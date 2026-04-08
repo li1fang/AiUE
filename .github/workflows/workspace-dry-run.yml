@@ -1,0 +1,17 @@
+name: workspace-dry-run
+
+on:
+  push:
+    branches: ["main", "codex/**"]
+  pull_request:
+
+jobs:
+  dry-run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Validate example workspace
+        run: python tools/workspace_dry_run.py --config examples/workspace/pipeline_workspace.example.json --allow-missing-paths

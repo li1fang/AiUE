@@ -1,0 +1,27 @@
+name: Workflow pack proposal
+description: Propose a new workflow pack for AiUE.
+title: "[Workflow Pack] "
+labels: ["workflow-pack"]
+body:
+  - type: input
+    id: pack_name
+    attributes:
+      label: Proposed pack name
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Unreal problem this pack solves
+    validations:
+      required: true
+  - type: textarea
+    id: fit
+    attributes:
+      label: Why this belongs in AiUE
+    validations:
+      required: true
+  - type: textarea
+    id: contracts
+    attributes:
+      label: Stable surface needed, if any

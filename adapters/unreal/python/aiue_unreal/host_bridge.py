@@ -1,0 +1,125 @@
+from __future__ import annotations
+
+import json
+import subprocess
+from pathlib import Path
+
+from aiue_core.schema_utils import load_json, load_workspace_config
+
+
+def _workspace_dict(workspace_or_config) -> dict:
+    if isinstance(workspace_or_config, dict):
+        return workspace_or_config
+    return load_workspace_config(workspace_or_config)
+
+
+def resolve_host_paths(workspace_or_config) -> dict:
+    workspace = _workspace_dict(workspace_or_config)
+    project_root = Path(workspace["paths"]["unreal_project_root"]).expanduser().resolve()
+    return {
+        "workspace": workspace,
+        "project_root": project_root,
+        "auto_ue_cli_ps1": project_root / "auto_ue_cli.ps1",
+        "probe_ps1": project_root / "probe_ue_capabilities.ps1",
+        "capability_root": Path(workspace["paths"]["capability_probe_root"]).expanduser().resolve(),
+        "auto_ue_cli_output_root": Path(workspace["paths"]["auto_ue_cli_output_root"]).expanduser().resolve()
+    }
+
+
+def _run_powershell(script_path: Path, arguments: list[str]) -> dict:
+    command = [
+        "powershell",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        str(script_path),
+        *arguments
+    ]
+    completed = subprocess.run(
+        command,
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace"
+    )
+    return {
+        "returncode": completed.returncode,
+        "stdout": completed.stdout,
+        "stderr": completed.stderr,
+        "command": command
+    }
+
+
+def run_host_probe(workspace_or_config, mode: str = "dual", run_id: str | None = None) -> dict:
+    paths = resolve_host_paths(workspace_or_config)
+    arguments = ["-WorkspaceConfig", paths["workspace"]["config_path"], "-Mode", mode]
+    if run_id:
+        arguments += ["-RunId", run_id]
+    invocation = _run_powershell(paths["probe_ps1"], arguments)
+    capabilities_path = paths["capability_root"] / "latest_capabilities.json"
+    probe_index_path = paths["capability_root"] / "latest_probe_index.json"
+    probe_report_path = paths["capability_root"] / "latest_probe_report.json"
+    if invocation["returncode"] != 0:
+        raise RuntimeError(
+            f"Host capability probe failed with exit code {invocation['returncode']}: "
+            f"{invocation['stderr'] or invocation['stdout']}"
+        )
+    return {
+        "invocation": invocation,
+        "capabilities_path": str(capabilities_path),
+        "probe_index_path": str(probe_index_path),
+        "probe_report_path": str(probe_report_path),
+        "capabilities": load_json(capabilities_path) if capabilities_path.exists() else None,
+        "probe_index": load_json(probe_index_path) if probe_index_path.exists() else None,
+        "probe_report": load_json(probe_report_path) if probe_report_path.exists() else None
+    }
+
+
+def run_host_auto_ue_cli(
+    workspace_or_config,
+    mode: str,
+    command: str,
+    params: dict | None = None,
+    output_path: str | None = None,
+    allow_destructive: bool = False,
+    dry_run: bool = False,
+    post_exit_finalize_wait_seconds: int | None = None
+) -> dict:
+    paths = resolve_host_paths(workspace_or_config)
+    arguments = [
+        "run",
+        "-WorkspaceConfig",
+        paths["workspace"]["config_path"],
+        "-Mode",
+        mode,
+        "-Command",
+        command
+    ]
+    if params:
+        arguments += ["-ParamsJson", json.dumps(params, ensure_ascii=False, separators=(",", ":"))]
+    if output_path:
+        arguments += ["-OutputPath", output_path]
+    if post_exit_finalize_wait_seconds is not None:
+        arguments += ["-PostExitFinalizeWaitSeconds", str(post_exit_finalize_wait_seconds)]
+    if allow_destructive:
+        arguments.append("-AllowDestructive")
+    if dry_run:
+        arguments.append("-DryRun")
+
+    invocation = _run_powershell(paths["auto_ue_cli_ps1"], arguments)
+    payload = None
+    if output_path:
+        payload_path = Path(output_path).expanduser().resolve()
+        if payload_path.exists():
+            payload = load_json(payload_path)
+    if invocation["returncode"] != 0:
+        if payload and payload.get("errors"):
+            raise RuntimeError("; ".join(str(item) for item in payload["errors"]))
+        raise RuntimeError(invocation["stderr"] or invocation["stdout"] or "host auto_ue_cli failed")
+    return {
+        "invocation": invocation,
+        "payload": payload,
+        "output_path": str(Path(output_path).expanduser().resolve()) if output_path else None
+    }

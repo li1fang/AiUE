@@ -1,0 +1,46 @@
+{
+  "schema_version": "0.1.0",
+  "tool_name": "AiUE",
+  "workflow_pack": "pmx_pipeline",
+  "generated_at_utc": "2026-04-08T00:00:00+00:00",
+  "compatibility": {
+    "channel": "alpha",
+    "schema_family": "aiue_capture_lab_report",
+    "legacy_fields": [],
+    "notes": ["sample_report"]
+  },
+  "run_id": "sample_capture_lab_001",
+  "suite_name": "weapon_split",
+  "run_root": "C:\\path\\to\\capture_lab\\sample_capture_lab_001",
+  "matrix_csv_path": "C:\\path\\to\\capture_lab\\sample_capture_lab_001\\aiue_capture_lab_matrix.csv",
+  "recommended_capture_policy_path": "C:\\path\\to\\capture_lab\\sample_capture_lab_001\\recommended_capture_policy.json",
+  "counts": {
+    "packages": 2,
+    "experiments": 4,
+    "valid_images": 6,
+    "late_captures": 2,
+    "motion_inconclusive": 1
+  },
+  "ranked_experiments": [
+    {
+      "package_id": "sample_package_001",
+      "config": {
+        "mode": "editor_rendered",
+        "level_lifecycle": "reuse_level",
+        "camera_lifecycle": "reuse_camera",
+        "scenario_scheduling": "single_scenario",
+        "scenario_order": ["jump_land_1cycle"],
+        "completion_strategy": "native_helper_wait",
+        "capture_delay_seconds": 0.5,
+        "finalize_wait_seconds": 15
+      },
+      "counts": {
+        "valid_images": 2,
+        "late_captures": 0,
+        "motion_inconclusive": 0
+      },
+      "supports_motion": true,
+      "confidence": 0.82
+    }
+  ]
+}

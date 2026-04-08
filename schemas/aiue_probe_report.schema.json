@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AiUE Probe Report",
+  "type": "object",
+  "properties": {
+    "schema_version": { "type": "string" },
+    "tool_name": { "type": "string" },
+    "workflow_pack": { "type": "string" },
+    "generated_at_utc": { "type": "string" },
+    "compatibility": { "type": "object" },
+    "run_id": { "type": "string" },
+    "workspace_config_path": { "type": "string" },
+    "mode": { "type": "string" },
+    "capabilities_path": { "type": "string" },
+    "probe_report_path": { "type": "string" },
+    "api_matrix_path": { "type": "string" },
+    "capture_policy_path": { "type": ["string", "null"] },
+    "latest_aiue_capture_lab_report": { "type": ["string", "null"] },
+    "counts": { "type": "object" },
+    "warnings": { "type": "array", "items": {} },
+    "errors": { "type": "array", "items": {} }
+  },
+  "required": [
+    "schema_version",
+    "tool_name",
+    "workflow_pack",
+    "generated_at_utc",
+    "compatibility",
+    "run_id",
+    "workspace_config_path",
+    "mode"
+  ],
+  "additionalProperties": true
+}

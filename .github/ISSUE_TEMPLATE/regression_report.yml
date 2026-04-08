@@ -1,0 +1,24 @@
+name: Regression report
+description: Report a regression against a previously passing lane or tripline.
+title: "[Regression] "
+labels: ["regression"]
+body:
+  - type: input
+    id: lane
+    attributes:
+      label: Lane
+    validations:
+      required: true
+  - type: input
+    id: tripline
+    attributes:
+      label: Failed tripline
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Include report paths, counts, and failure details.
+    validations:
+      required: true

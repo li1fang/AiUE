@@ -1,0 +1,53 @@
+from __future__ import annotations
+
+import argparse
+import json
+
+from _bootstrap import ensure_aiue_paths
+
+ensure_aiue_paths()
+
+from aiue_core.schema_utils import load_workspace_config
+from aiue_unreal.action_runner import run_action
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Run the AiUE PMX run-suite workflow.")
+    parser.add_argument("--workspace-config", required=True)
+    parser.add_argument("--suite-file", required=True)
+    parser.add_argument("--mode", default="cmd_nullrhi")
+    parser.add_argument("--conversion-root")
+    parser.add_argument("--dataset-root")
+    parser.add_argument("--asset-root")
+    parser.add_argument("--summary-output")
+    parser.add_argument("--include-optional-sources", action="store_true")
+    parser.add_argument("--output-path")
+    return parser.parse_args()
+
+
+def main():
+    args = parse_args()
+    workspace = load_workspace_config(args.workspace_config)
+    payload, output_path = run_action(
+        {
+            "command": "run-suite",
+            "mode": args.mode,
+            "params": {
+                "suite_file": args.suite_file,
+                "conversion_root": args.conversion_root,
+                "dataset_root": args.dataset_root,
+                "asset_root": args.asset_root,
+                "summary_output": args.summary_output,
+                "include_optional_sources": args.include_optional_sources
+            },
+            "output_path": args.output_path
+        },
+        workspace
+    )
+    print(json.dumps({"output_path": output_path, "status": payload["status"]}, ensure_ascii=False))
+    if not payload.get("success"):
+        raise SystemExit(1)
+
+
+if __name__ == "__main__":
+    main()

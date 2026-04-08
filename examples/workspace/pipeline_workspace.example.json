@@ -1,0 +1,41 @@
+{
+  "version": "0.1.0",
+  "schema_version": 1,
+  "paths": {
+    "unreal_project_root": "C:\\path\\to\\UnrealProject",
+    "aiue_repo_root": "${config_dir}\\..\\..",
+    "blender_addon_root": "C:\\path\\to\\cats-blender-plugin-master",
+    "dataset_root": "C:\\path\\to\\dataset\\mingchao",
+    "dataset_catalog_root": "C:\\path\\to\\_dataset_catalog\\mingchao",
+    "preflight_root": "C:\\path\\to\\_preflight_out\\mingchao",
+    "conversion_root": "C:\\path\\to\\_fbx_out_fastloop\\mingchao",
+    "blender_python_exe": "C:\\Program Files\\Blender Foundation\\Blender 3.6\\3.6\\python\\bin\\python.exe",
+    "unreal_editor_cmd": "C:\\Program Files\\Epic Games\\UE_5.7\\Engine\\Binaries\\Win64\\UnrealEditor-Cmd.exe",
+    "unreal_editor_gui": "C:\\Program Files\\Epic Games\\UE_5.7\\Engine\\Binaries\\Win64\\UnrealEditor.exe",
+    "asset_root": "/Game/AiUE/ImportedAssets",
+    "visual_review_output_root": "C:\\path\\to\\UnrealProject\\Saved\\pmx_pipeline\\visual_review",
+    "capability_probe_root": "C:\\path\\to\\UnrealProject\\Saved\\pmx_pipeline\\capabilities",
+    "auto_ue_cli_output_root": "C:\\path\\to\\UnrealProject\\Saved\\pmx_pipeline\\auto_ue_cli"
+  },
+  "defaults": {
+    "daily_suite": "smoke",
+    "animation_validation_scope": "all"
+  },
+  "animation": {
+    "validation_mode": "editor_world_scene_sweep",
+    "scene_level_path": "/Game/ThirdPerson/Lvl_ThirdPerson",
+    "capture_enabled": true,
+    "capture_width": 1280,
+    "capture_height": 720,
+    "camera_distance": 320.0,
+    "camera_lateral_offset": -160.0,
+    "camera_height": 120.0,
+    "capture_delay_seconds": 0.2
+  },
+  "probe": {
+    "default_mode": "cmd_nullrhi",
+    "preferred_capture_mode": "editor_rendered",
+    "capture_repeat_count": 3,
+    "capture_finalize_wait_seconds": 8
+  }
+}

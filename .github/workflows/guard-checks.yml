@@ -1,0 +1,22 @@
+name: guard-checks
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  destructive-guards:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Check destructive command guards
+        shell: pwsh
+        run: |
+          python .\tools\check_destructive_guards.py

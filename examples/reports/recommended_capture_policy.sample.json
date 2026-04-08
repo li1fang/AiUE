@@ -1,0 +1,26 @@
+{
+  "schema_version": "0.1.0",
+  "tool_name": "AiUE",
+  "workflow_pack": "core",
+  "generated_at_utc": "2026-04-08T00:00:00+00:00",
+  "compatibility": {
+    "channel": "alpha",
+    "schema_family": "aiue_capture_policy",
+    "legacy_fields": [],
+    "notes": ["sample_policy"]
+  },
+  "recommended_mode": "editor_rendered",
+  "recommended_level_lifecycle": "reuse_level",
+  "recommended_camera_lifecycle": "reuse_camera",
+  "recommended_scenario_order": ["jump_land_1cycle", "run_forward_2s"],
+  "recommended_completion_strategy": "native_helper_wait",
+  "recommended_capture_delay_seconds": 0.5,
+  "recommended_settle_timeout_seconds": 6.0,
+  "recommended_file_stability_window_seconds": 0.75,
+  "recommended_viewport_pump_interval_seconds": 0.05,
+  "recommended_quit_barrier_seconds": 2.0,
+  "recommended_finalize_wait_seconds": 15,
+  "confidence": 0.82,
+  "derived_from": ["capabilities:sample_probe_001", "capture_lab:sample_capture_lab_001"],
+  "policy_reasoning": ["capture_lab_best_experiment_selected"]
+}

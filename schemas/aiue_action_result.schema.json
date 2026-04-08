@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AiUE Action Result",
+  "type": "object",
+  "properties": {
+    "schema_version": { "type": "string" },
+    "tool_name": { "type": "string" },
+    "workflow_pack": { "type": "string" },
+    "generated_at_utc": { "type": "string" },
+    "compatibility": { "type": "object" },
+    "run_id": { "type": "string" },
+    "command": { "type": "string" },
+    "mode": { "type": "string" },
+    "status": { "type": "string", "enum": ["pass", "fail", "blocked", "dry_run"] },
+    "success": { "type": "boolean" },
+    "warnings": { "type": "array", "items": {} },
+    "errors": { "type": "array", "items": {} },
+    "result": { "type": "object" }
+  },
+  "required": [
+    "schema_version",
+    "tool_name",
+    "workflow_pack",
+    "generated_at_utc",
+    "compatibility",
+    "run_id",
+    "command",
+    "mode",
+    "status",
+    "success",
+    "warnings",
+    "errors",
+    "result"
+  ],
+  "additionalProperties": true
+}

@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AiUE Capabilities",
+  "type": "object",
+  "properties": {
+    "schema_version": { "type": "string" },
+    "tool_name": { "type": "string" },
+    "workflow_pack": { "type": "string" },
+    "generated_at_utc": { "type": "string" },
+    "compatibility": { "type": "object" },
+    "run_id": { "type": "string" },
+    "preferred_capture_mode": { "type": "string" },
+    "recommended_capture_mode": { "type": "string" },
+    "capture_policy": { "$ref": "./aiue_capture_policy.schema.json" },
+    "capabilities": { "type": "array" }
+  },
+  "required": [
+    "schema_version",
+    "tool_name",
+    "workflow_pack",
+    "generated_at_utc",
+    "compatibility",
+    "run_id",
+    "capabilities"
+  ],
+  "additionalProperties": true
+}

@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AiUE Capture Policy",
+  "type": "object",
+  "properties": {
+    "schema_version": { "type": "string" },
+    "tool_name": { "type": "string" },
+    "workflow_pack": { "type": "string" },
+    "generated_at_utc": { "type": "string" },
+    "compatibility": { "type": "object" },
+    "recommended_mode": { "type": "string" },
+    "recommended_level_lifecycle": { "type": "string" },
+    "recommended_camera_lifecycle": { "type": "string" },
+    "recommended_scenario_order": { "type": "array", "items": { "type": "string" } },
+    "recommended_completion_strategy": { "type": "string" },
+    "recommended_capture_delay_seconds": { "type": "number" },
+    "recommended_settle_timeout_seconds": { "type": "number" },
+    "recommended_file_stability_window_seconds": { "type": "number" },
+    "recommended_viewport_pump_interval_seconds": { "type": "number" },
+    "recommended_quit_barrier_seconds": { "type": "number" },
+    "recommended_finalize_wait_seconds": { "type": "integer" },
+    "confidence": { "type": "number" },
+    "derived_from": { "type": "array", "items": { "type": "string" } },
+    "policy_reasoning": { "type": "array", "items": { "type": "string" } }
+  },
+  "required": [
+    "schema_version",
+    "tool_name",
+    "workflow_pack",
+    "generated_at_utc",
+    "compatibility",
+    "recommended_mode",
+    "recommended_completion_strategy",
+    "confidence",
+    "derived_from",
+    "policy_reasoning"
+  ],
+  "additionalProperties": true
+}

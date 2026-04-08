@@ -1,0 +1,17 @@
+name: hosted-regression
+
+on:
+  workflow_dispatch:
+
+jobs:
+  hosted-regression:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run alpha triplines
+        shell: pwsh
+        env:
+          AIUE_WORKSPACE_CONFIG: ${{ secrets.AIUE_WORKSPACE_CONFIG }}
+        run: |
+          if (-not $env:AIUE_WORKSPACE_CONFIG) { throw "AIUE_WORKSPACE_CONFIG secret is required for hosted regression." }
+          .\run_alpha_triplines.ps1 -WorkspaceConfig $env:AIUE_WORKSPACE_CONFIG

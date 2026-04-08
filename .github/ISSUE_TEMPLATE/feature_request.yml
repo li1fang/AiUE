@@ -1,0 +1,33 @@
+name: Feature request
+description: Propose a new AiUE feature.
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: input
+    id: lane
+    attributes:
+      label: Primary lane
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+    validations:
+      required: true
+  - type: dropdown
+    id: stable_surface
+    attributes:
+      label: Stable-surface impact
+      options:
+        - none
+        - likely
+        - unknown
+    validations:
+      required: true

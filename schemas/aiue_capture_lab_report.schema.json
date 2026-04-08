@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AiUE Capture Lab Report",
+  "type": "object",
+  "properties": {
+    "schema_version": { "type": "string" },
+    "tool_name": { "type": "string" },
+    "workflow_pack": { "type": "string" },
+    "generated_at_utc": { "type": "string" },
+    "compatibility": { "type": "object" },
+    "run_id": { "type": "string" },
+    "suite_name": { "type": "string" },
+    "run_root": { "type": "string" },
+    "matrix_csv_path": { "type": "string" },
+    "recommended_capture_policy_path": { "type": "string" },
+    "counts": { "type": "object" },
+    "focus": { "type": ["string", "null"] },
+    "scenario_summary": { "type": "object" },
+    "completion_strategy_summary": { "type": "object" },
+    "experiments": { "type": "array" },
+    "ranked_experiments": { "type": "array" }
+  },
+  "required": [
+    "schema_version",
+    "tool_name",
+    "workflow_pack",
+    "generated_at_utc",
+    "compatibility",
+    "run_id",
+    "suite_name",
+    "run_root",
+    "matrix_csv_path",
+    "recommended_capture_policy_path",
+    "counts"
+  ],
+  "additionalProperties": true
+}

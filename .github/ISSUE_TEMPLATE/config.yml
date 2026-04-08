@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: AiUE Discussions
+    url: https://github.com/example/AiUE/discussions
+    about: Use discussions for design or platform questions before opening feature issues.
