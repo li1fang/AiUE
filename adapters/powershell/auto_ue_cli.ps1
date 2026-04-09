@@ -8,8 +8,10 @@ param(
     [string]$Command,
     [string]$ActionSpec,
     [string]$ParamsJson,
+    [string]$ParamsPath,
     [string]$OutputPath,
     [string]$RunId,
+    [string]$HostKey,
     [int]$PostExitFinalizeWaitSeconds,
     [switch]$AllowDestructive,
     [switch]$DryRun
@@ -29,18 +31,47 @@ function Resolve-WorkspacePathValue {
 }
 
 function Get-HostProjectRoot {
-    param([string]$ConfigPath)
+    param([string]$ConfigPath, [string]$CommandId, [string]$RequestedHostKey)
     if (-not $ConfigPath) { throw "AiUE wrapper requires -WorkspaceConfig" }
     $resolvedConfig = [System.IO.Path]::GetFullPath($ConfigPath)
     $raw = Get-Content -LiteralPath $resolvedConfig -Raw -Encoding UTF8 | ConvertFrom-Json
     $configDirectory = Split-Path -Parent $resolvedConfig
     $projectRoot = Split-Path -Parent $configDirectory
-    $hostRoot = Resolve-WorkspacePathValue -Value $raw.paths.unreal_project_root -ProjectRoot $projectRoot -ConfigDirectory $configDirectory
-    if (-not $hostRoot) { throw "Workspace config is missing paths.unreal_project_root" }
-    return $hostRoot
+    $defaultRoutes = @{
+        "import-package" = "kernel"
+        "build-equipment-registry" = "kernel"
+        "inspect-host" = "kernel"
+        "inspect-host-visual" = "kernel"
+        "composition-validation" = "kernel"
+        "validate-package" = "kernel"
+        "load-level" = "demo"
+        "stage-capture" = "demo"
+        "run-scene-sweep" = "demo"
+        "action-preview" = "demo"
+        "demo-gate" = "demo"
+    }
+    if ($raw.default_host_routes) {
+        foreach ($property in $raw.default_host_routes.PSObject.Properties) {
+            $defaultRoutes[$property.Name] = [string]$property.Value
+        }
+    }
+    $resolvedHostKey = if ($RequestedHostKey) { [string]$RequestedHostKey } elseif ($CommandId -and $defaultRoutes.ContainsKey($CommandId)) { [string]$defaultRoutes[$CommandId] } elseif ($raw.hosts.kernel) { "kernel" } else { "" }
+    $hostRoot = $null
+    if ($resolvedHostKey -and $raw.hosts -and $raw.hosts.$resolvedHostKey) {
+        $hostRoot = Resolve-WorkspacePathValue -Value $raw.hosts.$resolvedHostKey.project_root -ProjectRoot $projectRoot -ConfigDirectory $configDirectory
+    }
+    if (-not $hostRoot) {
+        $hostRoot = Resolve-WorkspacePathValue -Value $raw.paths.unreal_project_root -ProjectRoot $projectRoot -ConfigDirectory $configDirectory
+    }
+    if (-not $hostRoot) { throw "Workspace config is missing a resolvable host project root" }
+    return @{
+        ProjectRoot = $hostRoot
+        HostKey = $resolvedHostKey
+    }
 }
 
-$hostProjectRoot = Get-HostProjectRoot -ConfigPath $WorkspaceConfig
+$hostSelection = Get-HostProjectRoot -ConfigPath $WorkspaceConfig -CommandId $Command -RequestedHostKey $HostKey
+$hostProjectRoot = $hostSelection.ProjectRoot
 $hostWrapper = Join-Path $hostProjectRoot "auto_ue_cli.ps1"
 if (-not (Test-Path -LiteralPath $hostWrapper)) { throw "Host auto_ue_cli wrapper not found: $hostWrapper" }
 
@@ -48,8 +79,10 @@ $arguments = @($Operation)
 if ($WorkspaceConfig) { $arguments += @("-WorkspaceConfig", $WorkspaceConfig) }
 if ($Mode) { $arguments += @("-Mode", $Mode) }
 if ($Command) { $arguments += @("-Command", $Command) }
+if ($hostSelection.HostKey) { $arguments += @("-HostKey", $hostSelection.HostKey) }
 if ($ActionSpec) { $arguments += @("-ActionSpec", $ActionSpec) }
 if ($ParamsJson) { $arguments += @("-ParamsJson", $ParamsJson) }
+if ($ParamsPath) { $arguments += @("-ParamsPath", $ParamsPath) }
 if ($OutputPath) { $arguments += @("-OutputPath", $OutputPath) }
 if ($RunId) { $arguments += @("-RunId", $RunId) }
 if ($PSBoundParameters.ContainsKey("PostExitFinalizeWaitSeconds")) { $arguments += @("-PostExitFinalizeWaitSeconds", [string]$PostExitFinalizeWaitSeconds) }

@@ -1,0 +1,18 @@
+{
+  "FileVersion": 3,
+  "Version": 1,
+  "VersionName": "0.1.0",
+  "FriendlyName": "AiUE PMX Runtime",
+  "Description": "Shared PMX host runtime and registry assets for AiUE kernel and demo hosts.",
+  "Category": "Animation",
+  "EnabledByDefault": true,
+  "CanContainContent": false,
+  "Installed": false,
+  "Modules": [
+    {
+      "Name": "AiUEPmxRuntime",
+      "Type": "Runtime",
+      "LoadingPhase": "Default"
+    }
+  ]
+}

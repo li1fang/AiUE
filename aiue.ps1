@@ -10,6 +10,7 @@ param(
     [string]$Command,
     [string]$ActionSpec,
     [string]$ParamsJson,
+    [string]$ParamsPath,
     [string]$OutputPath,
     [string]$RunId,
     [int]$PostExitFinalizeWaitSeconds,
@@ -28,6 +29,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$forwardedParamsPath = $null
 
 function Resolve-WorkspacePathValue {
     param([AllowNull()]$Value, [string]$ProjectRoot, [string]$ConfigDirectory)
@@ -74,7 +76,16 @@ switch ($Verb) {
         $args = @("-Operation", $Verb, "-WorkspaceConfig", $WorkspaceConfig, "-Mode", $Mode)
         if ($Command) { $args += @("-Command", $Command) }
         if ($ActionSpec) { $args += @("-ActionSpec", $ActionSpec) }
-        if ($ParamsJson) { $args += @("-ParamsJson", $ParamsJson) }
+        if ($ParamsPath) {
+            $forwardedParamsPath = [System.IO.Path]::GetFullPath($ParamsPath)
+            $args += @("-ParamsPath", $forwardedParamsPath)
+        } elseif ($ParamsJson) {
+            $paramsDir = Join-Path $repoRoot "Saved\cli_params"
+            New-Item -ItemType Directory -Path $paramsDir -Force | Out-Null
+            $forwardedParamsPath = Join-Path $paramsDir ("params_" + [guid]::NewGuid().ToString("N") + ".json")
+            Set-Content -LiteralPath $forwardedParamsPath -Value $ParamsJson -Encoding UTF8
+            $args += @("-ParamsPath", $forwardedParamsPath)
+        }
         if ($OutputPath) { $args += @("-OutputPath", $OutputPath) }
         if ($RunId) { $args += @("-RunId", $RunId) }
         if ($PSBoundParameters.ContainsKey("PostExitFinalizeWaitSeconds")) { $args += @("-PostExitFinalizeWaitSeconds", [string]$PostExitFinalizeWaitSeconds) }
@@ -88,8 +99,15 @@ switch ($Verb) {
             "-File",
             $scriptPath
         ) + $args
-        & powershell @psArgs
-        exit $LASTEXITCODE
+        try {
+            & powershell @psArgs
+            exit $LASTEXITCODE
+        }
+        finally {
+            if ($ParamsJson -and $forwardedParamsPath -and (Test-Path -LiteralPath $forwardedParamsPath)) {
+                Remove-Item -LiteralPath $forwardedParamsPath -Force -ErrorAction SilentlyContinue
+            }
+        }
     }
     "lab" {
         if (-not $LabName -and $Subcommand -eq "capture") { $LabName = "capture" }

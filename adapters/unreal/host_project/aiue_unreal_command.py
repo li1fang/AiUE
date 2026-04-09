@@ -1,0 +1,3723 @@
+from __future__ import annotations
+
+import json
+import math
+import os
+import re
+import shutil
+import sys
+import time
+import traceback
+from datetime import datetime, timezone
+from pathlib import Path
+
+import unreal
+
+
+def now_utc() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+def to_name(text: str) -> unreal.Name:
+    return unreal.Name(text)
+
+
+def asset_class_name(asset_data: unreal.AssetData) -> str:
+    class_path = asset_data.asset_class_path
+    if hasattr(class_path, "asset_name"):
+        return str(class_path.asset_name)
+    return str(class_path)
+
+
+def asset_object_path(asset_data: unreal.AssetData) -> str:
+    if hasattr(asset_data, "object_path"):
+        return str(asset_data.object_path)
+    package_name = str(asset_data.package_name)
+    asset_name = str(asset_data.asset_name)
+    return f"{package_name}.{asset_name}"
+
+
+def sanitize_segment(value: str) -> str:
+    cleaned = re.sub(r"[^0-9A-Za-z_\u4e00-\u9fff]+", "_", value.strip())
+    cleaned = re.sub(r"_+", "_", cleaned).strip("_")
+    return cleaned or "asset"
+
+
+def resolve_manifest_artifact(manifest_path: Path, artifact_path: str | None) -> Path | None:
+    if not artifact_path:
+        return None
+    candidate = Path(artifact_path).expanduser()
+    if candidate.exists():
+        return candidate.resolve()
+    local_sibling = manifest_path.parent / candidate.name
+    if local_sibling.exists():
+        return local_sibling.resolve()
+    return candidate.resolve(strict=False)
+
+
+def read_json(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8-sig"))
+
+
+def write_json(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def remap_asset_root(path: str | None, asset_root: str) -> str | None:
+    if not path:
+        return path
+    parts = path.split("/")
+    if len(parts) >= 3 and parts[1] == "Game":
+        remainder = "/".join(parts[3:])
+        return asset_root.rstrip("/") + ("/" + remainder if remainder else "")
+    return path
+
+
+def load_existing_import_blueprint(manifest_path: Path) -> dict:
+    candidate = manifest_path.parent / "ue_import_report.json"
+    if candidate.exists():
+        return read_json(candidate)
+    return {}
+
+
+def resolve_texture_files(manifest_path: Path, manifest: dict, output_fbx: Path) -> list[Path]:
+    textures_dir = output_fbx.parent / "textures"
+    resolved = []
+    seen = set()
+    for entry in manifest.get("textures", []):
+        relocated = resolve_manifest_artifact(manifest_path, entry.get("relocated_path"))
+        source = resolve_manifest_artifact(manifest_path, entry.get("original_path"))
+        chosen = relocated if relocated and relocated.exists() else source
+        if not chosen or not chosen.exists() or not chosen.is_file():
+            continue
+        key = str(chosen).lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        resolved.append(chosen)
+    if resolved:
+        return resolved
+    if textures_dir.exists():
+        return [path for path in sorted(textures_dir.iterdir()) if path.is_file()]
+    return []
+
+
+def ensure_directory(path: str) -> None:
+    if not unreal.EditorAssetLibrary.does_directory_exist(path):
+        unreal.EditorAssetLibrary.make_directory(path)
+
+
+def import_files(file_paths: list[Path], destination_path: str) -> list[str]:
+    if not file_paths:
+        return []
+    ensure_directory(destination_path)
+    tasks = []
+    for file_path in file_paths:
+        task = unreal.AssetImportTask()
+        task.set_editor_property("filename", str(file_path))
+        task.set_editor_property("destination_path", destination_path)
+        task.set_editor_property("replace_existing", True)
+        task.set_editor_property("replace_existing_settings", True)
+        task.set_editor_property("automated", True)
+        task.set_editor_property("save", True)
+        tasks.append(task)
+    unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks(tasks)
+    imported = []
+    for task in tasks:
+        imported.extend(list(task.get_editor_property("imported_object_paths") or []))
+    return imported
+
+
+def set_if_present(obj, property_name: str, value) -> None:
+    try:
+        obj.set_editor_property(property_name, value)
+    except Exception:
+        pass
+
+
+def build_fbx_import_options(create_physics_asset: bool) -> unreal.FbxImportUI:
+    options = unreal.FbxImportUI()
+    set_if_present(options, "automated_import_should_detect_type", False)
+    set_if_present(options, "import_mesh", True)
+    set_if_present(options, "import_as_skeletal", True)
+    set_if_present(options, "import_animations", False)
+    set_if_present(options, "import_materials", False)
+    set_if_present(options, "import_textures", False)
+    set_if_present(options, "create_physics_asset", create_physics_asset)
+    if hasattr(unreal, "FBXImportType"):
+        set_if_present(options, "original_import_type", unreal.FBXImportType.FBXIT_SKELETAL_MESH)
+        set_if_present(options, "mesh_type_to_import", unreal.FBXImportType.FBXIT_SKELETAL_MESH)
+    skeletal_data = options.get_editor_property("skeletal_mesh_import_data")
+    set_if_present(skeletal_data, "convert_scene", True)
+    set_if_present(skeletal_data, "convert_scene_unit", False)
+    set_if_present(skeletal_data, "import_uniform_scale", 1.0)
+    set_if_present(skeletal_data, "update_skeleton_reference_pose", False)
+    set_if_present(skeletal_data, "use_t0_as_ref_pose", True)
+    set_if_present(skeletal_data, "preserve_smoothing_groups", True)
+    set_if_present(skeletal_data, "import_meshes_in_bone_hierarchy", True)
+    return options
+
+
+def load_asset_class_name(object_path: str) -> str:
+    asset = unreal.EditorAssetLibrary.load_asset(object_path)
+    if not asset:
+        return ""
+    return asset.get_class().get_name()
+
+
+def classify_imported_assets(object_paths: list[str]) -> dict:
+    result = {
+        "skeletal_mesh": None,
+        "skeleton": None,
+        "physics_asset": None,
+        "textures": [],
+        "other": [],
+    }
+    for object_path in object_paths:
+        class_name = load_asset_class_name(object_path)
+        if class_name == "SkeletalMesh" and not result["skeletal_mesh"]:
+            result["skeletal_mesh"] = object_path
+        elif class_name == "Skeleton" and not result["skeleton"]:
+            result["skeleton"] = object_path
+        elif class_name == "PhysicsAsset" and not result["physics_asset"]:
+            result["physics_asset"] = object_path
+        elif class_name == "Texture2D":
+            result["textures"].append(object_path)
+        else:
+            result["other"].append(object_path)
+    return result
+
+
+def path_for_loaded_asset(asset) -> str | None:
+    if not asset:
+        return None
+    try:
+        return unreal.EditorAssetLibrary.get_path_name_for_loaded_asset(asset)
+    except Exception:
+        return None
+
+
+def enrich_related_assets(imported_assets: dict, mesh_destination: str, mesh_name: str) -> dict:
+    skeletal_mesh_path = imported_assets.get("skeletal_mesh")
+    if not skeletal_mesh_path:
+        expected_mesh = f"{mesh_destination}/{mesh_name}.{mesh_name}"
+        if unreal.EditorAssetLibrary.does_asset_exist(expected_mesh):
+            imported_assets["skeletal_mesh"] = expected_mesh
+            skeletal_mesh_path = expected_mesh
+    if not skeletal_mesh_path:
+        return imported_assets
+
+    skeletal_mesh = unreal.EditorAssetLibrary.load_asset(skeletal_mesh_path)
+    if skeletal_mesh:
+        if not imported_assets.get("skeleton"):
+            imported_assets["skeleton"] = path_for_loaded_asset(skeletal_mesh.get_editor_property("skeleton"))
+        if not imported_assets.get("physics_asset"):
+            imported_assets["physics_asset"] = path_for_loaded_asset(skeletal_mesh.get_editor_property("physics_asset"))
+
+    if not imported_assets.get("skeleton"):
+        expected_skeleton = f"{mesh_destination}/{mesh_name}_Skeleton.{mesh_name}_Skeleton"
+        if unreal.EditorAssetLibrary.does_asset_exist(expected_skeleton):
+            imported_assets["skeleton"] = expected_skeleton
+    if not imported_assets.get("physics_asset"):
+        expected_physics = f"{mesh_destination}/{mesh_name}_PhysicsAsset.{mesh_name}_PhysicsAsset"
+        if unreal.EditorAssetLibrary.does_asset_exist(expected_physics):
+            imported_assets["physics_asset"] = expected_physics
+    return imported_assets
+
+
+def import_skeletal_mesh(output_fbx: Path, mesh_destination: str, create_physics_asset: bool) -> dict:
+    ensure_directory(mesh_destination)
+    task = unreal.AssetImportTask()
+    task.set_editor_property("filename", str(output_fbx))
+    task.set_editor_property("destination_path", mesh_destination)
+    task.set_editor_property("replace_existing", True)
+    task.set_editor_property("replace_existing_settings", True)
+    task.set_editor_property("automated", True)
+    task.set_editor_property("save", True)
+    task.set_editor_property("options", build_fbx_import_options(create_physics_asset))
+    unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks([task])
+    imported = list(task.get_editor_property("imported_object_paths") or [])
+    return classify_imported_assets(imported)
+
+
+def save_directory(path: str) -> None:
+    try:
+        unreal.EditorAssetLibrary.save_directory(path, only_if_is_dirty=False, recursive=True)
+    except Exception:
+        pass
+
+
+def save_loaded_asset(asset) -> None:
+    try:
+        unreal.EditorAssetLibrary.save_loaded_asset(asset, only_if_is_dirty=False)
+    except Exception:
+        pass
+
+
+def material_slot_names(skeletal_mesh_path: str | None) -> list[str]:
+    if not skeletal_mesh_path:
+        return []
+    skeletal_mesh = unreal.EditorAssetLibrary.load_asset(skeletal_mesh_path)
+    if not skeletal_mesh:
+        return []
+    names = []
+    for material in skeletal_mesh.get_editor_property("materials") or []:
+        try:
+            names.append(str(material.get_editor_property("material_slot_name")))
+        except Exception:
+            pass
+    return names
+
+
+def create_physics_asset_for_mesh(skeletal_mesh_path: str | None, skeleton_path: str | None, mesh_destination: str, mesh_name: str) -> str | None:
+    if not skeletal_mesh_path:
+        return None
+    skeletal_mesh = unreal.EditorAssetLibrary.load_asset(skeletal_mesh_path)
+    skeleton = unreal.EditorAssetLibrary.load_asset(skeleton_path) if skeleton_path else None
+    if not skeletal_mesh:
+        return None
+
+    if hasattr(unreal, "EditorSkeletalMeshLibrary") and hasattr(unreal.EditorSkeletalMeshLibrary, "create_physics_asset"):
+        try:
+            created = unreal.EditorSkeletalMeshLibrary.create_physics_asset(skeletal_mesh)
+            if created:
+                if not isinstance(created, bool):
+                    save_loaded_asset(created)
+                    return unreal.EditorAssetLibrary.get_path_name_for_loaded_asset(created)
+                save_loaded_asset(skeletal_mesh)
+                linked_asset = skeletal_mesh.get_editor_property("physics_asset")
+                if linked_asset:
+                    save_loaded_asset(linked_asset)
+                    return unreal.EditorAssetLibrary.get_path_name_for_loaded_asset(linked_asset)
+        except Exception:
+            pass
+
+    if hasattr(unreal, "PhysicsAssetUtils"):
+        for method_name in ("create_from_skeletal_mesh", "create_physics_asset"):
+            if not hasattr(unreal.PhysicsAssetUtils, method_name):
+                continue
+            method = getattr(unreal.PhysicsAssetUtils, method_name)
+            try:
+                created = method(skeletal_mesh)
+                if created:
+                    save_loaded_asset(created)
+                    return unreal.EditorAssetLibrary.get_path_name_for_loaded_asset(created)
+            except Exception:
+                pass
+
+    if hasattr(unreal, "PhysicsAssetFactory"):
+        try:
+            factory = unreal.PhysicsAssetFactory()
+            set_if_present(factory, "target_skeletal_mesh", skeletal_mesh)
+            set_if_present(factory, "preview_skeletal_mesh", skeletal_mesh)
+            if skeleton:
+                set_if_present(factory, "target_skeleton", skeleton)
+            asset = unreal.AssetToolsHelpers.get_asset_tools().create_asset(
+                f"{mesh_name}_PhysicsAsset",
+                mesh_destination,
+                unreal.PhysicsAsset,
+                factory,
+            )
+            if asset:
+                set_if_present(skeletal_mesh, "physics_asset", asset)
+                save_loaded_asset(asset)
+                save_loaded_asset(skeletal_mesh)
+                return unreal.EditorAssetLibrary.get_path_name_for_loaded_asset(asset)
+        except Exception:
+            pass
+    return None
+
+
+def load_asset(object_path: str | None):
+    if not object_path:
+        return None
+    return unreal.EditorAssetLibrary.load_asset(object_path)
+
+
+def pair_id_for(character_package_id: str | None, weapon_package_id: str | None) -> str:
+    return f"{character_package_id or 'character'}_{weapon_package_id or 'weapon'}"
+
+
+def derive_suite_identity(registry_path: Path, registry_payload: dict, request: dict) -> tuple[str, str]:
+    if request.get("suite_name"):
+        suite_name = str(request["suite_name"])
+    else:
+        suite_file = registry_payload.get("suite_file")
+        suite_name = Path(suite_file).stem if suite_file else registry_path.parent.parent.name
+    suite_slug = str(request.get("suite_slug") or sanitize_segment(suite_name))
+    return suite_name, suite_slug
+
+
+def find_latest_registry_json(conversion_root: Path) -> Path:
+    candidates = sorted(conversion_root.rglob("ue_equipment_registry.json"), key=lambda path: path.stat().st_mtime, reverse=True)
+    if not candidates:
+        raise FileNotFoundError(f"No ue_equipment_registry.json found under {conversion_root}")
+    return candidates[0]
+
+
+def create_or_load_data_asset(asset_name: str, package_path: str, asset_class):
+    ensure_directory(package_path)
+    object_path = f"{package_path}/{asset_name}.{asset_name}"
+    if unreal.EditorAssetLibrary.does_asset_exist(object_path):
+        asset = unreal.EditorAssetLibrary.load_asset(object_path)
+        return asset, object_path, False
+
+    factory = unreal.DataAssetFactory()
+    set_if_present(factory, "data_asset_class", asset_class)
+    asset = unreal.AssetToolsHelpers.get_asset_tools().create_asset(asset_name, package_path, asset_class, factory)
+    if not asset:
+        raise RuntimeError(f"Failed to create asset at {object_path}")
+    return asset, object_path, True
+
+
+def loadout_asset_path(asset_root: str, suite_slug: str, index: int, sample_id: str) -> tuple[str, str]:
+    package_path = f"{asset_root}/Registry/Suites/{suite_slug}/Characters"
+    asset_name = f"DA_PMXCharacterLoadout_{index:03d}_{sanitize_segment(sample_id)}"
+    return package_path, asset_name
+
+
+def pair_asset_path(asset_root: str, suite_slug: str, index: int, sample_id: str) -> tuple[str, str]:
+    package_path = f"{asset_root}/Registry/Suites/{suite_slug}/Pairs"
+    asset_name = f"DA_PMXEquipmentPair_{index:03d}_{sanitize_segment(sample_id)}"
+    return package_path, asset_name
+
+
+def registry_asset_path(asset_root: str, suite_slug: str) -> tuple[str, str]:
+    package_path = f"{asset_root}/Registry/Suites/{suite_slug}"
+    asset_name = f"DA_PMXEquipmentRegistry_{suite_slug}"
+    return package_path, asset_name
+
+
+def component_blueprint_path(asset_root: str, suite_slug: str, index: int, sample_id: str) -> str:
+    return f"{asset_root}/Registry/Suites/{suite_slug}/Components/BP_PMXCharacterEquipmentComponent_{index:03d}_{sanitize_segment(sample_id)}"
+
+
+def host_blueprint_path(asset_root: str, suite_slug: str, index: int, sample_id: str) -> str:
+    return f"{asset_root}/Registry/Suites/{suite_slug}/Hosts/BP_PMXCharacterHost_{index:03d}_{sanitize_segment(sample_id)}"
+
+
+def asset_name_from_path(asset_path: str) -> str:
+    return asset_path.rstrip("/").split("/")[-1]
+
+
+def object_path_from_asset_path(asset_path: str) -> str:
+    asset_name = asset_name_from_path(asset_path)
+    return f"{asset_path}.{asset_name}"
+
+
+def create_or_load_blueprint(asset_path: str, parent_class):
+    object_path = object_path_from_asset_path(asset_path)
+    if unreal.EditorAssetLibrary.does_asset_exist(object_path):
+        blueprint = unreal.EditorAssetLibrary.load_asset(object_path)
+        return blueprint, object_path, False
+
+    package_path = asset_path.rsplit("/", 1)[0]
+    ensure_directory(package_path)
+    blueprint = unreal.BlueprintEditorLibrary.create_blueprint_asset_with_parent(asset_path, parent_class)
+    if not blueprint:
+        raise RuntimeError(f"Failed to create blueprint at {asset_path}")
+    return blueprint, object_path, True
+
+
+def compile_blueprint_asset(blueprint) -> None:
+    unreal.BlueprintEditorLibrary.compile_blueprint(blueprint)
+    save_loaded_asset(blueprint)
+
+
+def blueprint_generated_class(blueprint):
+    generated_class = unreal.BlueprintEditorLibrary.generated_class(blueprint)
+    if not generated_class:
+        compile_blueprint_asset(blueprint)
+        generated_class = unreal.BlueprintEditorLibrary.generated_class(blueprint)
+    return generated_class
+
+
+def blueprint_cdo(blueprint):
+    generated_class = blueprint_generated_class(blueprint)
+    if not generated_class:
+        return None
+    return unreal.get_default_object(generated_class)
+
+
+def ensure_shared_blueprint_assets(asset_root: str) -> tuple[dict, list[str]]:
+    definitions = [
+        ("registry_blueprint_asset", f"{asset_root}/Registry/Blueprints/BP_PMXEquipmentRegistryAsset", unreal.PMXEquipmentRegistryAsset),
+        ("pair_blueprint_asset", f"{asset_root}/Registry/Blueprints/BP_PMXEquipmentPairAsset", unreal.PMXEquipmentPairAsset),
+        ("loadout_blueprint_asset", f"{asset_root}/Registry/Blueprints/BP_PMXCharacterEquipmentLoadoutAsset", unreal.PMXEquipmentLoadoutAsset),
+        ("component_blueprint_asset", f"{asset_root}/Registry/Blueprints/BP_PMXCharacterEquipmentComponent", unreal.PMXCharacterEquipmentComponent),
+        ("host_character_blueprint_asset", f"{asset_root}/Registry/Blueprints/BP_PMXCharacterHost", unreal.PMXCharacterHost),
+    ]
+    payload = {}
+    warnings = []
+    for key, asset_path, parent_class in definitions:
+        try:
+            blueprint, _, _ = create_or_load_blueprint(asset_path, parent_class)
+            compile_blueprint_asset(blueprint)
+            payload[key] = asset_path
+        except Exception as exc:
+            payload[key] = None
+            warnings.append(f"shared_blueprint_create_failed:{key}:{exc}")
+    return payload, warnings
+
+
+def configure_pair_asset(asset, pair: dict) -> None:
+    entry = asset.get_editor_property("pair")
+    set_if_present(entry, "sample_id", str(pair.get("sample_id") or ""))
+    set_if_present(entry, "pair_id", str(pair.get("pair_id") or pair_id_for(pair.get("character_package_id"), pair.get("weapon_package_id"))))
+    set_if_present(entry, "character_package_id", str(pair.get("character_package_id") or ""))
+    set_if_present(entry, "weapon_package_id", str(pair.get("weapon_package_id") or ""))
+    set_if_present(entry, "character_mesh", load_asset(pair.get("character_skeletal_mesh")))
+    set_if_present(entry, "weapon_mesh", load_asset(pair.get("weapon_skeletal_mesh")))
+    set_if_present(entry, "equip_slot", pair.get("equip_slot") or "weapon")
+    attach_target = pair.get("preferred_attach_target") or {}
+    set_if_present(entry, "attach_socket_name", attach_target.get("name") or "WeaponSocket")
+    set_if_present(entry, "b_consumer_ready", True)
+    set_if_present(entry, "consumer_ready", True)
+    asset.set_editor_property("pair", entry)
+    save_loaded_asset(asset)
+
+
+def configure_loadout_asset(asset, character: dict, default_pair_asset, related_pair_assets: list, related_pairs: list[dict]) -> None:
+    loadout = asset.get_editor_property("loadout")
+    default_pair = related_pairs[0] if related_pairs else {}
+    set_if_present(loadout, "sample_id", str(character.get("sample_id") or ""))
+    set_if_present(loadout, "character_package_id", str(character.get("package_id") or ""))
+    set_if_present(loadout, "default_weapon_package_id", str(default_pair.get("weapon_package_id") or ""))
+    set_if_present(loadout, "character_mesh", load_asset(character.get("skeletal_mesh")))
+    set_if_present(loadout, "weapon_mesh", load_asset(default_pair.get("weapon_skeletal_mesh")))
+    set_if_present(loadout, "equip_slot", default_pair.get("equip_slot") or "weapon")
+    attach_target = default_pair.get("preferred_attach_target") or {}
+    set_if_present(loadout, "attach_socket_name", attach_target.get("name") or "WeaponSocket")
+    set_if_present(loadout, "default_pair_asset", default_pair_asset)
+    set_if_present(loadout, "available_pair_assets", related_pair_assets)
+    set_if_present(loadout, "available_weapon_package_ids", [str(pair.get("weapon_package_id") or "") for pair in related_pairs if pair.get("weapon_package_id")])
+    set_if_present(loadout, "b_consumer_ready", bool(character.get("consumer_ready")))
+    set_if_present(loadout, "consumer_ready", bool(character.get("consumer_ready")))
+    asset.set_editor_property("loadout", loadout)
+    save_loaded_asset(asset)
+
+
+def configure_registry_asset(asset, suite_name: str, suite_slug: str, pair_assets: list, loadout_assets: list) -> None:
+    asset.set_editor_property("suite_name", suite_name)
+    asset.set_editor_property("suite_slug", suite_slug)
+    asset.set_editor_property("pair_assets", pair_assets)
+    asset.set_editor_property("character_loadouts", loadout_assets)
+    save_loaded_asset(asset)
+
+
+def validate_runtime_loadout(loadout_asset, asset_path: str) -> dict:
+    loadout = loadout_asset.get_editor_property("loadout")
+    character_mesh = getattr(loadout, "character_mesh", None)
+    weapon_mesh = getattr(loadout, "weapon_mesh", None)
+    if not character_mesh or not weapon_mesh:
+        return {
+            "loadout_asset_path": asset_path,
+            "status": "skipped",
+            "warnings": ["loadout_missing_character_or_weapon_mesh"],
+            "errors": [],
+        }
+
+    if not hasattr(unreal, "PMXEquipmentBlueprintLibrary"):
+        return {
+            "loadout_asset_path": asset_path,
+            "status": "skipped",
+            "warnings": ["pmx_blueprint_library_unavailable"],
+            "errors": [],
+        }
+
+    actor_subsystem = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+    actor = None
+    try:
+        actor = actor_subsystem.spawn_actor_from_class(unreal.Character.static_class(), unreal.Vector(0.0, 0.0, 0.0), make_rotator(0.0, 0.0, 0.0))
+        if not actor:
+            return {
+                "loadout_asset_path": asset_path,
+                "status": "skipped",
+                "warnings": ["failed_to_spawn_preview_character"],
+                "errors": [],
+            }
+
+        owner_mesh = actor.get_editor_property("mesh")
+        owner_mesh.set_skeletal_mesh(character_mesh)
+        weapon_component = unreal.PMXEquipmentBlueprintLibrary.apply_equipment_loadout(actor, loadout_asset)
+        pmx_component = actor.get_component_by_class(unreal.PMXCharacterEquipmentComponent)
+
+        desired_weapon_mesh = pmx_component.get_desired_weapon_mesh() if pmx_component else None
+        attach_socket_name = str(pmx_component.get_attach_socket_name()) if pmx_component else ""
+        managed_component = pmx_component.get_managed_weapon_mesh_component() if pmx_component else None
+
+        success = bool(weapon_component and managed_component and desired_weapon_mesh)
+        warnings = []
+        if success and attach_socket_name != str(loadout.attach_socket_name):
+            warnings.append(f"attach_socket_mismatch:{attach_socket_name}:{loadout.attach_socket_name}")
+
+        return {
+            "loadout_asset_path": asset_path,
+            "status": "pass" if success else "fail",
+            "warnings": warnings,
+            "errors": [] if success else ["preview_apply_equipment_loadout_failed"],
+            "attach_socket_name": attach_socket_name,
+            "desired_weapon_mesh_path": path_for_loaded_asset(desired_weapon_mesh),
+            "managed_weapon_component_name": managed_component.get_name() if managed_component else None,
+        }
+    except Exception as exc:
+        return {
+            "loadout_asset_path": asset_path,
+            "status": "fail",
+            "warnings": [],
+            "errors": [str(exc)],
+        }
+    finally:
+        if actor:
+            try:
+                actor_subsystem.destroy_actor(actor)
+            except Exception:
+                pass
+
+
+def configure_component_blueprint(blueprint, weapon_mesh_path: str | None, attach_socket_name: str | None) -> None:
+    cdo = blueprint_cdo(blueprint)
+    if not cdo:
+        raise RuntimeError("Unable to resolve blueprint CDO for component blueprint")
+    set_if_present(cdo, "desired_weapon_mesh", load_asset(weapon_mesh_path))
+    set_if_present(cdo, "attach_socket_name", attach_socket_name or "WeaponSocket")
+    set_if_present(cdo, "b_create_component_if_missing", True)
+    set_if_present(cdo, "create_component_if_missing", True)
+    compile_blueprint_asset(blueprint)
+
+
+def configure_host_blueprint(blueprint, character_mesh_path: str | None, loadout_asset, component_blueprint) -> None:
+    cdo = blueprint_cdo(blueprint)
+    if not cdo:
+        raise RuntimeError("Unable to resolve blueprint CDO for host blueprint")
+    component_class = blueprint_generated_class(component_blueprint) if component_blueprint else unreal.PMXCharacterEquipmentComponent
+    set_if_present(cdo, "character_mesh_asset", load_asset(character_mesh_path))
+    set_if_present(cdo, "default_loadout_asset", loadout_asset)
+    set_if_present(cdo, "equipment_component_class", component_class)
+    compile_blueprint_asset(blueprint)
+
+
+def validate_host_blueprint(host_blueprint, host_asset_path: str, loadout_asset, loadout_record: dict, component_blueprint_asset_path: str) -> dict:
+    generated_class = blueprint_generated_class(host_blueprint)
+    if not generated_class:
+        return {
+            "asset_path": host_asset_path,
+            "status": "fail",
+            "warnings": [],
+            "errors": ["host_blueprint_generated_class_missing"],
+        }
+
+    actor_subsystem = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+    actor = None
+    try:
+        actor = actor_subsystem.spawn_actor_from_class(generated_class, unreal.Vector(0.0, 0.0, 0.0), make_rotator(0.0, 0.0, 0.0))
+        if not actor:
+            return {
+                "asset_path": host_asset_path,
+                "status": "fail",
+                "warnings": [],
+                "errors": ["failed_to_spawn_host_blueprint"],
+            }
+
+        actor.apply_configured_loadout()
+        equipment_component = actor.get_component_by_class(unreal.PMXCharacterEquipmentComponent)
+        managed_component = equipment_component.get_managed_weapon_mesh_component() if equipment_component else None
+        desired_weapon_mesh = equipment_component.get_desired_weapon_mesh() if equipment_component else None
+        attach_socket_name = str(equipment_component.get_attach_socket_name()) if equipment_component else ""
+        mesh_component = actor.get_editor_property("mesh") if hasattr(actor, "get_editor_property") else None
+        has_ready_weapon_pairs = bool(loadout_record.get("has_ready_weapon_pairs"))
+        has_runtime_weapon_mesh_component = bool(managed_component and desired_weapon_mesh)
+        success = has_runtime_weapon_mesh_component if has_ready_weapon_pairs else True
+
+        return {
+            "asset_path": host_asset_path,
+            "loadout_asset_path": loadout_record.get("loadout_asset_path"),
+            "component_blueprint_asset_path": component_blueprint_asset_path,
+            "default_weapon_package_id": loadout_record.get("default_weapon_package_id") or "",
+            "default_weapon_skeletal_mesh": loadout_record.get("default_weapon_skeletal_mesh") or "",
+            "consumer_ready": bool(loadout_record.get("consumer_ready")),
+            "has_ready_weapon_pairs": has_ready_weapon_pairs,
+            "has_runtime_weapon_mesh_component": has_runtime_weapon_mesh_component,
+            "default_weapon_component_name": managed_component.get_name() if managed_component else "DefaultWeaponMeshComponent",
+            "default_weapon_component_created": False,
+            "default_weapon_component_attach_ok": bool(not has_ready_weapon_pairs or has_runtime_weapon_mesh_component),
+            "default_weapon_component_attach_parent": mesh_component.get_name() if mesh_component else "CharacterMesh0",
+            "default_weapon_component_attach_socket_name": attach_socket_name or "WeaponSocket",
+            "equipment_component_parent_class": str(unreal.PMXCharacterEquipmentComponent),
+            "native_runtime_available": True,
+            "status": "pass" if success else "fail",
+            "warnings": [],
+            "errors": [] if success else ["host_runtime_weapon_mesh_component_missing"],
+        }
+    except Exception as exc:
+        return {
+            "asset_path": host_asset_path,
+            "status": "fail",
+            "warnings": [],
+            "errors": [str(exc)],
+        }
+    finally:
+        if actor:
+            try:
+                actor_subsystem.destroy_actor(actor)
+            except Exception:
+                pass
+
+
+def serialize_vector(vector) -> dict[str, float]:
+    return {
+        "x": float(vector.x),
+        "y": float(vector.y),
+        "z": float(vector.z),
+    }
+
+
+def serialize_rotator(rotator) -> dict[str, float]:
+    return {
+        "pitch": float(rotator.pitch),
+        "yaw": float(rotator.yaw),
+        "roll": float(rotator.roll),
+    }
+
+
+def make_rotator(pitch: float = 0.0, yaw: float = 0.0, roll: float = 0.0) -> unreal.Rotator:
+    rotator = unreal.Rotator()
+    rotator.pitch = float(pitch)
+    rotator.yaw = float(yaw)
+    rotator.roll = float(roll)
+    return rotator
+
+
+def vector_from_request(value, default: unreal.Vector | None = None) -> unreal.Vector:
+    if isinstance(value, unreal.Vector):
+        return value
+    if isinstance(value, (list, tuple)) and len(value) >= 3:
+        return unreal.Vector(float(value[0]), float(value[1]), float(value[2]))
+    if isinstance(value, dict):
+        return unreal.Vector(
+            float(value.get("x", 0.0)),
+            float(value.get("y", 0.0)),
+            float(value.get("z", 0.0)),
+        )
+    return default or unreal.Vector(0.0, 0.0, 0.0)
+
+
+def rotator_from_request(value, default: unreal.Rotator | None = None) -> unreal.Rotator:
+    if isinstance(value, unreal.Rotator):
+        return value
+    if isinstance(value, (list, tuple)) and len(value) >= 3:
+        return make_rotator(float(value[0]), float(value[1]), float(value[2]))
+    if isinstance(value, dict):
+        return make_rotator(
+            float(value.get("pitch", 0.0)),
+            float(value.get("yaw", 0.0)),
+            float(value.get("roll", 0.0)),
+        )
+    return default or make_rotator(0.0, 0.0, 0.0)
+
+
+def editor_actor_subsystem():
+    return unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+
+
+def level_editor_subsystem():
+    return unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
+
+
+def get_current_level_path() -> str:
+    try:
+        current_level = level_editor_subsystem().get_current_level()
+        if current_level:
+            return current_level.get_path_name()
+    except Exception:
+        pass
+    world = unreal.EditorLevelLibrary.get_editor_world()
+    return world.get_path_name() if world else ""
+
+
+def find_actor_by_label_or_path(actor_label: str | None = None, actor_path: str | None = None):
+    for actor in editor_actor_subsystem().get_all_level_actors():
+        try:
+            if actor_path and actor.get_path_name() == actor_path:
+                return actor
+            if actor_label and (actor.get_actor_label() == actor_label or actor.get_name() == actor_label):
+                return actor
+            if actor_label:
+                tags = [str(tag) for tag in (actor.tags or [])]
+                if actor_label in tags:
+                    return actor
+        except Exception:
+            continue
+    return None
+
+
+def ensure_actor_tag(actor, tag_value: str) -> None:
+    if not actor or not tag_value:
+        return
+    try:
+        existing = [str(tag) for tag in (actor.tags or [])]
+        if tag_value in existing:
+            return
+        actor.tags = list(actor.tags or []) + [to_name(tag_value)]
+    except Exception:
+        pass
+
+
+def wait_for_actor_labels(labels: list[str], timeout_seconds: float = 5.0, poll_interval_seconds: float = 0.1) -> bool:
+    pending = {str(label) for label in labels if label}
+    if not pending:
+        return True
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        pending = {label for label in pending if not find_actor_by_label_or_path(actor_label=label)}
+        if not pending:
+            return True
+        time.sleep(poll_interval_seconds)
+    return not pending
+
+
+def snapshot_visible_actors(limit: int = 200) -> list[dict]:
+    snapshot = []
+    for actor in editor_actor_subsystem().get_all_level_actors():
+        try:
+            snapshot.append(
+                {
+                    "label": actor.get_actor_label(),
+                    "name": actor.get_name(),
+                    "class_name": actor_class_name(actor),
+                    "tags": [str(tag) for tag in (actor.tags or [])],
+                    "location": serialize_vector(actor.get_actor_location()),
+                    "rotation": serialize_rotator(actor.get_actor_rotation()),
+                }
+            )
+        except Exception:
+            continue
+        if len(snapshot) >= limit:
+            break
+    return snapshot
+
+
+def actor_class_name(actor) -> str:
+    try:
+        return actor.get_class().get_name()
+    except Exception:
+        return ""
+
+
+def component_class_name(component) -> str:
+    try:
+        return component.get_class().get_name()
+    except Exception:
+        return ""
+
+
+def summarize_render_components(actor) -> list[dict]:
+    records = []
+    if not actor:
+        return records
+    component_sets = []
+    for component_class in (getattr(unreal, "PrimitiveComponent", None), getattr(unreal, "ChildActorComponent", None)):
+        if component_class is None:
+            continue
+        try:
+            component_sets.extend(list(actor.get_components_by_class(component_class) or []))
+        except Exception:
+            continue
+    components = component_sets
+    for component in components or []:
+        class_name = component_class_name(component)
+        if class_name not in {
+            "SkeletalMeshComponent",
+            "StaticMeshComponent",
+            "ChildActorComponent",
+            "CapsuleComponent",
+        }:
+            continue
+        record = {
+            "component_name": str(getattr(component, "get_name", lambda: "")() or ""),
+            "class_name": class_name,
+        }
+        for property_name in ("visible", "hidden_in_game", "cast_shadow"):
+            try:
+                record[property_name] = component.get_editor_property(property_name)
+            except Exception:
+                continue
+        if class_name == "SkeletalMeshComponent":
+            try:
+                skeletal_mesh = component.get_editor_property("skeletal_mesh_asset")
+            except Exception:
+                skeletal_mesh = None
+            if skeletal_mesh:
+                record["asset_path"] = skeletal_mesh.get_path_name()
+        if class_name == "StaticMeshComponent":
+            try:
+                static_mesh = component.get_editor_property("static_mesh")
+            except Exception:
+                static_mesh = None
+            if static_mesh:
+                record["asset_path"] = static_mesh.get_path_name()
+        try:
+            origin, extent = component.bounds.origin, component.bounds.box_extent
+            record["bounds_origin"] = serialize_vector(origin)
+            record["bounds_extent"] = serialize_vector(extent)
+        except Exception:
+            pass
+        records.append(record)
+    return records
+
+
+def component_world_location(component):
+    if not component:
+        return None
+    for method_name in ("get_world_location", "get_component_location", "k2_get_component_location"):
+        if hasattr(component, method_name):
+            try:
+                return getattr(component, method_name)()
+            except Exception:
+                continue
+    return None
+
+
+def component_world_rotation(component):
+    if not component:
+        return None
+    for method_name in ("get_world_rotation", "get_component_rotation", "k2_get_component_rotation"):
+        if hasattr(component, method_name):
+            try:
+                return getattr(component, method_name)()
+            except Exception:
+                continue
+    return None
+
+
+def camera_view_transform(camera_actor) -> tuple[unreal.Vector, unreal.Rotator, str]:
+    if camera_actor:
+        component = None
+        if hasattr(camera_actor, "get_cine_camera_component"):
+            try:
+                component = camera_actor.get_cine_camera_component()
+            except Exception:
+                component = None
+        if component is None and hasattr(camera_actor, "get_camera_component"):
+            try:
+                component = camera_actor.get_camera_component()
+            except Exception:
+                component = None
+        component_location = component_world_location(component)
+        component_rotation = component_world_rotation(component)
+        if component_location is not None and component_rotation is not None:
+            return component_location, component_rotation, "camera_component_world_transform"
+        return camera_actor.get_actor_location(), camera_actor.get_actor_rotation(), "actor_transform"
+    return unreal.Vector(0.0, 0.0, 0.0), make_rotator(0.0, 0.0, 0.0), "fallback_identity"
+
+
+def serialize_actor_reference(actor, label: str | None = None) -> dict:
+    if not actor:
+        return {}
+    view_location = None
+    view_rotation = None
+    view_transform_source = ""
+    if actor_class_name(actor) in {"CameraActor", "CineCameraActor"}:
+        view_location, view_rotation, view_transform_source = camera_view_transform(actor)
+    return {
+        "label": label or actor.get_actor_label(),
+        "actor_label": actor.get_actor_label(),
+        "actor_name": actor.get_name(),
+        "actor_path": actor.get_path_name(),
+        "class_name": actor_class_name(actor),
+        "location": serialize_vector(actor.get_actor_location()),
+        "rotation": serialize_rotator(actor.get_actor_rotation()),
+        "view_location": serialize_vector(view_location) if view_location is not None else {},
+        "view_rotation": serialize_rotator(view_rotation) if view_rotation is not None else {},
+        "view_transform_source": view_transform_source,
+    }
+
+
+def resolve_stage_anchor_actor(actor_label: str | None, expected_class_name: str, role: str) -> tuple[object | None, dict]:
+    if not actor_label:
+        return None, {
+            "label": "",
+            "role": role,
+            "expected_class_name": expected_class_name,
+            "exists": False,
+            "status": "fail",
+            "warnings": [],
+            "errors": [f"{role}_anchor_label_missing"],
+        }
+
+    actor = find_actor_by_label_or_path(actor_label=actor_label)
+    if not actor:
+        return None, {
+            "label": str(actor_label),
+            "role": role,
+            "expected_class_name": expected_class_name,
+            "exists": False,
+            "status": "fail",
+            "warnings": [],
+            "errors": [f"{role}_anchor_missing:{actor_label}"],
+        }
+
+    record = serialize_actor_reference(actor, str(actor_label))
+    record.update(
+        {
+            "role": role,
+            "expected_class_name": expected_class_name,
+            "exists": True,
+            "status": "pass",
+            "warnings": [],
+            "errors": [],
+        }
+    )
+    actual_class_name = record.get("class_name") or ""
+    if expected_class_name and actual_class_name != expected_class_name:
+        record["status"] = "fail"
+        record["errors"] = [f"{role}_anchor_class_mismatch:{actor_label}:{expected_class_name}:{actual_class_name}"]
+        return None, record
+    return actor, record
+
+
+def build_anchor_camera_plan(camera_anchor, target_actor, request: dict) -> dict:
+    expected_camera_location = request.get("expected_camera_location")
+    expected_camera_rotation = request.get("expected_camera_rotation")
+    if expected_camera_location and expected_camera_rotation:
+        camera_location = vector_from_request(expected_camera_location)
+        reference_camera_rotation = rotator_from_request(expected_camera_rotation)
+        camera_transform_source = "request_expected_stage_transform"
+    else:
+        camera_location, reference_camera_rotation, camera_transform_source = camera_view_transform(camera_anchor)
+    camera_rotation = reference_camera_rotation
+    payload = {
+        "camera_source": "anchor_actor",
+        "camera_anchor_actor_label": str(request.get("camera_anchor_actor_label") or camera_anchor.get_actor_label()),
+        "camera_anchor_actor_path": camera_anchor.get_path_name(),
+        "camera_location": serialize_vector(camera_location),
+        "camera_rotation": serialize_rotator(camera_rotation),
+        "camera_reference_rotation": serialize_rotator(reference_camera_rotation),
+        "camera_view_transform_source": camera_transform_source,
+        "camera_rotation_source": "anchor_reference_rotation",
+        "spawn_anchor_actor_label": str(request.get("spawn_anchor_actor_label") or ""),
+    }
+    if target_actor:
+        origin, extent = actor_bounds(target_actor)
+        target_height_offset = float(request.get("target_height_offset") or max(extent.z * 0.65, 90.0))
+        look_at_target_location = origin + unreal.Vector(0.0, 0.0, target_height_offset)
+        camera_rotation = unreal.MathLibrary.find_look_at_rotation(camera_location, look_at_target_location)
+        payload["camera_rotation"] = serialize_rotator(camera_rotation)
+        payload["camera_rotation_source"] = "look_at_target_from_fixed_anchor_position"
+        payload["look_at_target_location"] = serialize_vector(look_at_target_location)
+        payload["target_bounds_origin"] = serialize_vector(origin)
+        payload["target_bounds_extent"] = serialize_vector(extent)
+        payload.update(
+            {
+                "target_actor_label": target_actor.get_actor_label(),
+                "target_actor_path": target_actor.get_path_name(),
+                "target_location": serialize_vector(target_actor.get_actor_location()),
+                "target_rotation": serialize_rotator(target_actor.get_actor_rotation()),
+            }
+        )
+    return payload
+
+
+def stage_anchor_class(anchor_class_name: str):
+    class_map = {
+        "TargetPoint": getattr(unreal, "TargetPoint", None),
+        "CineCameraActor": getattr(unreal, "CineCameraActor", None),
+    }
+    resolved = class_map.get(anchor_class_name)
+    if resolved is None:
+        raise ValueError(f"unsupported_stage_anchor_class:{anchor_class_name}")
+    return resolved
+
+
+def save_current_level() -> tuple[bool, list[str]]:
+    warnings = []
+    try:
+        saved = unreal.EditorLevelLibrary.save_current_level()
+        if saved:
+            return True, warnings
+        warnings.append("save_current_level_returned_false")
+    except Exception as exc:
+        warnings.append(f"save_current_level_failed:{exc}")
+
+    if hasattr(unreal, "EditorLoadingAndSavingUtils"):
+        try:
+            saved = unreal.EditorLoadingAndSavingUtils.save_dirty_packages(True, True)
+            if saved:
+                return True, warnings
+            warnings.append("save_dirty_packages_returned_false")
+        except Exception as exc:
+            warnings.append(f"save_dirty_packages_failed:{exc}")
+    return False, warnings
+
+
+def resolve_equipment_report_path(request: dict) -> Path | None:
+    explicit = request.get("report_path")
+    if explicit:
+        candidate = Path(explicit).expanduser().resolve()
+        if candidate.exists():
+            return candidate
+    related_paths = [
+        request.get("summary"),
+        request.get("suite_output"),
+        request.get("capture_manifest_output"),
+    ]
+    sibling_names = [
+        "ue_equipment_assets_report.local.json",
+        "ue_equipment_assets_report.json",
+    ]
+    for raw_path in related_paths:
+        if not raw_path:
+            continue
+        base_path = Path(raw_path).expanduser().resolve()
+        for candidate_name in sibling_names:
+            candidate = base_path.parent / candidate_name
+            if candidate.exists():
+                return candidate
+    return None
+
+
+def resolve_host_record(request: dict) -> tuple[dict | None, list[str]]:
+    warnings = []
+    report_path = resolve_equipment_report_path(request)
+    if not report_path:
+        return None, warnings
+    payload = read_json(report_path)
+    host_records = list(payload.get("host_blueprints") or [])
+    host_asset_path = request.get("host_blueprint_asset_path")
+    sample_id = request.get("sample_id")
+    character_package_id = request.get("package_id") or request.get("character_package_id")
+    runtime_ready_only = bool(request.get("runtime_ready_only"))
+
+    filtered = host_records
+    if runtime_ready_only:
+        filtered = [record for record in filtered if record.get("has_runtime_weapon_mesh_component")]
+    if host_asset_path:
+        for record in filtered:
+            if record.get("asset_path") == host_asset_path:
+                return record, warnings
+    if character_package_id:
+        for record in filtered:
+            if record.get("character_package_id") == character_package_id:
+                return record, warnings
+    if sample_id:
+        for record in filtered:
+            if record.get("sample_id") == sample_id:
+                return record, warnings
+    if runtime_ready_only and filtered:
+        warnings.append("host_record_not_specified_defaulted_to_first_runtime_ready_host")
+        return filtered[0], warnings
+    if filtered:
+        warnings.append("host_record_not_specified_defaulted_to_first_available_host")
+        return filtered[0], warnings
+    return None, warnings
+
+
+def resolve_host_blueprint_asset_path(request: dict) -> tuple[str, dict | None, list[str]]:
+    warnings = []
+    host_asset_path = request.get("host_blueprint_asset_path")
+    host_record = None
+    if not host_asset_path:
+        host_record, record_warnings = resolve_host_record(request)
+        warnings.extend(record_warnings)
+        host_asset_path = host_record.get("asset_path") if host_record else None
+    if host_asset_path and unreal.EditorAssetLibrary.does_asset_exist(object_path_from_asset_path(str(host_asset_path))):
+        return str(host_asset_path), host_record, warnings
+    discovered_record = discover_live_host_record(
+        request.get("asset_root") or "/Game/PMXPipeline",
+        request.get("package_id") or request.get("character_package_id"),
+        request.get("sample_id"),
+    )
+    if discovered_record:
+        if host_asset_path and host_asset_path != discovered_record.get("asset_path"):
+            warnings.append("stale_host_asset_path_replaced_from_live_registry")
+        return str(discovered_record["asset_path"]), discovered_record, warnings
+    if not host_asset_path:
+        raise ValueError("host_blueprint_asset_path_missing")
+    return str(host_asset_path), host_record, warnings
+
+
+def discover_live_host_record(asset_root: str, package_id: str | None, sample_id: str | None) -> dict | None:
+    registry = unreal.AssetRegistryHelpers.get_asset_registry()
+    suite_root = f"{asset_root.rstrip('/')}/Registry/Suites"
+    assets = list(registry.get_assets_by_path(to_name(suite_root), recursive=True))
+    sample_slug = sanitize_segment(sample_id) if sample_id else None
+    matched_loadout = None
+    for asset_data in assets:
+        if asset_class_name(asset_data) != "PMXEquipmentLoadoutAsset":
+            continue
+        object_path = asset_object_path(asset_data)
+        asset = unreal.EditorAssetLibrary.load_asset(object_path)
+        if not asset:
+            continue
+        loadout = asset.get_editor_property("loadout")
+        record_package_id = str(getattr(loadout, "character_package_id", "") or "")
+        record_sample_id = str(getattr(loadout, "sample_id", "") or "")
+        if package_id and record_package_id == package_id:
+            matched_loadout = {
+                "sample_id": record_sample_id,
+                "character_package_id": record_package_id,
+                "loadout_asset_path": object_path.rsplit(".", 1)[0],
+                "default_weapon_skeletal_mesh": str(getattr(loadout, "default_weapon_skeletal_mesh", "") or ""),
+            }
+            break
+        if sample_slug and sanitize_segment(record_sample_id) == sample_slug:
+            matched_loadout = {
+                "sample_id": record_sample_id,
+                "character_package_id": record_package_id,
+                "loadout_asset_path": object_path.rsplit(".", 1)[0],
+                "default_weapon_skeletal_mesh": str(getattr(loadout, "default_weapon_skeletal_mesh", "") or ""),
+            }
+
+    if matched_loadout:
+        loadout_asset_path = matched_loadout["loadout_asset_path"]
+        host_asset_path = loadout_asset_path.replace("/Characters/DA_PMXCharacterLoadout_", "/Hosts/BP_PMXCharacterHost_")
+        component_asset_path = loadout_asset_path.replace("/Characters/DA_PMXCharacterLoadout_", "/Components/BP_PMXCharacterEquipmentComponent_")
+        if unreal.EditorAssetLibrary.does_asset_exist(object_path_from_asset_path(host_asset_path)):
+            return {
+                "sample_id": matched_loadout["sample_id"],
+                "character_package_id": matched_loadout["character_package_id"],
+                "asset_path": host_asset_path,
+                "loadout_asset_path": loadout_asset_path,
+                "component_blueprint_asset_path": component_asset_path,
+                "default_weapon_skeletal_mesh": matched_loadout["default_weapon_skeletal_mesh"],
+                "has_runtime_weapon_mesh_component": bool(matched_loadout["default_weapon_skeletal_mesh"]),
+            }
+
+    for asset_data in assets:
+        asset_path = str(asset_data.package_name)
+        if asset_class_name(asset_data) != "Blueprint":
+            continue
+        asset_name = str(asset_data.asset_name)
+        if not asset_name.startswith("BP_PMXCharacterHost_"):
+            continue
+        if sample_slug and sample_slug not in sanitize_segment(asset_name):
+            continue
+        return {
+            "sample_id": sample_id,
+            "character_package_id": package_id,
+            "asset_path": asset_path,
+        }
+    return None
+
+
+def load_suite_summary_record(summary_path: str | None, package_id: str | None) -> dict:
+    if not summary_path or not package_id:
+        return {}
+    candidate = Path(summary_path).expanduser().resolve()
+    if not candidate.exists():
+        return {}
+    payload = read_json(candidate)
+    for entry in payload.get("successes") or []:
+        if entry.get("package_id") == package_id:
+            return entry
+    for entry in payload.get("entries") or []:
+        if entry.get("package_id") == package_id:
+            return entry
+    return {}
+
+
+def scenario_capture_overrides(index: int, scenario_name: str, request: dict) -> dict:
+    stage_map = dict(request.get("scenario_stage_map") or {})
+    stage_entry = dict(stage_map.get(scenario_name) or {})
+    camera_mode = str(stage_entry.get("camera_mode") or request.get("camera_mode") or "auto_framing")
+    if camera_mode == "anchor_actor":
+        return {
+            "camera_mode": "anchor_actor",
+            "spawn_anchor_actor_label": stage_entry.get("spawn_anchor_actor_label") or request.get("spawn_anchor_actor_label"),
+            "camera_anchor_actor_label": stage_entry.get("camera_anchor_actor_label") or request.get("camera_anchor_actor_label"),
+            "expected_spawn_location": stage_entry.get("expected_spawn_location"),
+            "expected_spawn_rotation": stage_entry.get("expected_spawn_rotation"),
+            "expected_camera_location": stage_entry.get("expected_camera_location"),
+            "expected_camera_rotation": stage_entry.get("expected_camera_rotation"),
+        }
+    base_location = vector_from_request(request.get("location"), unreal.Vector(0.0, 0.0, 120.0))
+    base_rotation = rotator_from_request(request.get("rotation"), make_rotator(0.0, 180.0, 0.0))
+    base_distance = float(request.get("camera_distance") or 320.0)
+    base_lateral = float(request.get("camera_lateral_offset") or -160.0)
+    base_height = float(request.get("camera_height") or 120.0)
+    presets = {
+        "idle_2s": {
+            "location": base_location,
+            "rotation": base_rotation,
+            "camera_distance": base_distance,
+            "camera_lateral_offset": base_lateral,
+            "camera_height": base_height,
+        },
+        "walk_forward_2s": {
+            "location": unreal.Vector(base_location.x + 110.0 + (index * 5.0), base_location.y + 30.0, base_location.z),
+            "rotation": make_rotator(base_rotation.pitch, base_rotation.yaw - 15.0, base_rotation.roll),
+            "camera_distance": base_distance - 20.0,
+            "camera_lateral_offset": base_lateral + 15.0,
+            "camera_height": base_height,
+        },
+        "run_forward_2s": {
+            "location": unreal.Vector(base_location.x + 220.0 + (index * 10.0), base_location.y - 55.0, base_location.z),
+            "rotation": make_rotator(base_rotation.pitch, base_rotation.yaw - 32.0, base_rotation.roll),
+            "camera_distance": base_distance - 35.0,
+            "camera_lateral_offset": base_lateral + 40.0,
+            "camera_height": base_height + 6.0,
+        },
+        "jump_land_1cycle": {
+            "location": unreal.Vector(base_location.x + 90.0, base_location.y + 95.0, base_location.z + 95.0),
+            "rotation": make_rotator(base_rotation.pitch, base_rotation.yaw - 8.0, base_rotation.roll),
+            "camera_distance": base_distance + 25.0,
+            "camera_lateral_offset": base_lateral - 10.0,
+            "camera_height": base_height + 55.0,
+            "target_height_offset": float(request.get("target_height_offset") or 150.0),
+        },
+    }
+    selected = presets.get(scenario_name, presets["idle_2s"])
+    return {
+        "camera_mode": "auto_framing",
+        "location": serialize_vector(selected["location"]),
+        "rotation": serialize_rotator(selected["rotation"]),
+        "camera_distance": float(selected.get("camera_distance", base_distance)),
+        "camera_lateral_offset": float(selected.get("camera_lateral_offset", base_lateral)),
+        "camera_height": float(selected.get("camera_height", base_height)),
+        "target_height_offset": float(selected.get("target_height_offset", request.get("target_height_offset") or 0.0)),
+    }
+
+
+def actor_bounds(actor) -> tuple[unreal.Vector, unreal.Vector]:
+    try:
+        origin, extent = actor.get_actor_bounds(False)
+        return origin, extent
+    except Exception:
+        origin = actor.get_actor_location()
+        return origin, unreal.Vector(50.0, 50.0, 100.0)
+
+
+def build_capture_camera_for_actor(actor, request: dict) -> dict:
+    origin, extent = actor_bounds(actor)
+    actor_location = actor.get_actor_location()
+    actor_rotation = actor.get_actor_rotation()
+    forward = actor.get_actor_forward_vector()
+    right = actor.get_actor_right_vector()
+    distance = float(request.get("camera_distance") or max(extent.x, extent.y, 80.0) * 3.0)
+    lateral_offset = float(request.get("camera_lateral_offset") or (-0.5 * distance))
+    camera_height = float(request.get("camera_height") or max(extent.z * 1.2, 120.0))
+    target_height_offset = float(request.get("target_height_offset") or max(extent.z * 0.65, 90.0))
+    camera_location = (
+        origin
+        - (forward * distance)
+        + (right * lateral_offset)
+        + unreal.Vector(0.0, 0.0, camera_height)
+    )
+    target_location = origin + unreal.Vector(0.0, 0.0, target_height_offset)
+    camera_rotation = unreal.MathLibrary.find_look_at_rotation(camera_location, target_location)
+    return {
+        "camera_source": "auto_framing",
+        "actor_location": serialize_vector(actor_location),
+        "actor_rotation": serialize_rotator(actor_rotation),
+        "bounds_origin": serialize_vector(origin),
+        "bounds_extent": serialize_vector(extent),
+        "camera_location": serialize_vector(camera_location),
+        "camera_rotation": serialize_rotator(camera_rotation),
+        "target_location": serialize_vector(target_location),
+        "distance": distance,
+        "lateral_offset": lateral_offset,
+        "camera_height": camera_height,
+        "target_height_offset": target_height_offset,
+    }
+
+
+def normalize_degrees(value: float) -> float:
+    normalized = (float(value) + 180.0) % 360.0 - 180.0
+    if normalized == -180.0:
+        return 180.0
+    return normalized
+
+
+def camera_horizontal_fov_degrees(camera_actor) -> float:
+    fallback = 90.0
+    if not camera_actor:
+        return fallback
+    try:
+        if hasattr(camera_actor, "get_cine_camera_component"):
+            component = camera_actor.get_cine_camera_component()
+            for property_name in ("current_horizontal_fov", "field_of_view", "fov_angle"):
+                try:
+                    value = component.get_editor_property(property_name)
+                    if value:
+                        return float(value)
+                except Exception:
+                    continue
+        if hasattr(camera_actor, "get_camera_component"):
+            component = camera_actor.get_camera_component()
+            for property_name in ("field_of_view", "fov_angle"):
+                try:
+                    value = component.get_editor_property(property_name)
+                    if value:
+                        return float(value)
+                except Exception:
+                    continue
+    except Exception:
+        pass
+    return fallback
+
+
+def evaluate_subject_visibility(target_actor, camera_actor, camera_location, camera_rotation, width: int, height: int) -> dict:
+    origin, extent = actor_bounds(target_actor)
+    target_location = origin + unreal.Vector(0.0, 0.0, max(extent.z * 0.25, 40.0))
+    look_at_rotation = unreal.MathLibrary.find_look_at_rotation(camera_location, target_location)
+    delta_pitch = normalize_degrees(look_at_rotation.pitch - camera_rotation.pitch)
+    delta_yaw = normalize_degrees(look_at_rotation.yaw - camera_rotation.yaw)
+    to_target = target_location - camera_location
+    target_distance = float(to_target.length())
+    if target_distance <= 0.001:
+        return {
+            "visible": False,
+            "reason": "camera_and_target_coincident",
+            "delta_pitch": delta_pitch,
+            "delta_yaw": delta_yaw,
+            "target_distance": target_distance,
+            "horizontal_fov": 0.0,
+            "vertical_fov": 0.0,
+        }
+
+    horizontal_fov = max(10.0, min(170.0, camera_horizontal_fov_degrees(camera_actor)))
+    aspect_ratio = float(width) / float(height) if height else (16.0 / 9.0)
+    vertical_fov = float(
+        2.0
+        * math.degrees(math.atan(math.tan(math.radians(horizontal_fov) / 2.0) / max(aspect_ratio, 0.1)))
+    )
+    horizontal_margin = (horizontal_fov * 0.5) * 0.92
+    vertical_margin = (vertical_fov * 0.5) * 0.92
+    extent_yaw_margin = float(math.degrees(math.atan2(max(extent.x, extent.y, 1.0), max(target_distance, 1.0))))
+    extent_pitch_margin = float(math.degrees(math.atan2(max(extent.z, 1.0), max(target_distance, 1.0))))
+    subject_visible = abs(delta_yaw) <= (horizontal_margin + extent_yaw_margin) and abs(delta_pitch) <= (vertical_margin + extent_pitch_margin)
+    return {
+        "visible": bool(subject_visible),
+        "reason": "within_camera_frustum_estimate" if subject_visible else "target_origin_outside_camera_frustum_estimate",
+        "delta_pitch": delta_pitch,
+        "delta_yaw": delta_yaw,
+        "target_distance": target_distance,
+        "horizontal_fov": horizontal_fov,
+        "vertical_fov": vertical_fov,
+        "horizontal_margin": horizontal_margin,
+        "vertical_margin": vertical_margin,
+        "extent_yaw_margin": extent_yaw_margin,
+        "extent_pitch_margin": extent_pitch_margin,
+        "target_location": serialize_vector(target_location),
+        "target_bounds_origin": serialize_vector(origin),
+        "target_bounds_extent": serialize_vector(extent),
+        "camera_location": serialize_vector(camera_location),
+        "camera_rotation": serialize_rotator(camera_rotation),
+        "look_at_rotation": serialize_rotator(look_at_rotation),
+    }
+
+
+def component_asset_path(component) -> str:
+    if not component:
+        return ""
+    for property_name in ("skeletal_mesh_asset", "skeletal_mesh", "static_mesh"):
+        try:
+            asset = component.get_editor_property(property_name)
+        except Exception:
+            asset = None
+        if asset:
+            try:
+                return asset.get_path_name()
+            except Exception:
+                continue
+    return ""
+
+
+def component_visibility_record(component) -> dict:
+    payload = {
+        "visible": None,
+        "hidden_in_game": None,
+        "component_name": str(getattr(component, "get_name", lambda: "")() or "") if component else "",
+        "class_name": component_class_name(component) if component else "",
+        "asset_path": component_asset_path(component),
+    }
+    if not component:
+        return payload
+    for property_name in ("visible", "hidden_in_game", "cast_shadow"):
+        try:
+            payload[property_name] = component.get_editor_property(property_name)
+        except Exception:
+            continue
+    return payload
+
+
+def bounds_payload_from_origin_extent(origin, extent, source: str) -> dict:
+    diagonal_length = float(math.sqrt((extent.x * extent.x) + (extent.y * extent.y) + (extent.z * extent.z)))
+    return {
+        "origin": serialize_vector(origin),
+        "extent": serialize_vector(extent),
+        "diagonal_length": diagonal_length,
+        "non_zero": diagonal_length > 1.0,
+        "source": source,
+    }
+
+
+def asset_bounds_payload_for_component(component) -> dict:
+    if not component:
+        return {
+            "origin": {},
+            "extent": {},
+            "diagonal_length": 0.0,
+            "non_zero": False,
+            "source": "asset_bounds_unavailable",
+        }
+    asset = None
+    for property_name in ("skeletal_mesh_asset", "skeletal_mesh", "static_mesh"):
+        try:
+            asset = component.get_editor_property(property_name)
+        except Exception:
+            asset = None
+        if asset:
+            break
+    if not asset:
+        return {
+            "origin": {},
+            "extent": {},
+            "diagonal_length": 0.0,
+            "non_zero": False,
+            "source": "asset_missing",
+        }
+    local_origin = local_extent = None
+    for property_name in ("extended_bounds", "imported_bounds", "bounds"):
+        try:
+            bounds_value = asset.get_editor_property(property_name)
+        except Exception:
+            bounds_value = None
+        if bounds_value and hasattr(bounds_value, "origin") and hasattr(bounds_value, "box_extent"):
+            local_origin = bounds_value.origin
+            local_extent = bounds_value.box_extent
+            break
+    if local_origin is None or local_extent is None:
+        if hasattr(asset, "get_bounds"):
+            try:
+                bounds_value = asset.get_bounds()
+            except Exception:
+                bounds_value = None
+            if bounds_value and hasattr(bounds_value, "origin") and hasattr(bounds_value, "box_extent"):
+                local_origin = bounds_value.origin
+                local_extent = bounds_value.box_extent
+    if local_origin is None or local_extent is None:
+        return {
+            "origin": {},
+            "extent": {},
+            "diagonal_length": 0.0,
+            "non_zero": False,
+            "source": "asset_bounds_unavailable",
+        }
+    component_location = component_world_location(component) or unreal.Vector(0.0, 0.0, 0.0)
+    world_origin = unreal.Vector(
+        component_location.x + float(local_origin.x),
+        component_location.y + float(local_origin.y),
+        component_location.z + float(local_origin.z),
+    )
+    return bounds_payload_from_origin_extent(world_origin, local_extent, "asset_bounds_fallback")
+
+
+def component_bounds_payload(component, fallback_actor=None) -> dict:
+    payload = {
+        "origin": {},
+        "extent": {},
+        "diagonal_length": 0.0,
+        "non_zero": False,
+        "source": "component_bounds",
+    }
+    if not component:
+        if fallback_actor:
+            origin, extent = actor_bounds(fallback_actor)
+            return bounds_payload_from_origin_extent(origin, extent, "fallback_actor_bounds")
+        return payload
+    origin = extent = None
+    try:
+        origin = component.bounds.origin
+        extent = component.bounds.box_extent
+        payload = bounds_payload_from_origin_extent(origin, extent, "component_bounds")
+    except Exception:
+        location = component_world_location(component)
+        origin = location or unreal.Vector(0.0, 0.0, 0.0)
+        extent = unreal.Vector(0.0, 0.0, 0.0)
+        payload = bounds_payload_from_origin_extent(origin, extent, "component_bounds")
+    if not payload.get("non_zero") and hasattr(component, "get_component_bounds"):
+        try:
+            component_origin, component_extent = component.get_component_bounds()
+        except Exception:
+            component_origin = component_extent = None
+        if component_origin is not None and component_extent is not None:
+            component_payload = bounds_payload_from_origin_extent(component_origin, component_extent, "component_get_component_bounds")
+            if component_payload.get("non_zero"):
+                payload = component_payload
+    if not payload.get("non_zero") and hasattr(component, "calc_bounds") and hasattr(component, "get_component_transform"):
+        try:
+            calc_bounds = component.calc_bounds(component.get_component_transform())
+        except Exception:
+            calc_bounds = None
+        if calc_bounds and hasattr(calc_bounds, "origin") and hasattr(calc_bounds, "box_extent"):
+            calc_payload = bounds_payload_from_origin_extent(calc_bounds.origin, calc_bounds.box_extent, "component_calc_bounds")
+            if calc_payload.get("non_zero"):
+                payload = calc_payload
+    if not payload.get("non_zero"):
+        asset_payload = asset_bounds_payload_for_component(component)
+        if asset_payload.get("non_zero"):
+            payload = asset_payload
+    if (not payload["non_zero"]) and fallback_actor:
+        fallback_origin, fallback_extent = actor_bounds(fallback_actor)
+        payload = bounds_payload_from_origin_extent(fallback_origin, fallback_extent, "fallback_actor_bounds")
+    return payload
+
+
+def component_transform_payload(component) -> dict:
+    location = component_world_location(component)
+    rotation = component_world_rotation(component)
+    scale = None
+    if component:
+        for method_name in ("get_component_scale", "get_world_scale"):
+            if hasattr(component, method_name):
+                try:
+                    scale = getattr(component, method_name)()
+                    break
+                except Exception:
+                    continue
+    return {
+        "location": serialize_vector(location) if location is not None else {},
+        "rotation": serialize_rotator(rotation) if rotation is not None else {},
+        "scale": serialize_vector(scale) if scale is not None else {},
+    }
+
+
+def component_relative_transform_payload(component) -> dict:
+    location = rotation = scale = None
+    if component:
+        for method_name in ("get_relative_location",):
+            if hasattr(component, method_name):
+                try:
+                    location = getattr(component, method_name)()
+                    break
+                except Exception:
+                    continue
+        for method_name in ("get_relative_rotation",):
+            if hasattr(component, method_name):
+                try:
+                    rotation = getattr(component, method_name)()
+                    break
+                except Exception:
+                    continue
+        for method_name in ("get_relative_scale3d",):
+            if hasattr(component, method_name):
+                try:
+                    scale = getattr(component, method_name)()
+                    break
+                except Exception:
+                    continue
+    return {
+        "location": serialize_vector(location) if location is not None else {},
+        "rotation": serialize_rotator(rotation) if rotation is not None else {},
+        "scale": serialize_vector(scale) if scale is not None else {},
+    }
+
+
+def component_attach_payload(component) -> dict:
+    payload = {
+        "attach_parent_name": "",
+        "attach_parent_class": "",
+        "attach_socket_name": "",
+        "world_transform": component_transform_payload(component),
+        "relative_transform": component_relative_transform_payload(component),
+    }
+    if not component:
+        return payload
+    attach_parent = None
+    if hasattr(component, "get_attach_parent"):
+        try:
+            attach_parent = component.get_attach_parent()
+        except Exception:
+            attach_parent = None
+    if attach_parent:
+        payload["attach_parent_name"] = str(getattr(attach_parent, "get_name", lambda: "")() or "")
+        payload["attach_parent_class"] = component_class_name(attach_parent)
+    if hasattr(component, "get_attach_socket_name"):
+        try:
+            payload["attach_socket_name"] = str(component.get_attach_socket_name() or "")
+        except Exception:
+            pass
+    return payload
+
+
+def interesting_attach_targets(component) -> list[str]:
+    if not component or not hasattr(component, "get_all_socket_names"):
+        return []
+    try:
+        names = [str(item) for item in (component.get_all_socket_names() or [])]
+    except Exception:
+        return []
+    interesting = []
+    for name in names:
+        lower = name.lower()
+        if any(token in lower for token in ("weapon", "wpn", "hand_r", "r_hand", "right", "ik_hand_r")):
+            interesting.append(name)
+    if interesting:
+        return interesting[:32]
+    return names[:16]
+
+
+def pmx_equipment_diagnostics(pmx_component, owner_mesh) -> dict:
+    payload = {
+        "component_name": str(getattr(pmx_component, "get_name", lambda: "")() or "") if pmx_component else "",
+        "component_class": component_class_name(pmx_component) if pmx_component else "",
+        "desired_weapon_mesh_asset": "",
+        "requested_attach_socket_name": "",
+        "resolved_attach_socket_name": "",
+        "resolved_attach_socket_exists": None,
+        "attach_resolution_mode": "",
+        "owner_socket_exists_for_requested_name": None,
+        "owner_interesting_attach_targets": interesting_attach_targets(owner_mesh),
+    }
+    if not pmx_component:
+        return payload
+    try:
+        desired_weapon_mesh = pmx_component.get_desired_weapon_mesh()
+    except Exception:
+        desired_weapon_mesh = None
+    if desired_weapon_mesh:
+        try:
+            payload["desired_weapon_mesh_asset"] = desired_weapon_mesh.get_path_name()
+        except Exception:
+            pass
+    if hasattr(pmx_component, "get_attach_socket_name"):
+        try:
+            requested_name = pmx_component.get_attach_socket_name()
+            payload["requested_attach_socket_name"] = str(requested_name or "")
+            if owner_mesh and requested_name and hasattr(owner_mesh, "does_socket_exist"):
+                try:
+                    payload["owner_socket_exists_for_requested_name"] = bool(owner_mesh.does_socket_exist(requested_name))
+                except Exception:
+                    pass
+        except Exception:
+            pass
+    if hasattr(pmx_component, "get_resolved_attach_socket_name"):
+        try:
+            payload["resolved_attach_socket_name"] = str(pmx_component.get_resolved_attach_socket_name() or "")
+        except Exception:
+            pass
+    if hasattr(pmx_component, "has_resolved_attach_socket"):
+        try:
+            payload["resolved_attach_socket_exists"] = bool(pmx_component.has_resolved_attach_socket())
+        except Exception:
+            pass
+    if hasattr(pmx_component, "get_attach_resolution_mode"):
+        try:
+            payload["attach_resolution_mode"] = str(pmx_component.get_attach_resolution_mode() or "")
+        except Exception:
+            pass
+    return payload
+
+
+def actor_primary_mesh_component(actor):
+    if not actor:
+        return None
+    if hasattr(actor, "get_editor_property"):
+        try:
+            mesh = actor.get_editor_property("mesh")
+            if mesh:
+                return mesh
+        except Exception:
+            pass
+    try:
+        components = list(actor.get_components_by_class(unreal.SkeletalMeshComponent) or [])
+    except Exception:
+        components = []
+    return components[0] if components else None
+
+
+def actor_weapon_mesh_component(actor, primary_component=None):
+    if not actor:
+        return None
+    try:
+        pmx_component = actor.get_component_by_class(unreal.PMXCharacterEquipmentComponent)
+    except Exception:
+        pmx_component = None
+    if pmx_component:
+        try:
+            managed = pmx_component.get_managed_weapon_mesh_component()
+            if managed:
+                return managed
+        except Exception:
+            pass
+    try:
+        components = list(actor.get_components_by_class(unreal.SkeletalMeshComponent) or [])
+    except Exception:
+        components = []
+    for component in components:
+        if primary_component and component == primary_component:
+            continue
+        asset_path = component_asset_path(component)
+        if asset_path:
+            return component
+    return components[1] if len(components) > 1 else None
+
+
+def bounds_corners(origin: unreal.Vector, extent: unreal.Vector) -> list[unreal.Vector]:
+    corners = []
+    for x_sign in (-1.0, 1.0):
+        for y_sign in (-1.0, 1.0):
+            for z_sign in (-1.0, 1.0):
+                corners.append(
+                    unreal.Vector(
+                        origin.x + (extent.x * x_sign),
+                        origin.y + (extent.y * y_sign),
+                        origin.z + (extent.z * z_sign),
+                    )
+                )
+    return corners
+
+
+def dot_vector(a, b) -> float:
+    return float((a.x * b.x) + (a.y * b.y) + (a.z * b.z))
+
+
+def project_world_to_camera_screen(world_point, camera_actor, width: int, height: int) -> dict | None:
+    camera_location = camera_actor.get_actor_location()
+    forward = camera_actor.get_actor_forward_vector()
+    right = camera_actor.get_actor_right_vector()
+    up = camera_actor.get_actor_up_vector()
+    relative = world_point - camera_location
+    depth = dot_vector(relative, forward)
+    if depth <= 0.001:
+        return None
+    horizontal_fov = max(10.0, min(170.0, camera_horizontal_fov_degrees(camera_actor)))
+    aspect_ratio = float(width) / float(height) if height else (16.0 / 9.0)
+    vertical_fov = float(
+        2.0 * math.degrees(math.atan(math.tan(math.radians(horizontal_fov) / 2.0) / max(aspect_ratio, 0.1)))
+    )
+    half_width = math.tan(math.radians(horizontal_fov) / 2.0) * depth
+    half_height = math.tan(math.radians(vertical_fov) / 2.0) * depth
+    if abs(half_width) <= 1e-6 or abs(half_height) <= 1e-6:
+        return None
+    screen_x = dot_vector(relative, right) / half_width
+    screen_y = dot_vector(relative, up) / half_height
+    return {
+        "depth": depth,
+        "ndc_x": screen_x,
+        "ndc_y": screen_y,
+        "screen_x": ((screen_x + 1.0) * 0.5) * float(width),
+        "screen_y": ((1.0 - screen_y) * 0.5) * float(height),
+    }
+
+
+def screen_coverage_for_component(component, camera_actor, width: int, height: int, fallback_actor=None) -> dict:
+    if not component:
+        return {
+            "coverage_ratio": 0.0,
+            "projected_points": 0,
+            "in_frame": False,
+            "reason": "component_missing",
+        }
+    bounds = component_bounds_payload(component, fallback_actor=fallback_actor)
+    if not bounds.get("non_zero"):
+        return {
+            "coverage_ratio": 0.0,
+            "projected_points": 0,
+            "in_frame": False,
+            "reason": "bounds_invalid",
+            "bounds": bounds,
+        }
+    origin = vector_from_request(bounds["origin"])
+    extent = vector_from_request(bounds["extent"])
+    projected = []
+    for point in bounds_corners(origin, extent):
+        screen_point = project_world_to_camera_screen(point, camera_actor, width, height)
+        if screen_point is not None:
+            projected.append(screen_point)
+    if not projected:
+        return {
+            "coverage_ratio": 0.0,
+            "projected_points": 0,
+            "in_frame": False,
+            "reason": "all_points_behind_camera",
+            "bounds": bounds,
+        }
+    screen_x_values = [item["screen_x"] for item in projected]
+    screen_y_values = [item["screen_y"] for item in projected]
+    min_x = max(0.0, min(screen_x_values))
+    max_x = min(float(width), max(screen_x_values))
+    min_y = max(0.0, min(screen_y_values))
+    max_y = min(float(height), max(screen_y_values))
+    visible_width = max(0.0, max_x - min_x)
+    visible_height = max(0.0, max_y - min_y)
+    coverage_ratio = (visible_width * visible_height) / max(float(width * height), 1.0)
+    projected_center = project_world_to_camera_screen(origin, camera_actor, width, height)
+    center_in_frame = bool(
+        projected_center
+        and 0.0 <= projected_center["screen_x"] <= float(width)
+        and 0.0 <= projected_center["screen_y"] <= float(height)
+    )
+    return {
+        "coverage_ratio": float(coverage_ratio),
+        "projected_points": len(projected),
+        "in_frame": bool(coverage_ratio > 0.0 and center_in_frame),
+        "center_in_frame": center_in_frame,
+        "screen_rect": {
+            "min_x": min_x,
+            "max_x": max_x,
+            "min_y": min_y,
+            "max_y": max_y,
+        },
+        "projected_center": projected_center or {},
+        "bounds": bounds,
+        "reason": "projected_bounds" if coverage_ratio > 0.0 else "projected_bounds_outside_frame",
+    }
+
+
+def line_of_sight_to_actor(camera_actor, target_actor) -> dict:
+    if not camera_actor or not target_actor:
+        return {
+            "clear": False,
+            "reason": "camera_or_target_missing",
+        }
+    origin, extent = actor_bounds(target_actor)
+    target_location = origin + unreal.Vector(0.0, 0.0, max(extent.z * 0.45, 65.0))
+    try:
+        hit_result = unreal.SystemLibrary.line_trace_single(
+            unreal.EditorLevelLibrary.get_editor_world(),
+            camera_actor.get_actor_location(),
+            target_location,
+            unreal.TraceTypeQuery.TRACE_TYPE_QUERY1,
+            False,
+            [camera_actor, target_actor],
+            unreal.DrawDebugTrace.NONE,
+            True,
+        )
+    except Exception as exc:
+        return {
+            "clear": False,
+            "reason": f"trace_api_failed:{exc}",
+            "target_location": serialize_vector(target_location),
+        }
+    if not hit_result:
+        return {
+            "clear": True,
+            "reason": "no_blocking_hit",
+            "target_location": serialize_vector(target_location),
+        }
+    hit_actor = None
+    try:
+        hit_actor = hit_result.get_actor()
+    except Exception:
+        hit_actor = None
+    if not hit_actor or hit_actor == target_actor:
+        return {
+            "clear": True,
+            "reason": "target_hit_or_clear",
+            "target_location": serialize_vector(target_location),
+            "hit_actor_path": hit_actor.get_path_name() if hit_actor else "",
+        }
+    return {
+        "clear": False,
+        "reason": "blocked_by_other_actor",
+        "target_location": serialize_vector(target_location),
+        "hit_actor_label": hit_actor.get_actor_label(),
+        "hit_actor_path": hit_actor.get_path_name(),
+        "hit_actor_class": actor_class_name(hit_actor),
+    }
+
+
+def find_screenshot_output_path(output_path: Path) -> Path | None:
+    if output_path.exists():
+        return output_path
+    project_saved_dir = Path(unreal.Paths.project_saved_dir())
+    fallback_roots = [
+        project_saved_dir / "Screenshots" / "WindowsEditor",
+        project_saved_dir / "Screenshots" / "Windows",
+    ]
+    for root in fallback_roots:
+        candidate = root / output_path.name
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def wait_for_screenshot(task, desired_output_path: Path, timeout_seconds: float, stability_window_seconds: float, poll_interval_seconds: float) -> tuple[Path | None, bool]:
+    deadline = time.time() + timeout_seconds
+    stable_since = None
+    last_size = None
+    while time.time() < deadline:
+        candidate = find_screenshot_output_path(desired_output_path)
+        task_done = bool(task and task.is_valid_task() and task.is_task_done()) if task else False
+        if candidate and candidate.exists():
+            current_size = candidate.stat().st_size
+            if last_size == current_size:
+                if stable_since is None:
+                    stable_since = time.time()
+                elif time.time() - stable_since >= stability_window_seconds:
+                    return candidate, task_done
+            else:
+                stable_since = None
+                last_size = current_size
+        elif task_done:
+            return None, True
+        time.sleep(poll_interval_seconds)
+    return find_screenshot_output_path(desired_output_path), bool(task and task.is_valid_task() and task.is_task_done()) if task else False
+
+
+def capture_to_render_target(
+    capture_camera,
+    width: int,
+    height: int,
+    output_path: Path,
+    capture_hdr: bool,
+    delay_seconds: float,
+    timeout_seconds: float,
+    stability_window_seconds: float,
+    poll_interval_seconds: float,
+) -> dict:
+    world = unreal.EditorLevelLibrary.get_editor_world()
+    actor_subsystem = editor_actor_subsystem()
+    scene_capture_actor = None
+    render_target = None
+    warnings = []
+    try:
+        scene_capture_actor = actor_subsystem.spawn_actor_from_class(
+            unreal.SceneCapture2D,
+            capture_camera.get_actor_location(),
+            capture_camera.get_actor_rotation(),
+            True,
+        )
+        if not scene_capture_actor:
+            return {
+                "output_exists": False,
+                "warnings": warnings,
+                "errors": ["scene_capture_actor_spawn_failed"],
+            }
+        component = getattr(scene_capture_actor, "capture_component2d", None)
+        if not component:
+            return {
+                "output_exists": False,
+                "warnings": warnings,
+                "errors": ["scene_capture_component_missing"],
+            }
+        render_target = unreal.RenderingLibrary.create_render_target2d(
+            world,
+            int(width),
+            int(height),
+            unreal.TextureRenderTargetFormat.RTF_RGBA8 if not capture_hdr else unreal.TextureRenderTargetFormat.RTF_RGBA16F,
+        )
+        if not render_target:
+            return {
+                "output_exists": False,
+                "warnings": warnings,
+                "errors": ["render_target_create_failed"],
+            }
+        component.set_editor_property("texture_target", render_target)
+        component.set_editor_property(
+            "capture_source",
+            unreal.SceneCaptureSource.SCS_FINAL_COLOR_LDR if not capture_hdr else unreal.SceneCaptureSource.SCS_FINAL_COLOR_HDR,
+        )
+        component.set_editor_property("capture_every_frame", False)
+        component.set_editor_property("capture_on_movement", False)
+        if hasattr(component, "fov_angle") and hasattr(capture_camera, "get_camera_component"):
+            try:
+                camera_component = capture_camera.get_camera_component()
+                fov_angle = camera_component.get_editor_property("field_of_view")
+                component.set_editor_property("fov_angle", float(fov_angle))
+            except Exception:
+                pass
+        time.sleep(max(delay_seconds, 0.05))
+        component.capture_scene()
+        unreal.RenderingLibrary.export_render_target(world, render_target, str(output_path.parent), output_path.name)
+        actual_output_path, _ = wait_for_screenshot(
+            None,
+            output_path,
+            timeout_seconds,
+            stability_window_seconds,
+            poll_interval_seconds,
+        )
+        output_exists = bool(actual_output_path and actual_output_path.exists())
+        return {
+            "output_exists": output_exists,
+            "output_path": str((actual_output_path or output_path).resolve()),
+            "file_size_bytes": int(actual_output_path.stat().st_size) if output_exists else 0,
+            "task_done": output_exists,
+            "warnings": warnings,
+            "errors": [] if output_exists else ["render_target_export_missing"],
+            "capture_backend": "scene_capture_render_target",
+        }
+    except Exception as exc:
+        return {
+            "output_exists": False,
+            "warnings": warnings,
+            "errors": [f"render_target_capture_failed:{exc}"],
+        }
+    finally:
+        if scene_capture_actor:
+            try:
+                actor_subsystem.destroy_actor(scene_capture_actor)
+            except Exception:
+                pass
+
+
+def load_level(request: dict) -> dict:
+    level_path = request.get("level_path") or request.get("scene_level_path")
+    if not level_path:
+        return {
+            "warnings": [],
+            "errors": ["level_path_missing"],
+        }
+    level_object_path = object_path_from_asset_path(str(level_path))
+    if not unreal.EditorAssetLibrary.does_asset_exist(level_object_path):
+        return {
+            "requested_level_path": str(level_path),
+            "loaded": False,
+            "current_level_path": get_current_level_path(),
+            "warnings": [],
+            "errors": [f"level_asset_missing:{level_path}"],
+        }
+    loaded = level_editor_subsystem().load_level(str(level_path))
+    current_level_path = get_current_level_path()
+    level_loaded = bool(loaded and current_level_path.startswith(str(level_path)))
+    return {
+        "requested_level_path": str(level_path),
+        "loaded": level_loaded,
+        "current_level_path": current_level_path,
+        "warnings": [] if level_loaded else [f"requested_level_not_active_after_load:{level_path}"],
+        "errors": [] if level_loaded else [f"failed_to_load_level:{level_path}"],
+    }
+
+
+def spawn_host(request: dict) -> dict:
+    host_asset_path, host_record, warnings = resolve_host_blueprint_asset_path(request)
+    actor_subsystem = editor_actor_subsystem()
+    actor_label = str(request.get("actor_label") or asset_name_from_path(host_asset_path))
+    spawn_location = vector_from_request(request.get("location"), unreal.Vector(0.0, 0.0, 0.0))
+    spawn_rotation = rotator_from_request(request.get("rotation"), make_rotator(0.0, 0.0, 0.0))
+
+    existing_actor = find_actor_by_label_or_path(actor_label=actor_label)
+    if existing_actor and request.get("replace_existing", True):
+        try:
+            actor_subsystem.destroy_actor(existing_actor)
+        except Exception as exc:
+            warnings.append(f"failed_to_destroy_existing_actor:{exc}")
+
+    blueprint_asset = unreal.EditorAssetLibrary.load_asset(object_path_from_asset_path(host_asset_path))
+    if not blueprint_asset:
+        return {
+            "warnings": warnings,
+            "errors": [f"host_blueprint_load_failed:{host_asset_path}"],
+        }
+
+    actor = actor_subsystem.spawn_actor_from_object(blueprint_asset, spawn_location, spawn_rotation)
+    if not actor:
+        return {
+            "warnings": warnings,
+            "errors": [f"failed_to_spawn_host:{host_asset_path}"],
+        }
+
+    actor.set_actor_label(actor_label)
+    try:
+        actor.apply_configured_loadout()
+    except Exception as exc:
+        warnings.append(f"apply_configured_loadout_failed:{exc}")
+
+    camera_plan = build_capture_camera_for_actor(actor, request)
+    return {
+        "host_blueprint_asset_path": host_asset_path,
+        "host_record": host_record,
+        "spawned_actor_label": actor.get_actor_label(),
+        "spawned_actor_name": actor.get_name(),
+        "spawned_actor_path": actor.get_path_name(),
+        "spawn_location": serialize_vector(actor.get_actor_location()),
+        "spawn_rotation": serialize_rotator(actor.get_actor_rotation()),
+        "current_level_path": get_current_level_path(),
+        "camera_plan": camera_plan,
+        "warnings": warnings,
+        "errors": [],
+    }
+
+
+def inspect_stage_anchors(request: dict) -> dict:
+    warnings = []
+    level_path = request.get("level_path") or request.get("scene_level_path")
+    if level_path:
+        load_result = load_level({"level_path": level_path})
+        warnings.extend(load_result.get("warnings") or [])
+        if load_result.get("errors"):
+            return {
+                "stage_id": str(request.get("stage_id") or "stage"),
+                "stage_level_path": str(level_path),
+                "current_level_path": get_current_level_path(),
+                "resolved_stage_anchors": {},
+                "warnings": warnings,
+                "errors": list(load_result.get("errors") or []),
+            }
+    expected_labels = []
+    for scenario_name in list(request.get("scenario_order") or []):
+        stage_entry = dict((request.get("scenario_stage_map") or {}).get(scenario_name) or {})
+        expected_labels.extend(
+            [
+                str(stage_entry.get("spawn_anchor_actor_label") or ""),
+                str(stage_entry.get("camera_anchor_actor_label") or ""),
+            ]
+        )
+    if expected_labels and not wait_for_actor_labels(expected_labels):
+        warnings.append("stage_anchor_labels_not_all_visible_before_inspection")
+
+    scenario_order = list(request.get("scenario_order") or [])
+    scenario_stage_map = dict(request.get("scenario_stage_map") or {})
+    resolved_stage_anchors = {}
+    errors = []
+    for scenario_name in scenario_order:
+        stage_entry = dict(scenario_stage_map.get(scenario_name) or {})
+        spawn_anchor, spawn_record = resolve_stage_anchor_actor(
+            stage_entry.get("spawn_anchor_actor_label"),
+            "TargetPoint",
+            "spawn",
+        )
+        camera_anchor, camera_record = resolve_stage_anchor_actor(
+            stage_entry.get("camera_anchor_actor_label"),
+            "CineCameraActor",
+            "camera",
+        )
+        resolved_stage_anchors[scenario_name] = {
+            "spawn": spawn_record,
+            "camera": camera_record,
+        }
+        errors.extend(list(spawn_record.get("errors") or []))
+        errors.extend(list(camera_record.get("errors") or []))
+
+    return {
+        "stage_id": str(request.get("stage_id") or "stage"),
+        "stage_level_path": str(level_path or get_current_level_path()),
+        "current_level_path": get_current_level_path(),
+        "resolved_stage_anchors": resolved_stage_anchors,
+        "visible_actor_snapshot": snapshot_visible_actors(),
+        "warnings": warnings,
+        "errors": errors,
+    }
+
+
+def ensure_stage_anchors(request: dict) -> dict:
+    warnings = []
+    level_path = request.get("level_path") or request.get("scene_level_path")
+    if level_path:
+        load_result = load_level({"level_path": level_path})
+        warnings.extend(load_result.get("warnings") or [])
+        if load_result.get("errors"):
+            return {
+                "stage_id": str(request.get("stage_id") or "stage"),
+                "stage_level_path": str(level_path),
+                "current_level_path": get_current_level_path(),
+                "resolved_stage_anchors": [],
+                "warnings": warnings,
+                "errors": list(load_result.get("errors") or []),
+            }
+
+    actor_subsystem = editor_actor_subsystem()
+    resolved_stage_anchors = []
+    errors = []
+    for anchor_spec in list(request.get("anchors") or []):
+        label = str(anchor_spec.get("label") or "")
+        anchor_class_name = str(anchor_spec.get("actor_class") or "")
+        if not label:
+            errors.append("stage_anchor_label_missing")
+            continue
+        if not anchor_class_name:
+            errors.append(f"stage_anchor_class_missing:{label}")
+            continue
+
+        try:
+            desired_class = stage_anchor_class(anchor_class_name)
+        except Exception as exc:
+            errors.append(str(exc))
+            continue
+
+        location = vector_from_request(anchor_spec.get("location"))
+        rotation = rotator_from_request(anchor_spec.get("rotation"))
+        existing_actor = find_actor_by_label_or_path(actor_label=label)
+        action = "updated"
+        if existing_actor and actor_class_name(existing_actor) != anchor_class_name:
+            try:
+                actor_subsystem.destroy_actor(existing_actor)
+                existing_actor = None
+                action = "recreated"
+            except Exception as exc:
+                errors.append(f"stage_anchor_destroy_failed:{label}:{exc}")
+                continue
+
+        if not existing_actor:
+            existing_actor = actor_subsystem.spawn_actor_from_class(desired_class, location, rotation, False)
+            action = "created" if action != "recreated" else action
+        if not existing_actor:
+            errors.append(f"stage_anchor_spawn_failed:{label}")
+            continue
+
+        try:
+            existing_actor.set_actor_label(label)
+        except Exception:
+            pass
+        ensure_actor_tag(existing_actor, label)
+        set_if_present(existing_actor, "is_spatially_loaded", False)
+        set_if_present(existing_actor, "b_is_spatially_loaded", False)
+        try:
+            existing_actor.set_actor_location(location, False, False)
+        except Exception:
+            existing_actor.set_actor_location(location, False)
+        try:
+            existing_actor.set_actor_rotation(rotation, False)
+        except Exception:
+            existing_actor.set_actor_rotation(rotation)
+
+        resolved_entry = serialize_actor_reference(existing_actor, label)
+        resolved_entry.update(
+            {
+                "requested_class_name": anchor_class_name,
+                "action": action,
+                "status": "pass",
+                "warnings": [],
+                "errors": [],
+            }
+        )
+        resolved_stage_anchors.append(resolved_entry)
+
+    saved, save_warnings = save_current_level()
+    warnings.extend(save_warnings)
+    if not saved:
+        warnings.append("stage_anchor_level_save_not_confirmed")
+
+    return {
+        "stage_id": str(request.get("stage_id") or "stage"),
+        "stage_level_path": str(level_path or get_current_level_path()),
+        "current_level_path": get_current_level_path(),
+        "resolved_stage_anchors": resolved_stage_anchors,
+        "saved_level": saved,
+        "warnings": warnings,
+        "errors": errors,
+    }
+
+
+def capture_frame(request: dict) -> dict:
+    raw_output_path = request.get("output_path")
+    output_path = Path(raw_output_path).expanduser() if raw_output_path else None
+    if output_path is None:
+        capture_root = Path(request.get("capture_root") or (Path(unreal.Paths.project_saved_dir()) / "Screenshots" / "AiUE"))
+        shot_name = sanitize_segment(str(request.get("shot_name") or request.get("actor_label") or request.get("target_actor_label") or "capture"))
+        output_path = capture_root / f"{shot_name}.png"
+    output_path = output_path.resolve()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    warnings = []
+    camera_mode = str(request.get("camera_mode") or "auto_framing")
+    level_path = request.get("level_path") or request.get("scene_level_path")
+    if level_path:
+        load_result = load_level({"level_path": level_path})
+        warnings.extend(load_result.get("warnings") or [])
+        if load_result.get("errors"):
+            return {
+                "warnings": warnings,
+                "errors": list(load_result.get("errors") or []),
+            }
+
+    spawn_anchor_actor_label = str(request.get("spawn_anchor_actor_label") or "")
+    camera_anchor_actor_label = str(request.get("camera_anchor_actor_label") or "")
+    expected_spawn_location = request.get("expected_spawn_location")
+    expected_spawn_rotation = request.get("expected_spawn_rotation")
+    resolved_stage_anchors = {}
+    spawn_anchor = None
+    camera_anchor = None
+    if camera_mode == "anchor_actor":
+        wait_for_actor_labels([spawn_anchor_actor_label, camera_anchor_actor_label])
+        spawn_anchor, spawn_anchor_record = resolve_stage_anchor_actor(spawn_anchor_actor_label, "TargetPoint", "spawn")
+        camera_anchor, camera_anchor_record = resolve_stage_anchor_actor(camera_anchor_actor_label, "CineCameraActor", "camera")
+        resolved_stage_anchors = {
+            "spawn": spawn_anchor_record,
+            "camera": camera_anchor_record,
+        }
+        anchor_errors = list(spawn_anchor_record.get("errors") or []) + list(camera_anchor_record.get("errors") or [])
+        if anchor_errors:
+            return {
+                "camera_mode": camera_mode,
+                "camera_source": "anchor_actor",
+                "spawn_anchor_actor_label": spawn_anchor_actor_label,
+                "camera_anchor_actor_label": camera_anchor_actor_label,
+                "resolved_stage_anchors": resolved_stage_anchors,
+                "warnings": warnings,
+                "errors": anchor_errors,
+            }
+
+    actor_label = request.get("actor_label") or request.get("target_actor_label")
+    actor_path = request.get("actor_path") or request.get("target_actor_path")
+    target_actor = find_actor_by_label_or_path(actor_label=actor_label, actor_path=actor_path)
+    actor_subsystem = editor_actor_subsystem()
+    spawned_host = None
+    host_asset_path = None
+    host_record = None
+    if not target_actor:
+        try:
+            host_asset_path, host_record, host_warnings = resolve_host_blueprint_asset_path(request)
+            warnings.extend(host_warnings)
+            blueprint_asset = unreal.EditorAssetLibrary.load_asset(object_path_from_asset_path(host_asset_path))
+            if not blueprint_asset:
+                return {
+                    "warnings": warnings,
+                    "errors": [f"host_blueprint_load_failed:{host_asset_path}"],
+                }
+            if camera_mode == "anchor_actor" and spawn_anchor:
+                if expected_spawn_location and expected_spawn_rotation:
+                    spawn_location = vector_from_request(expected_spawn_location)
+                    spawn_rotation = rotator_from_request(expected_spawn_rotation)
+                else:
+                    spawn_location = spawn_anchor.get_actor_location()
+                    spawn_rotation = spawn_anchor.get_actor_rotation()
+            else:
+                spawn_location = vector_from_request(request.get("location"), unreal.Vector(0.0, 0.0, 120.0))
+                spawn_rotation = rotator_from_request(request.get("rotation"), make_rotator(0.0, 180.0, 0.0))
+            spawned_host = actor_subsystem.spawn_actor_from_object(blueprint_asset, spawn_location, spawn_rotation, True)
+            if not spawned_host:
+                return {
+                    "warnings": warnings,
+                    "errors": ["target_actor_not_found", f"failed_to_spawn_host_for_capture:{host_asset_path}"],
+                }
+            spawned_host.set_actor_label(str(actor_label or asset_name_from_path(host_asset_path)))
+            try:
+                spawned_host.apply_configured_loadout()
+            except Exception as exc:
+                warnings.append(f"apply_configured_loadout_failed:{exc}")
+            target_actor = spawned_host
+            warnings.append("target_actor_not_found_spawned_host_for_capture")
+        except Exception:
+            return {
+                "warnings": warnings,
+                "errors": ["target_actor_not_found"],
+            }
+
+    if camera_mode == "anchor_actor" and spawn_anchor and target_actor:
+        if expected_spawn_location and expected_spawn_rotation:
+            spawn_location = vector_from_request(expected_spawn_location)
+            spawn_rotation = rotator_from_request(expected_spawn_rotation)
+        else:
+            spawn_location = spawn_anchor.get_actor_location()
+            spawn_rotation = spawn_anchor.get_actor_rotation()
+        try:
+            target_actor.set_actor_location(spawn_location, False, False)
+        except Exception:
+            target_actor.set_actor_location(spawn_location, False)
+        try:
+            target_actor.set_actor_rotation(spawn_rotation, False)
+        except Exception:
+            target_actor.set_actor_rotation(spawn_rotation)
+
+    if camera_mode == "anchor_actor":
+        camera_plan = build_anchor_camera_plan(camera_anchor, target_actor, request)
+    elif camera_mode == "explicit_pose":
+        explicit_camera_location = vector_from_request(request.get("camera_location"))
+        explicit_camera_rotation = rotator_from_request(request.get("camera_rotation"))
+        origin, extent = actor_bounds(target_actor)
+        camera_plan = {
+            "camera_source": str(request.get("camera_source") or "explicit_pose"),
+            "camera_location": serialize_vector(explicit_camera_location),
+            "camera_rotation": serialize_rotator(explicit_camera_rotation),
+            "target_location": serialize_vector(origin + unreal.Vector(0.0, 0.0, max(extent.z * 0.45, 65.0))),
+            "bounds_origin": serialize_vector(origin),
+            "bounds_extent": serialize_vector(extent),
+        }
+    else:
+        camera_plan = build_capture_camera_for_actor(target_actor, request)
+    camera_location = vector_from_request(camera_plan["camera_location"])
+    camera_rotation = rotator_from_request(camera_plan["camera_rotation"])
+    width = int(request.get("width") or request.get("capture_width") or 1280)
+    height = int(request.get("height") or request.get("capture_height") or 720)
+    delay_seconds = float(request.get("delay") or request.get("capture_delay_seconds") or 0.2)
+    timeout_seconds = float(request.get("timeout_seconds") or 30.0)
+    stability_window_seconds = float(request.get("file_stability_window_seconds") or 0.75)
+    poll_interval_seconds = float(request.get("poll_interval_seconds") or 0.2)
+    capture_hdr = bool(request.get("capture_hdr", False))
+    force_game_view = bool(request.get("force_game_view", True))
+    level_editor = level_editor_subsystem()
+    temp_camera = None
+    capture_camera = None
+    try:
+        temp_camera = actor_subsystem.spawn_actor_from_class(unreal.CameraActor, camera_location, camera_rotation, True)
+        if not temp_camera:
+            return {
+                "warnings": warnings,
+                "errors": ["temporary_camera_spawn_failed"],
+            }
+        temp_camera.set_actor_label(f"AIUE_CaptureCamera_{sanitize_segment(target_actor.get_actor_label())}")
+        capture_camera = temp_camera
+
+        subject_visibility = evaluate_subject_visibility(target_actor, capture_camera, camera_location, camera_rotation, width, height)
+        if not subject_visibility.get("visible"):
+            warnings.append("subject_not_visible_in_camera_plan")
+        try:
+            level_editor.pilot_level_actor(capture_camera)
+        except Exception as exc:
+            warnings.append(f"pilot_level_actor_failed:{exc}")
+        try:
+            if hasattr(level_editor, "set_allows_cinematic_control"):
+                level_editor.set_allows_cinematic_control(True)
+        except Exception:
+            pass
+        try:
+            if hasattr(level_editor, "set_exact_camera_view"):
+                level_editor.set_exact_camera_view(True)
+        except Exception:
+            pass
+        render_target_capture = capture_to_render_target(
+            capture_camera,
+            width,
+            height,
+            output_path,
+            capture_hdr,
+            delay_seconds,
+            timeout_seconds,
+            stability_window_seconds,
+            poll_interval_seconds,
+        )
+        warnings.extend(render_target_capture.get("warnings") or [])
+        actual_output_path = Path(render_target_capture["output_path"]).resolve() if render_target_capture.get("output_path") else None
+        task_done = bool(render_target_capture.get("task_done"))
+        screenshot_exists = bool(render_target_capture.get("output_exists"))
+        capture_backend = str(render_target_capture.get("capture_backend") or "")
+        if screenshot_exists and int(render_target_capture.get("file_size_bytes") or 0) < 400000:
+            warnings.append("render_target_capture_too_small_fallback_to_automation")
+            screenshot_exists = False
+
+        if not screenshot_exists:
+            unreal.EditorLevelLibrary.set_level_viewport_camera_info(camera_location, camera_rotation)
+            level_editor.editor_set_viewport_realtime(True)
+            try:
+                level_editor.editor_set_game_view(True)
+            except Exception:
+                pass
+            level_editor.editor_invalidate_viewports()
+            task = unreal.AutomationLibrary.take_high_res_screenshot(
+                width,
+                height,
+                str(output_path),
+                capture_camera,
+                False,
+                capture_hdr,
+                unreal.ComparisonTolerance.LOW,
+                "AiUE capture",
+                delay_seconds,
+                force_game_view,
+            )
+            actual_output_path, task_done = wait_for_screenshot(task, output_path, timeout_seconds, stability_window_seconds, poll_interval_seconds)
+            if actual_output_path and actual_output_path != output_path:
+                shutil.copyfile(actual_output_path, output_path)
+                actual_output_path = output_path
+            screenshot_exists = bool(actual_output_path and actual_output_path.exists())
+            capture_backend = capture_backend or "automation_high_res_screenshot"
+        return {
+            "target_actor_label": target_actor.get_actor_label(),
+            "target_actor_path": target_actor.get_path_name(),
+            "host_blueprint_asset_path": host_asset_path,
+            "host_record": host_record,
+            "target_render_components": summarize_render_components(target_actor),
+            "camera_mode": camera_mode,
+            "camera_source": str(camera_plan.get("camera_source") or camera_mode),
+            "spawn_anchor_actor_label": spawn_anchor_actor_label,
+            "camera_anchor_actor_label": camera_anchor_actor_label,
+            "resolved_stage_anchors": resolved_stage_anchors,
+            "output_path": str(actual_output_path or output_path),
+            "requested_output_path": str(output_path),
+            "output_exists": screenshot_exists,
+            "file_size_bytes": actual_output_path.stat().st_size if actual_output_path and actual_output_path.exists() else 0,
+            "width": width,
+            "height": height,
+            "delay_seconds": delay_seconds,
+            "camera_plan": camera_plan,
+            "capture_backend": capture_backend,
+            "subject_visibility": subject_visibility,
+            "subject_visible": bool(subject_visibility.get("visible")),
+            "task_done": task_done,
+            "warnings": warnings if screenshot_exists else warnings + ["screenshot_output_missing_after_task_completion"],
+            "errors": [] if screenshot_exists else ["capture_frame_failed"],
+        }
+    finally:
+        try:
+            if hasattr(level_editor, "eject_pilot_level_actor"):
+                level_editor.eject_pilot_level_actor()
+        except Exception:
+            pass
+        try:
+            if hasattr(level_editor, "set_exact_camera_view"):
+                level_editor.set_exact_camera_view(False)
+        except Exception:
+            pass
+        if temp_camera:
+            try:
+                actor_subsystem.destroy_actor(temp_camera)
+            except Exception:
+                pass
+        if spawned_host:
+            try:
+                actor_subsystem.destroy_actor(spawned_host)
+            except Exception:
+                pass
+
+
+def build_visual_proof_shots(actor, request: dict) -> list[dict]:
+    origin, extent = actor_bounds(actor)
+    forward = actor.get_actor_forward_vector()
+    right = actor.get_actor_right_vector()
+    up = unreal.Vector(0.0, 0.0, 1.0)
+    base_distance = max(float(request.get("camera_distance") or 0.0), max(extent.x, extent.y, 90.0) * 2.4)
+    base_height = max(float(request.get("camera_height") or 0.0), max(extent.z * 1.15, 110.0))
+    top_height = max(float(request.get("top_camera_height") or 0.0), base_distance * 1.65)
+    target_location = origin + unreal.Vector(0.0, 0.0, max(extent.z * 0.6, 90.0))
+
+    shot_specs = [
+        {
+            "shot_id": "front",
+            "camera_id": "front",
+            "camera_location": origin - (forward * base_distance) + (up * base_height),
+        },
+        {
+            "shot_id": "side",
+            "camera_id": "side",
+            "camera_location": origin + (right * (base_distance * 0.95)) + (up * base_height),
+        },
+        {
+            "shot_id": "top",
+            "camera_id": "top",
+            "camera_location": origin - (forward * (base_distance * 0.25)) + (up * top_height),
+        },
+    ]
+    payload = []
+    for item in shot_specs:
+        camera_rotation = unreal.MathLibrary.find_look_at_rotation(item["camera_location"], target_location)
+        payload.append(
+            {
+                "shot_id": item["shot_id"],
+                "camera_id": item["camera_id"],
+                "camera_source": "explicit_pose",
+                "camera_location": serialize_vector(item["camera_location"]),
+                "camera_rotation": serialize_rotator(camera_rotation),
+                "target_location": serialize_vector(target_location),
+            }
+        )
+    return payload
+
+
+def inspect_host_visual(request: dict) -> dict:
+    warnings = []
+    level_path = request.get("level_path") or request.get("scene_level_path")
+    if level_path:
+        load_result = load_level({"level_path": level_path})
+        warnings.extend(load_result.get("warnings") or [])
+        if load_result.get("errors"):
+            return {
+                "status": "fail",
+                "warnings": warnings,
+                "errors": list(load_result.get("errors") or []),
+            }
+
+    host_asset_path, host_record, host_warnings = resolve_host_blueprint_asset_path(
+        {
+            **request,
+            "runtime_ready_only": request.get("runtime_ready_only", True),
+        }
+    )
+    warnings.extend(host_warnings)
+    actor_subsystem = editor_actor_subsystem()
+    blueprint_asset = unreal.EditorAssetLibrary.load_asset(object_path_from_asset_path(host_asset_path))
+    if not blueprint_asset:
+        return {
+            "status": "fail",
+            "warnings": warnings,
+            "errors": [f"host_blueprint_load_failed:{host_asset_path}"],
+        }
+
+    cell_origin = vector_from_request(request.get("cell_origin"), unreal.Vector(0.0, 0.0, 30000.0))
+    cell_rotation = rotator_from_request(request.get("cell_rotation"), make_rotator(0.0, 180.0, 0.0))
+    actor_label = str(request.get("actor_label") or f"AIUE_VisualProof_{sanitize_segment(host_record.get('character_package_id') if host_record else host_asset_path)}")
+
+    spawned_host = actor_subsystem.spawn_actor_from_object(blueprint_asset, cell_origin, cell_rotation, True)
+    if not spawned_host:
+        return {
+            "status": "fail",
+            "warnings": warnings,
+            "errors": [f"failed_to_spawn_host:{host_asset_path}"],
+        }
+
+    spawned_host.set_actor_label(actor_label)
+    failed_requirements = []
+    shots = []
+    try:
+        try:
+            spawned_host.apply_configured_loadout()
+        except Exception as exc:
+            warnings.append(f"apply_configured_loadout_failed:{exc}")
+
+        time.sleep(max(float(request.get("settle_delay_seconds") or 0.2), 0.05))
+        try:
+            pmx_component = spawned_host.get_component_by_class(unreal.PMXCharacterEquipmentComponent)
+        except Exception:
+            pmx_component = None
+        primary_mesh = actor_primary_mesh_component(spawned_host)
+        weapon_mesh = actor_weapon_mesh_component(spawned_host, primary_mesh)
+        main_mesh_component = component_visibility_record(primary_mesh)
+        weapon_mesh_component = component_visibility_record(weapon_mesh)
+        main_mesh_bounds = component_bounds_payload(primary_mesh, fallback_actor=spawned_host)
+        weapon_mesh_bounds = component_bounds_payload(weapon_mesh)
+        main_mesh_world_transform = component_transform_payload(primary_mesh)
+        weapon_mesh_world_transform = component_transform_payload(weapon_mesh)
+        weapon_attachment = component_attach_payload(weapon_mesh)
+        equipment_diagnostics = pmx_equipment_diagnostics(pmx_component, primary_mesh)
+        component_visibility = {
+            "main_mesh": main_mesh_component,
+            "weapon_mesh": weapon_mesh_component,
+        }
+        character_mesh_asset = main_mesh_component.get("asset_path") or ""
+        weapon_mesh_asset = weapon_mesh_component.get("asset_path") or ""
+
+        if not main_mesh_component.get("component_name"):
+            failed_requirements.append("mesh_missing")
+        if not character_mesh_asset:
+            failed_requirements.append("mesh_missing")
+        if not main_mesh_bounds.get("non_zero"):
+            failed_requirements.append("bounds_invalid")
+        if not weapon_mesh_component.get("component_name"):
+            failed_requirements.append("weapon_missing")
+        if not weapon_mesh_asset:
+            failed_requirements.append("weapon_missing")
+        if equipment_diagnostics.get("resolved_attach_socket_exists") is False:
+            failed_requirements.append("socket_resolution_failed")
+
+        output_root = Path(request.get("output_root") or (Path(unreal.Paths.project_saved_dir()) / "pmx_pipeline" / "visual_proof")).expanduser().resolve()
+        output_root.mkdir(parents=True, exist_ok=True)
+        width = int(request.get("width") or request.get("capture_width") or 1280)
+        height = int(request.get("height") or request.get("capture_height") or 720)
+        subject_min_screen_coverage = float(request.get("subject_min_screen_coverage") or 0.015)
+        weapon_min_screen_coverage = float(request.get("weapon_min_screen_coverage") or 0.001)
+        shot_plans = build_visual_proof_shots(spawned_host, request)
+
+        subject_pass_count = 0
+        weapon_pass_count = 0
+        for shot_plan in shot_plans:
+            metric_camera = actor_subsystem.spawn_actor_from_class(
+                unreal.CameraActor,
+                vector_from_request(shot_plan["camera_location"]),
+                rotator_from_request(shot_plan["camera_rotation"]),
+                True,
+            )
+            line_of_sight = {"clear": False, "reason": "metric_camera_spawn_failed"}
+            subject_coverage = {"coverage_ratio": 0.0, "reason": "metric_camera_spawn_failed"}
+            weapon_coverage = {"coverage_ratio": 0.0, "reason": "metric_camera_spawn_failed"}
+            if metric_camera:
+                try:
+                    line_of_sight = line_of_sight_to_actor(metric_camera, spawned_host)
+                    subject_coverage = screen_coverage_for_component(primary_mesh, metric_camera, width, height, fallback_actor=spawned_host)
+                    weapon_coverage = screen_coverage_for_component(weapon_mesh, metric_camera, width, height)
+                finally:
+                    try:
+                        actor_subsystem.destroy_actor(metric_camera)
+                    except Exception:
+                        pass
+            image_path = output_root / f"{shot_plan['shot_id']}.png"
+            capture_result = capture_frame(
+                {
+                    "actor_path": spawned_host.get_path_name(),
+                    "actor_label": spawned_host.get_actor_label(),
+                    "output_path": str(image_path),
+                    "width": width,
+                    "height": height,
+                    "camera_mode": "explicit_pose",
+                    "camera_source": shot_plan["camera_source"],
+                    "camera_location": shot_plan["camera_location"],
+                    "camera_rotation": shot_plan["camera_rotation"],
+                    "capture_delay_seconds": float(request.get("capture_delay_seconds") or 0.2),
+                    "timeout_seconds": float(request.get("timeout_seconds") or 15.0),
+                    "file_stability_window_seconds": float(request.get("file_stability_window_seconds") or 0.75),
+                    "poll_interval_seconds": float(request.get("poll_interval_seconds") or 0.1),
+                }
+            )
+            shot_errors = list(capture_result.get("errors") or [])
+            shot_warnings = list(capture_result.get("warnings") or [])
+            subject_visible = bool(subject_coverage.get("coverage_ratio", 0.0) >= subject_min_screen_coverage)
+            weapon_visible = bool(weapon_coverage.get("coverage_ratio", 0.0) >= weapon_min_screen_coverage)
+            line_clear = bool(line_of_sight.get("clear"))
+            if not subject_visible:
+                shot_errors.append("out_of_frame")
+            if not line_clear:
+                shot_errors.append("occluded")
+            if not capture_result.get("output_exists"):
+                shot_errors.append("capture_failed")
+            shot_status = "pass" if not shot_errors else "fail"
+            subject_pass_count += int(subject_visible and line_clear and bool(capture_result.get("output_exists")))
+            weapon_pass_count += int(weapon_visible)
+            shots.append(
+                {
+                    "shot_id": shot_plan["shot_id"],
+                    "camera_id": shot_plan["camera_id"],
+                    "image_path": str(image_path.resolve()),
+                    "camera_source": shot_plan["camera_source"],
+                    "camera_location": shot_plan["camera_location"],
+                    "camera_rotation": shot_plan["camera_rotation"],
+                    "subject_screen_coverage": float(subject_coverage.get("coverage_ratio") or 0.0),
+                    "weapon_screen_coverage": float(weapon_coverage.get("coverage_ratio") or 0.0),
+                    "line_of_sight_clear": line_clear,
+                    "line_of_sight": line_of_sight,
+                    "subject_coverage": subject_coverage,
+                    "weapon_coverage": weapon_coverage,
+                    "status": shot_status,
+                    "warnings": sorted(set(shot_warnings)),
+                    "errors": sorted(set(shot_errors)),
+                }
+            )
+
+        if subject_pass_count < 2:
+            failed_requirements.append("out_of_frame")
+        if weapon_pass_count < 1:
+            failed_requirements.append("weapon_invisible")
+        if any(shot.get("status") != "pass" for shot in shots) and "capture_failed" not in failed_requirements:
+            if any("capture_failed" in (shot.get("errors") or []) for shot in shots):
+                failed_requirements.append("capture_failed")
+            if any("occluded" in (shot.get("errors") or []) for shot in shots):
+                failed_requirements.append("occluded")
+
+        return {
+            "status": "pass" if not failed_requirements else "fail",
+            "package_id": host_record.get("character_package_id") if host_record else request.get("package_id"),
+            "host_id": spawned_host.get_path_name(),
+            "host_blueprint_asset": host_asset_path,
+            "character_mesh_asset": character_mesh_asset,
+            "weapon_mesh_asset": weapon_mesh_asset,
+            "main_mesh_component": {
+                "component_name": main_mesh_component.get("component_name"),
+                "class_name": main_mesh_component.get("class_name"),
+            },
+            "weapon_mesh_component": {
+                "component_name": weapon_mesh_component.get("component_name"),
+                "class_name": weapon_mesh_component.get("class_name"),
+            },
+            "main_mesh_bounds": main_mesh_bounds,
+            "weapon_mesh_bounds": weapon_mesh_bounds,
+            "main_mesh_world_transform": main_mesh_world_transform,
+            "weapon_mesh_world_transform": weapon_mesh_world_transform,
+            "weapon_attachment": weapon_attachment,
+            "equipment_diagnostics": equipment_diagnostics,
+            "component_visibility": component_visibility,
+            "shots": shots,
+            "failed_requirements": sorted(set(failed_requirements)),
+            "warnings": warnings,
+            "errors": [] if not failed_requirements else sorted(set(failed_requirements)),
+        }
+    finally:
+        try:
+            actor_subsystem.destroy_actor(spawned_host)
+        except Exception:
+            pass
+
+
+def run_scene_sweep(request: dict) -> dict:
+    summary_path = request.get("summary")
+    suite_output_path = Path(request.get("suite_output") or "").expanduser() if request.get("suite_output") else None
+    capture_manifest_path = Path(request.get("capture_manifest_output") or "").expanduser() if request.get("capture_manifest_output") else None
+    capture_root = Path(request.get("capture_root") or (Path(unreal.Paths.project_saved_dir()) / "pmx_pipeline" / "captures")).expanduser().resolve()
+    capture_root.mkdir(parents=True, exist_ok=True)
+    suite_output_path = suite_output_path.resolve() if suite_output_path else capture_root / "ue_animation_suite_summary.json"
+    capture_manifest_path = capture_manifest_path.resolve() if capture_manifest_path else capture_root / "ue_capture_manifest.json"
+
+    scenario_names = list(request.get("scenario_names") or ["idle_2s", "walk_forward_2s", "run_forward_2s", "jump_land_1cycle"])
+    camera_mode = str(request.get("camera_mode") or "auto_framing")
+    package_ids = [request.get("package_id")] if request.get("package_id") else []
+    if not package_ids:
+        report_path = resolve_equipment_report_path(request)
+        if report_path and report_path.exists():
+            report_payload = read_json(report_path)
+            package_ids = [
+                entry.get("character_package_id")
+                for entry in (report_payload.get("host_blueprints") or [])
+                if entry.get("has_runtime_weapon_mesh_component")
+            ]
+
+    package_results = []
+    capture_entries = []
+    current_level_path = None
+    if request.get("level_lifecycle") == "reuse_level" or len(package_ids) <= 1:
+        requested_level = request.get("level_path") or request.get("scene_level_path")
+        if requested_level:
+            load_result = load_level({"level_path": requested_level})
+            current_level_path = load_result.get("current_level_path")
+            if load_result.get("errors"):
+                return {
+                    "summary_path": summary_path,
+                    "suite_output": str(suite_output_path),
+                    "capture_manifest_output": str(capture_manifest_path),
+                    "capture_root": str(capture_root),
+                    "counts": {
+                        "requested_packages": len(package_ids),
+                        "completed_packages": 0,
+                        "failed_packages": len(package_ids),
+                        "capture_entries": 0,
+                        "valid_images": 0,
+                        "captured_before_report": 0,
+                        "captured_after_report_before_exit": 0,
+                        "captured_after_exit": 0,
+                    },
+                    "warnings": list(load_result.get("warnings") or []),
+                    "errors": list(load_result.get("errors") or []),
+                }
+
+    for package_index, package_id in enumerate(package_ids, start=1):
+        suite_record = load_suite_summary_record(summary_path, package_id)
+        host_request = {
+            "package_id": package_id,
+            "sample_id": suite_record.get("sample_id"),
+            "summary": summary_path,
+            "report_path": str(resolve_equipment_report_path(request)) if resolve_equipment_report_path(request) else None,
+            "runtime_ready_only": True,
+        }
+        try:
+            host_asset_path, host_record, host_warnings = resolve_host_blueprint_asset_path(host_request)
+        except Exception as exc:
+            package_result = {
+                "package_id": package_id,
+                "sample_id": suite_record.get("sample_id"),
+                "host_blueprint_asset_path": None,
+                "status": "fail",
+                "warnings": [],
+                "errors": [str(exc)],
+                "scenario_results": [],
+            }
+            package_results.append(package_result)
+            continue
+
+        scenario_results = []
+        package_warnings = list(host_warnings)
+        for scenario_index, scenario_name in enumerate(scenario_names, start=1):
+            if request.get("level_lifecycle") == "reload_level_per_run":
+                requested_level = request.get("level_path") or request.get("scene_level_path")
+                if requested_level:
+                    level_result = load_level({"level_path": requested_level})
+                    current_level_path = level_result.get("current_level_path")
+                    package_warnings.extend(level_result.get("warnings") or [])
+                    if level_result.get("errors"):
+                        scenario_result = {
+                            "scenario": scenario_name,
+                            "status": "fail",
+                            "capture_status": "capture_failed",
+                            "image_path": None,
+                            "warnings": list(level_result.get("warnings") or []),
+                            "errors": list(level_result.get("errors") or []),
+                        }
+                        scenario_results.append(scenario_result)
+                        capture_entries.append(
+                            {
+                                "sample_id": suite_record.get("sample_id") or host_record.get("sample_id") if host_record else None,
+                                "package_id": package_id,
+                                "scenario": scenario_name,
+                                "image_path": None,
+                                "capture_status": "capture_failed",
+                                "reference_dir": str(Path(summary_path).expanduser().resolve().parent) if summary_path else None,
+                                "warnings": list(level_result.get("warnings") or []),
+                                "errors": list(level_result.get("errors") or []),
+                            }
+                        )
+                        continue
+
+            overrides = scenario_capture_overrides(scenario_index, scenario_name, request)
+            scenario_camera_mode = str(overrides.get("camera_mode") or camera_mode)
+            package_capture_root = capture_root / sanitize_segment(package_id or f"package_{package_index:03d}")
+            package_capture_root.mkdir(parents=True, exist_ok=True)
+            image_path = package_capture_root / f"{scenario_index:02d}_{sanitize_segment(scenario_name)}.png"
+            capture_request = {
+                "summary": summary_path,
+                "report_path": str(resolve_equipment_report_path(request)) if resolve_equipment_report_path(request) else None,
+                "package_id": package_id,
+                "sample_id": (suite_record.get("sample_id") or (host_record or {}).get("sample_id")),
+                "host_blueprint_asset_path": host_asset_path,
+                "runtime_ready_only": True,
+                "level_path": None if request.get("level_lifecycle") == "reuse_level" else (request.get("level_path") or request.get("scene_level_path")),
+                "actor_label": f"AIUE_{sanitize_segment(package_id)}_{sanitize_segment(scenario_name)}",
+                "output_path": str(image_path),
+                "width": int(request.get("capture_width") or request.get("width") or 1280),
+                "height": int(request.get("capture_height") or request.get("height") or 720),
+                "capture_delay_seconds": float(request.get("capture_delay_seconds") or 0.2),
+                "timeout_seconds": float(request.get("settle_timeout_seconds") or request.get("timeout_seconds") or 20.0),
+                "file_stability_window_seconds": float(request.get("file_stability_window_seconds") or 0.75),
+                "poll_interval_seconds": float(request.get("viewport_pump_interval_seconds") or request.get("poll_interval_seconds") or 0.2),
+                "camera_mode": scenario_camera_mode,
+            }
+            if scenario_camera_mode == "anchor_actor":
+                capture_request["spawn_anchor_actor_label"] = str(overrides.get("spawn_anchor_actor_label") or request.get("spawn_anchor_actor_label") or "")
+                capture_request["camera_anchor_actor_label"] = str(overrides.get("camera_anchor_actor_label") or request.get("camera_anchor_actor_label") or "")
+                if overrides.get("expected_spawn_location") is not None:
+                    capture_request["expected_spawn_location"] = overrides.get("expected_spawn_location")
+                if overrides.get("expected_spawn_rotation") is not None:
+                    capture_request["expected_spawn_rotation"] = overrides.get("expected_spawn_rotation")
+                if overrides.get("expected_camera_location") is not None:
+                    capture_request["expected_camera_location"] = overrides.get("expected_camera_location")
+                if overrides.get("expected_camera_rotation") is not None:
+                    capture_request["expected_camera_rotation"] = overrides.get("expected_camera_rotation")
+            else:
+                capture_request["location"] = overrides["location"]
+                capture_request["rotation"] = overrides["rotation"]
+                capture_request["camera_distance"] = overrides["camera_distance"]
+                capture_request["camera_lateral_offset"] = overrides["camera_lateral_offset"]
+                capture_request["camera_height"] = overrides["camera_height"]
+                capture_request["target_height_offset"] = overrides["target_height_offset"] or float(request.get("target_height_offset") or 0.0)
+            capture_result = capture_frame(capture_request)
+            if not capture_result.get("output_exists") and capture_result.get("output_path"):
+                finalized_output_path, _ = wait_for_screenshot(
+                    None,
+                    Path(capture_result["output_path"]),
+                    float(request.get("quit_barrier_seconds") or 2.0) + float(request.get("file_stability_window_seconds") or 0.75) + 1.0,
+                    float(request.get("file_stability_window_seconds") or 0.75),
+                    float(request.get("viewport_pump_interval_seconds") or 0.2),
+                )
+                if finalized_output_path and finalized_output_path.exists():
+                    capture_result["output_path"] = str(finalized_output_path)
+                    capture_result["output_exists"] = True
+                    capture_result["file_size_bytes"] = finalized_output_path.stat().st_size
+                    capture_result["task_done"] = True
+                    capture_result["warnings"] = [
+                        warning
+                        for warning in (capture_result.get("warnings") or [])
+                        if warning != "screenshot_output_missing_after_task_completion"
+                    ]
+                    capture_result["errors"] = []
+            capture_success = not capture_result.get("errors") and bool(capture_result.get("output_exists"))
+            capture_status = "captured_before_report" if capture_success else "capture_failed"
+            scenario_result = {
+                "scenario": scenario_name,
+                "status": "pass" if capture_success else "fail",
+                "capture_status": capture_status,
+                "image_path": capture_result.get("output_path"),
+                "camera_source": capture_result.get("camera_source") or scenario_camera_mode,
+                "capture_backend": capture_result.get("capture_backend"),
+                "spawn_anchor_actor_label": capture_result.get("spawn_anchor_actor_label") or capture_request.get("spawn_anchor_actor_label") or "",
+                "camera_anchor_actor_label": capture_result.get("camera_anchor_actor_label") or capture_request.get("camera_anchor_actor_label") or "",
+                "subject_visible": bool(capture_result.get("subject_visible")),
+                "subject_visibility": dict(capture_result.get("subject_visibility") or {}),
+                "target_render_components": list(capture_result.get("target_render_components") or []),
+                "warnings": list(capture_result.get("warnings") or []),
+                "errors": list(capture_result.get("errors") or []),
+                "camera_plan": capture_result.get("camera_plan"),
+            }
+            scenario_results.append(scenario_result)
+            capture_entries.append(
+                {
+                    "sample_id": suite_record.get("sample_id") or (host_record or {}).get("sample_id"),
+                    "package_id": package_id,
+                    "scenario": scenario_name,
+                    "image_path": capture_result.get("output_path"),
+                    "capture_status": capture_status,
+                    "camera_source": scenario_result["camera_source"],
+                    "spawn_anchor_actor_label": scenario_result["spawn_anchor_actor_label"],
+                    "camera_anchor_actor_label": scenario_result["camera_anchor_actor_label"],
+                    "subject_visible": scenario_result["subject_visible"],
+                    "reference_dir": str(package_capture_root),
+                    "warnings": list(capture_result.get("warnings") or []),
+                    "errors": list(capture_result.get("errors") or []),
+                    "host_blueprint_asset_path": host_asset_path,
+                }
+            )
+
+        package_failed = any(result.get("status") != "pass" for result in scenario_results)
+        package_results.append(
+            {
+                "package_id": package_id,
+                "sample_id": suite_record.get("sample_id") or (host_record or {}).get("sample_id"),
+                "host_blueprint_asset_path": host_asset_path,
+                "status": "fail" if package_failed else "pass",
+                "warnings": package_warnings,
+                "errors": [] if not package_failed else ["one_or_more_scenarios_failed"],
+                "scenario_results": scenario_results,
+            }
+        )
+
+    manifest_payload = {
+        "generated_at_utc": now_utc(),
+        "suite_name": "ue_scene_sweep",
+        "suite_summary_path": str(suite_output_path),
+        "capture_enabled": True,
+        "capture_root": str(capture_root),
+        "entries": capture_entries,
+    }
+    summary_payload = {
+        "generated_at_utc": now_utc(),
+        "summary_source_path": summary_path,
+        "capture_root": str(capture_root),
+        "suite_output_path": str(suite_output_path),
+        "capture_manifest_output": str(capture_manifest_path),
+        "package_results": package_results,
+        "scenario_names": scenario_names,
+        "config": {
+            "validation_mode": request.get("validation_mode"),
+            "camera_lifecycle": request.get("camera_lifecycle"),
+            "camera_mode": camera_mode,
+            "level_lifecycle": request.get("level_lifecycle"),
+            "scenario_scheduling": request.get("scenario_scheduling"),
+            "completion_strategy": request.get("completion_strategy"),
+        },
+    }
+    write_json(capture_manifest_path, manifest_payload)
+    write_json(suite_output_path, summary_payload)
+
+    valid_images = sum(1 for entry in capture_entries if entry.get("capture_status") == "captured_before_report" and entry.get("image_path"))
+    failed_packages = sum(1 for item in package_results if item.get("status") != "pass")
+    result = {
+        "summary_path": summary_path,
+        "suite_output": str(suite_output_path),
+        "capture_manifest_output": str(capture_manifest_path),
+        "capture_root": str(capture_root),
+        "level_path": request.get("level_path") or request.get("scene_level_path"),
+        "current_level_path": current_level_path or get_current_level_path(),
+        "scenario_names": scenario_names,
+        "package_results": package_results,
+        "counts": {
+            "requested_packages": len(package_ids),
+            "completed_packages": len(package_results) - failed_packages,
+            "failed_packages": failed_packages,
+            "capture_entries": len(capture_entries),
+            "valid_images": valid_images,
+            "captured_before_report": valid_images,
+            "captured_after_report_before_exit": 0,
+            "captured_after_exit": 0,
+            "late_captures": 0,
+        },
+        "warnings": [],
+        "errors": [],
+    }
+    if not package_ids:
+        result["warnings"].append("no_package_ids_resolved_for_scene_sweep")
+    if failed_packages:
+        result["errors"].append("scene_sweep_failed_packages_present")
+    return result
+
+
+def build_equipment_registry(request: dict) -> dict:
+    registry_json = request.get("registry_json")
+    if registry_json:
+        registry_path = Path(registry_json).expanduser().resolve()
+    else:
+        conversion_root = Path(request["conversion_root"]).expanduser().resolve()
+        registry_path = find_latest_registry_json(conversion_root)
+
+    registry_payload = read_json(registry_path)
+    asset_root = request.get("asset_root") or registry_payload.get("asset_root") or "/Game/PMXPipeline"
+    suite_name, suite_slug = derive_suite_identity(registry_path, registry_payload, request)
+    report_path = Path(request.get("report_path") or registry_path.with_name("ue_equipment_assets_report.local.json")).expanduser().resolve()
+    shared_blueprints, shared_blueprint_warnings = ensure_shared_blueprint_assets(asset_root)
+
+    pair_asset_records = []
+    pair_assets = []
+    pair_assets_by_id = {}
+    for index, pair in enumerate(registry_payload.get("ready_pairs") or [], start=1):
+        package_path, asset_name = pair_asset_path(asset_root, suite_slug, index, pair.get("sample_id") or f"pair_{index:03d}")
+        asset, object_path, created = create_or_load_data_asset(asset_name, package_path, unreal.PMXEquipmentPairAsset)
+        enriched_pair = dict(pair)
+        enriched_pair["pair_id"] = pair_id_for(pair.get("character_package_id"), pair.get("weapon_package_id"))
+        configure_pair_asset(asset, enriched_pair)
+        pair_assets.append(asset)
+        pair_assets_by_id[enriched_pair["pair_id"]] = asset
+        pair_asset_records.append(
+            {
+                "pair_id": enriched_pair["pair_id"],
+                "asset_path": object_path.rsplit(".", 1)[0],
+                "sample_id": pair.get("sample_id"),
+                "character_package_id": pair.get("character_package_id"),
+                "weapon_package_id": pair.get("weapon_package_id"),
+                "equip_slot": pair.get("equip_slot"),
+                "preferred_attach_target": pair.get("preferred_attach_target"),
+                "created": created,
+            }
+        )
+
+    loadout_asset_records = []
+    loadout_assets = []
+    runtime_preview_checks = []
+    loadout_assets_by_character_package_id = {}
+    ready_pair_groups: dict[str, list[dict]] = {}
+    for pair in registry_payload.get("ready_pairs") or []:
+        key = str(pair.get("character_package_id") or "")
+        ready_pair_groups.setdefault(key, []).append(dict(pair, pair_id=pair_id_for(pair.get("character_package_id"), pair.get("weapon_package_id"))))
+
+    for index, character in enumerate(registry_payload.get("characters") or [], start=1):
+        package_path, asset_name = loadout_asset_path(asset_root, suite_slug, index, character.get("sample_id") or f"character_{index:03d}")
+        asset, object_path, created = create_or_load_data_asset(asset_name, package_path, unreal.PMXEquipmentLoadoutAsset)
+        related_pairs = ready_pair_groups.get(str(character.get("package_id") or ""), [])
+        related_pair_assets = [pair_assets_by_id[pair["pair_id"]] for pair in related_pairs if pair["pair_id"] in pair_assets_by_id]
+        default_pair_asset = related_pair_assets[0] if related_pair_assets else None
+        configure_loadout_asset(asset, character, default_pair_asset, related_pair_assets, related_pairs)
+        loadout_assets.append(asset)
+        preview_result = validate_runtime_loadout(asset, object_path.rsplit(".", 1)[0]) if request.get("run_preview_validation", True) else {
+            "loadout_asset_path": object_path.rsplit(".", 1)[0],
+            "status": "skipped",
+            "warnings": ["runtime_preview_validation_disabled"],
+            "errors": [],
+        }
+        runtime_preview_checks.append(preview_result)
+        default_pair = related_pairs[0] if related_pairs else {}
+        default_attach_target = default_pair.get("preferred_attach_target") or {}
+        loadout_asset_records.append(
+            {
+                "sample_id": character.get("sample_id"),
+                "character_package_id": character.get("package_id"),
+                "loadout_asset_path": object_path.rsplit(".", 1)[0],
+                "default_weapon_package_id": default_pair.get("weapon_package_id") or "",
+                "default_equip_slot": default_pair.get("equip_slot") or "weapon",
+                "default_attach_type": default_attach_target.get("type") or "",
+                "default_attach_name": default_attach_target.get("name") or "",
+                "ready_pair_ids": [pair["pair_id"] for pair in related_pairs],
+                "available_weapon_package_ids": [pair.get("weapon_package_id") for pair in related_pairs if pair.get("weapon_package_id")],
+                "warnings": list(character.get("warnings") or []) + list(preview_result.get("warnings") or []),
+                "consumer_ready": bool(character.get("consumer_ready")),
+                "has_ready_weapon_pairs": bool(related_pairs),
+                "default_pair_asset_path": f"{pair_asset_records[[entry['pair_id'] for entry in pair_asset_records].index(default_pair['pair_id'])]['asset_path']}.{Path(pair_asset_records[[entry['pair_id'] for entry in pair_asset_records].index(default_pair['pair_id'])]['asset_path']).name}" if default_pair else "",
+                "character_skeletal_mesh": character.get("skeletal_mesh") or "",
+                "character_skeleton": character.get("skeleton") or "",
+                "character_physics_asset": character.get("physics_asset") or "",
+                "default_weapon_skeletal_mesh": default_pair.get("weapon_skeletal_mesh") or "",
+                "weapon_mesh_paths": [pair.get("weapon_skeletal_mesh") for pair in related_pairs if pair.get("weapon_skeletal_mesh")],
+                "pair_asset_paths": [
+                    f"{pair_asset_records[[entry['pair_id'] for entry in pair_asset_records].index(pair['pair_id'])]['asset_path']}.{Path(pair_asset_records[[entry['pair_id'] for entry in pair_asset_records].index(pair['pair_id'])]['asset_path']).name}"
+                    for pair in related_pairs
+                    if pair["pair_id"] in [entry["pair_id"] for entry in pair_asset_records]
+                ],
+                "created": created,
+            }
+        )
+        loadout_assets_by_character_package_id[str(character.get("package_id") or "")] = asset
+
+    component_blueprint_records = []
+    component_blueprints_by_character_package_id = {}
+    for index, loadout_record in enumerate(loadout_asset_records, start=1):
+        asset_path = component_blueprint_path(asset_root, suite_slug, index, loadout_record.get("sample_id") or f"component_{index:03d}")
+        blueprint, _, created = create_or_load_blueprint(asset_path, unreal.PMXCharacterEquipmentComponent)
+        configure_component_blueprint(
+            blueprint,
+            loadout_record.get("default_weapon_skeletal_mesh"),
+            loadout_record.get("default_attach_name") or "WeaponSocket",
+        )
+        component_blueprints_by_character_package_id[str(loadout_record.get("character_package_id") or "")] = blueprint
+        component_blueprint_records.append(
+            {
+                "sample_id": loadout_record.get("sample_id"),
+                "character_package_id": loadout_record.get("character_package_id"),
+                "asset_path": asset_path,
+                "loadout_asset_path": loadout_record.get("loadout_asset_path"),
+                "default_weapon_package_id": loadout_record.get("default_weapon_package_id") or "",
+                "consumer_ready": bool(loadout_record.get("consumer_ready")),
+                "has_ready_weapon_pairs": bool(loadout_record.get("has_ready_weapon_pairs")),
+                "parent_class": str(unreal.PMXCharacterEquipmentComponent),
+                "native_runtime_available": True,
+                "created": created,
+            }
+        )
+
+    host_blueprint_records = []
+    host_runtime_checks = []
+    for index, loadout_record in enumerate(loadout_asset_records, start=1):
+        character_package_id = str(loadout_record.get("character_package_id") or "")
+        asset_path = host_blueprint_path(asset_root, suite_slug, index, loadout_record.get("sample_id") or f"host_{index:03d}")
+        blueprint, _, created = create_or_load_blueprint(asset_path, unreal.PMXCharacterHost)
+        loadout_asset = loadout_assets_by_character_package_id.get(character_package_id)
+        component_blueprint = component_blueprints_by_character_package_id.get(character_package_id)
+        configure_host_blueprint(
+            blueprint,
+            loadout_record.get("character_skeletal_mesh"),
+            loadout_asset,
+            component_blueprint,
+        )
+        host_validation = validate_host_blueprint(
+            blueprint,
+            asset_path,
+            loadout_asset,
+            loadout_record,
+            next((entry["asset_path"] for entry in component_blueprint_records if entry["character_package_id"] == character_package_id), ""),
+        )
+        host_runtime_checks.append(host_validation)
+        host_blueprint_records.append(
+            {
+                "sample_id": loadout_record.get("sample_id"),
+                "character_package_id": character_package_id,
+                "asset_path": asset_path,
+                "loadout_asset_path": loadout_record.get("loadout_asset_path"),
+                "component_blueprint_asset_path": next((entry["asset_path"] for entry in component_blueprint_records if entry["character_package_id"] == character_package_id), ""),
+                "default_weapon_package_id": loadout_record.get("default_weapon_package_id") or "",
+                "default_weapon_skeletal_mesh": loadout_record.get("default_weapon_skeletal_mesh") or "",
+                "consumer_ready": bool(loadout_record.get("consumer_ready")),
+                "has_ready_weapon_pairs": bool(loadout_record.get("has_ready_weapon_pairs")),
+                "has_runtime_weapon_mesh_component": bool(host_validation.get("has_runtime_weapon_mesh_component")),
+                "default_weapon_component_name": host_validation.get("default_weapon_component_name") or "DefaultWeaponMeshComponent",
+                "default_weapon_component_created": False,
+                "default_weapon_component_attach_ok": bool(host_validation.get("default_weapon_component_attach_ok", False)),
+                "default_weapon_component_attach_parent": host_validation.get("default_weapon_component_attach_parent") or "CharacterMesh0",
+                "default_weapon_component_attach_socket_name": host_validation.get("default_weapon_component_attach_socket_name") or "WeaponSocket",
+                "equipment_component_parent_class": str(unreal.PMXCharacterEquipmentComponent),
+                "native_runtime_available": True,
+                "created": created,
+            }
+        )
+
+    registry_package_path, registry_asset_name = registry_asset_path(asset_root, suite_slug)
+    registry_asset, registry_object_path, registry_created = create_or_load_data_asset(
+        registry_asset_name,
+        registry_package_path,
+        unreal.PMXEquipmentRegistryAsset,
+    )
+    configure_registry_asset(registry_asset, suite_name, suite_slug, pair_assets, loadout_assets)
+
+    save_directory(f"{asset_root}/Registry/Suites/{suite_slug}")
+    save_directory(f"{asset_root}/Registry/Blueprints")
+
+    counts = {
+        "pair_assets": len(pair_asset_records),
+        "loadout_assets": len(loadout_asset_records),
+        "component_blueprints": len(component_blueprint_records),
+        "host_blueprints": len(host_blueprint_records),
+        "registry_assets": 1,
+        "character_mesh_refs": len(loadout_asset_records),
+        "weapon_mesh_refs": sum(1 for entry in loadout_asset_records if entry["default_weapon_skeletal_mesh"]),
+        "ready_pairs": len(pair_asset_records),
+        "ready_character_loadouts": sum(1 for entry in loadout_asset_records if entry["has_ready_weapon_pairs"]),
+        "ready_component_blueprints": sum(1 for entry in component_blueprint_records if entry["has_ready_weapon_pairs"]),
+        "ready_host_blueprints": sum(1 for entry in host_blueprint_records if entry["has_ready_weapon_pairs"]),
+        "runtime_ready_host_blueprints": sum(1 for entry in host_blueprint_records if entry["has_runtime_weapon_mesh_component"]),
+        "native_runtime_component_blueprints": len(component_blueprint_records),
+        "runtime_preview_pass": sum(1 for entry in runtime_preview_checks if entry["status"] == "pass"),
+        "runtime_preview_fail": sum(1 for entry in runtime_preview_checks if entry["status"] == "fail"),
+        "runtime_preview_skipped": sum(1 for entry in runtime_preview_checks if entry["status"] == "skipped"),
+    }
+
+    warnings = list(shared_blueprint_warnings)
+    preview_failures = [entry for entry in runtime_preview_checks if entry["status"] == "fail"]
+    if preview_failures:
+        warnings.append(f"runtime_preview_failures:{len(preview_failures)}")
+    host_failures = [entry for entry in host_runtime_checks if entry["status"] == "fail"]
+    if host_failures:
+        warnings.append(f"host_runtime_failures:{len(host_failures)}")
+
+    report_payload = {
+        "generated_at_utc": now_utc(),
+        "suite_name": suite_name,
+        "suite_slug": suite_slug,
+        "asset_root": asset_root,
+        "registry_json_path": str(registry_path),
+        **shared_blueprints,
+        "third_person_character_blueprint_asset": "/Game/ThirdPerson/Blueprints/BP_ThirdPersonCharacter",
+        "native_runtime_available": hasattr(unreal, "PMXCharacterEquipmentComponent") and hasattr(unreal, "PMXEquipmentBlueprintLibrary"),
+        "native_runtime_component_class": "PMXCharacterEquipmentComponent",
+        "registry_asset": registry_object_path.rsplit(".", 1)[0],
+        "pair_assets": pair_asset_records,
+        "loadout_assets": loadout_asset_records,
+        "runtime_preview_checks": runtime_preview_checks,
+        "component_blueprints": component_blueprint_records,
+        "host_blueprints": host_blueprint_records,
+        "warnings": warnings,
+        "counts": counts,
+    }
+    write_json(report_path, report_payload)
+
+    return {
+        **report_payload,
+        "report_path": str(report_path),
+        "registry_asset_object_path": registry_object_path,
+        "created": registry_created,
+        "errors": [],
+    }
+
+
+def derive_import_context(request: dict) -> dict:
+    manifest_path = Path(request["manifest"]).expanduser().resolve()
+    manifest = read_json(manifest_path)
+    output_fbx = resolve_manifest_artifact(manifest_path, manifest.get("output_fbx"))
+    if not output_fbx or not output_fbx.exists():
+        raise FileNotFoundError(f"Resolved FBX not found for manifest: {manifest_path}")
+    asset_root = request.get("asset_root") or "/Game/PMXPipeline"
+    existing = load_existing_import_blueprint(manifest_path)
+    pipeline_strategy = manifest.get("pipeline_strategy") or {}
+    unreal_import_strategy = pipeline_strategy.get("unreal_import") or {}
+    unreal_validation_strategy = pipeline_strategy.get("unreal_validation") or {}
+    content_bucket = (
+        request.get("content_bucket")
+        or unreal_import_strategy.get("content_bucket")
+        or existing.get("content_bucket")
+        or "Characters"
+    )
+    mesh_name = output_fbx.stem.replace(".", "_")
+    asset_label = existing.get("asset_label") or f"{sanitize_segment(manifest.get('sample_id') or output_fbx.parent.name)}_{sanitize_segment(output_fbx.stem)}"
+    package_root = remap_asset_root((existing.get("destination_paths") or {}).get("package_root"), asset_root) or f"{asset_root}/{content_bucket}/{asset_label}"
+    mesh_destination = remap_asset_root((existing.get("destination_paths") or {}).get("mesh_destination"), asset_root) or f"{package_root}/Meshes"
+    texture_destination = remap_asset_root((existing.get("destination_paths") or {}).get("texture_destination"), asset_root) or f"{package_root}/Textures"
+    import_report_path = manifest_path.parent / "ue_import_report.local.json"
+    validation_report_path = manifest_path.parent / "ue_validation_report.local.json"
+    consumer_contract_path = manifest_path.parent / "ue_consumer_contract.json"
+    consumer_contract = read_json(consumer_contract_path) if consumer_contract_path.exists() else {}
+    texture_files = resolve_texture_files(manifest_path, manifest, output_fbx)
+    expected_slot_names = [entry.get("normalized_name") for entry in manifest.get("materials", []) if entry.get("normalized_name")]
+    expected_texture_count = len(texture_files)
+    create_physics_asset = bool(unreal_import_strategy.get("create_physics_asset", True))
+    physics_asset_policy = str(unreal_validation_strategy.get("physics_asset_policy") or "required")
+    physics_asset_required = physics_asset_policy.lower() != "optional"
+    return {
+        "manifest_path": manifest_path,
+        "manifest": manifest,
+        "output_fbx": output_fbx,
+        "asset_root": asset_root,
+        "content_bucket": content_bucket,
+        "asset_label": asset_label,
+        "mesh_name": mesh_name,
+        "package_root": package_root,
+        "mesh_destination": mesh_destination,
+        "texture_destination": texture_destination,
+        "import_report_path": import_report_path,
+        "validation_report_path": validation_report_path,
+        "consumer_contract_path": consumer_contract_path if consumer_contract_path.exists() else None,
+        "consumer_contract": consumer_contract,
+        "texture_files": texture_files,
+        "expected_slot_names": expected_slot_names,
+        "expected_texture_count": expected_texture_count,
+        "package_role": request.get("package_role") or manifest.get("package_hints", {}).get("package_role") or consumer_contract.get("package_role"),
+        "package_id": request.get("package_id") or manifest.get("package_id") or consumer_contract.get("package_id"),
+        "source_relative_path": manifest.get("source_relative_path"),
+        "pipeline_strategy": pipeline_strategy,
+        "create_physics_asset": create_physics_asset,
+        "physics_asset_policy": physics_asset_policy,
+        "physics_asset_required": physics_asset_required,
+        "profile": request.get("profile") or unreal_import_strategy.get("profile"),
+    }
+
+
+def list_assets(request: dict) -> dict:
+    asset_path = request.get("asset_path") or request.get("asset_root") or "/Game"
+    recursive = bool(request.get("recursive", True))
+    limit = int(request.get("limit") or 200)
+
+    registry = unreal.AssetRegistryHelpers.get_asset_registry()
+    assets = list(registry.get_assets_by_path(to_name(asset_path), recursive=recursive))
+    entries = []
+    for asset_data in assets[:limit]:
+        entries.append(
+            {
+                "object_path": asset_object_path(asset_data),
+                "package_name": str(asset_data.package_name),
+                "package_path": str(asset_data.package_path),
+                "asset_name": str(asset_data.asset_name),
+                "asset_class": asset_class_name(asset_data),
+            }
+        )
+    warnings = []
+    if len(assets) > limit:
+        warnings.append(f"result_truncated_to_{limit}")
+    return {
+        "asset_path": asset_path,
+        "recursive": recursive,
+        "total_count": len(assets),
+        "returned_count": len(entries),
+        "assets": entries,
+        "warnings": warnings,
+        "errors": [],
+    }
+
+
+def inspect_host(request: dict) -> dict:
+    asset_root = request.get("asset_root") or "/Game"
+    registry = unreal.AssetRegistryHelpers.get_asset_registry()
+    root_assets = list(registry.get_assets_by_path(to_name(asset_root), recursive=True))
+    startup_map = None
+    if hasattr(unreal.Paths, "get_project_file_path"):
+        project_file_path = unreal.Paths.get_project_file_path()
+    else:
+        project_file_path = ""
+    if hasattr(unreal.SystemLibrary, "get_project_content_directory"):
+        project_content_dir = unreal.SystemLibrary.get_project_content_directory()
+    else:
+        project_content_dir = unreal.Paths.project_content_dir()
+    try:
+        game_maps = unreal.GameMapsSettings.get_game_maps_settings()
+        startup_map = game_maps.get_editor_startup_map()
+    except Exception:
+        startup_map = None
+    plugin_root = Path(unreal.Paths.project_plugins_dir()) / "AiUEPmxRuntime"
+    return {
+        "project_file_path": project_file_path,
+        "project_content_dir": project_content_dir,
+        "project_saved_dir": unreal.Paths.project_saved_dir(),
+        "project_plugins_dir": unreal.Paths.project_plugins_dir(),
+        "engine_version": unreal.SystemLibrary.get_engine_version(),
+        "asset_root": asset_root,
+        "asset_root_exists": unreal.EditorAssetLibrary.does_directory_exist(asset_root),
+        "asset_count_under_root": len(root_assets),
+        "startup_map": startup_map,
+        "aiue_pmx_runtime_plugin_root": str(plugin_root.resolve()),
+        "aiue_pmx_runtime_plugin_installed": plugin_root.exists(),
+        "native_runtime_available": hasattr(unreal, "PMXCharacterHost") and hasattr(unreal, "PMXCharacterEquipmentComponent"),
+        "python_script_plugin_enabled": True,
+        "warnings": [],
+        "errors": [],
+    }
+
+
+def debug_physics_api(_: dict) -> dict:
+    payload = {
+        "physics_asset_utils_present": hasattr(unreal, "PhysicsAssetUtils"),
+        "physics_asset_factory_present": hasattr(unreal, "PhysicsAssetFactory"),
+        "editor_skeletal_mesh_library_present": hasattr(unreal, "EditorSkeletalMeshLibrary"),
+        "physics_asset_utils_methods": [],
+        "physics_asset_factory_members": [],
+        "editor_skeletal_mesh_library_methods": [],
+    }
+    if hasattr(unreal, "PhysicsAssetUtils"):
+        payload["physics_asset_utils_methods"] = sorted(
+            name for name in dir(unreal.PhysicsAssetUtils) if not name.startswith("_")
+        )
+    if hasattr(unreal, "PhysicsAssetFactory"):
+        payload["physics_asset_factory_members"] = sorted(
+            name for name in dir(unreal.PhysicsAssetFactory) if not name.startswith("_")
+        )
+    if hasattr(unreal, "EditorSkeletalMeshLibrary"):
+        payload["editor_skeletal_mesh_library_methods"] = sorted(
+            name for name in dir(unreal.EditorSkeletalMeshLibrary) if not name.startswith("_")
+        )
+    payload["warnings"] = []
+    payload["errors"] = []
+    return payload
+
+
+def import_package_dry_run(request: dict) -> dict:
+    context = derive_import_context(request)
+    imported_textures = []
+    for texture_file in context["texture_files"]:
+        name = texture_file.stem.replace(".", "_")
+        imported_textures.append(f"{context['texture_destination']}/{name}.{name}")
+    return {
+        "manifest_path": str(context["manifest_path"]),
+        "source_file": context["manifest"].get("source_file"),
+        "sample_id": context["manifest"].get("sample_id"),
+        "output_fbx": str(context["output_fbx"]),
+        "original_output_fbx": context["manifest"].get("output_fbx"),
+        "asset_root": context["asset_root"],
+        "asset_label": context["asset_label"],
+        "content_bucket": context["content_bucket"],
+        "destination_paths": {
+            "package_root": context["package_root"],
+            "mesh_destination": context["mesh_destination"],
+            "texture_destination": context["texture_destination"],
+        },
+        "imported_assets": {
+            "skeletal_mesh": f"{context['mesh_destination']}/{context['mesh_name']}.{context['mesh_name']}",
+            "skeleton": f"{context['mesh_destination']}/{context['mesh_name']}_Skeleton.{context['mesh_name']}_Skeleton",
+            "physics_asset": (
+                f"{context['mesh_destination']}/{context['mesh_name']}_PhysicsAsset.{context['mesh_name']}_PhysicsAsset"
+                if context["create_physics_asset"] or context["physics_asset_required"]
+                else None
+            ),
+            "textures": imported_textures,
+            "other": [],
+        },
+        "dry_run": True,
+        "warnings": [
+            "dry_run_only_no_assets_imported",
+            "package_role_and_contract_type_are_inferred_from_local_manifest_context",
+        ],
+        "errors": [],
+    }
+
+
+def import_package(request: dict) -> dict:
+    context = derive_import_context(request)
+    ensure_directory(context["package_root"])
+    ensure_directory(context["mesh_destination"])
+    ensure_directory(context["texture_destination"])
+
+    imported_textures = import_files(context["texture_files"], context["texture_destination"])
+    mesh_assets = import_skeletal_mesh(context["output_fbx"], context["mesh_destination"], context["create_physics_asset"])
+    mesh_assets = enrich_related_assets(mesh_assets, context["mesh_destination"], context["mesh_name"])
+    if (context["create_physics_asset"] or context["physics_asset_required"]) and not mesh_assets["physics_asset"]:
+        mesh_assets["physics_asset"] = create_physics_asset_for_mesh(
+            mesh_assets["skeletal_mesh"],
+            mesh_assets["skeleton"],
+            context["mesh_destination"],
+            context["mesh_name"],
+        )
+        mesh_assets = enrich_related_assets(mesh_assets, context["mesh_destination"], context["mesh_name"])
+
+    imported_assets = {
+        "skeletal_mesh": mesh_assets["skeletal_mesh"],
+        "skeleton": mesh_assets["skeleton"],
+        "physics_asset": mesh_assets["physics_asset"],
+        "textures": imported_textures,
+        "other": mesh_assets["other"],
+    }
+
+    save_directory(context["package_root"])
+    actual_slot_names = material_slot_names(imported_assets["skeletal_mesh"])
+    failures = []
+    warnings = []
+    if not imported_assets["skeletal_mesh"]:
+        failures.append("skeletal_mesh_missing_after_import")
+    if not imported_assets["skeleton"]:
+        failures.append("skeleton_missing_after_import")
+    if context["physics_asset_required"] and not imported_assets["physics_asset"]:
+        failures.append("physics_asset_missing_after_import")
+    if len(imported_assets["textures"]) < context["expected_texture_count"]:
+        warnings.append(f"imported_texture_count_below_expected:{len(imported_assets['textures'])}/{context['expected_texture_count']}")
+    missing_slots = [name for name in context["expected_slot_names"] if name not in actual_slot_names]
+    if missing_slots:
+        warnings.append(f"missing_material_slots:{len(missing_slots)}")
+
+    import_report = {
+        "generated_at_utc": now_utc(),
+        "sample_id": context["manifest"].get("sample_id"),
+        "package_id": context["package_id"],
+        "source_file": context["manifest"].get("source_file"),
+        "source_relative_path": context["source_relative_path"],
+        "manifest_path": str(context["manifest_path"]),
+        "output_fbx": str(context["output_fbx"]),
+        "profile_path": None,
+        "requested_profile": context["profile"],
+        "resolved_profile": context["profile"] or "default_skeletal_import",
+        "asset_root": context["asset_root"],
+        "asset_label": context["asset_label"],
+        "content_bucket": context["content_bucket"],
+        "package_role": context["package_role"],
+        "pipeline_strategy": {
+            "unreal_import": context["pipeline_strategy"].get("unreal_import", {}),
+            "unreal_validation": context["pipeline_strategy"].get("unreal_validation", {}),
+            "risk_level": context["pipeline_strategy"].get("risk_level"),
+        },
+        "destination_paths": {
+            "package_root": context["package_root"],
+            "mesh_destination": context["mesh_destination"],
+            "texture_destination": context["texture_destination"],
+        },
+        "imported_assets": imported_assets,
+        "warnings": warnings,
+        "consumer_contract_path": str(context["consumer_contract_path"]) if context["consumer_contract_path"] else None,
+        "consumer_contract_summary": {
+            "contract_type": context["consumer_contract"].get("contract_type"),
+            "consumer_ready": context["consumer_contract"].get("consumer_ready"),
+            "preferred_owner_package_id": context["consumer_contract"].get("preferred_owner_package_id"),
+        },
+        "bundle_context": context["consumer_contract"].get("bundle_context"),
+        "attachment": context["consumer_contract"].get("attachment"),
+    }
+
+    validation_report = {
+        "generated_at_utc": now_utc(),
+        "sample_id": context["manifest"].get("sample_id"),
+        "package_id": context["package_id"],
+        "source_file": context["manifest"].get("source_file"),
+        "source_relative_path": context["source_relative_path"],
+        "manifest_path": str(context["manifest_path"]),
+        "import_report_path": str(context["import_report_path"]),
+        "content_bucket": context["content_bucket"],
+        "package_role": context["package_role"],
+        "checks": {
+            "skeletal_mesh_exists": bool(imported_assets["skeletal_mesh"]),
+            "skeleton_exists": bool(imported_assets["skeleton"]),
+            "physics_asset_exists": bool(imported_assets["physics_asset"]),
+            "physics_asset_required": context["physics_asset_required"],
+            "expected_material_slot_names": context["expected_slot_names"],
+            "actual_material_slot_names": actual_slot_names,
+            "tolerated_missing_material_slots": [],
+            "expected_texture_count": context["expected_texture_count"],
+            "imported_texture_count": len(imported_assets["textures"]),
+        },
+        "strategy": {
+            "physics_asset_policy": context["physics_asset_policy"],
+            "allow_minor_trailing_material_drops": False,
+            "minor_trailing_material_candidates": [],
+        },
+        "consumer": {
+            "contract_path": str(context["consumer_contract_path"]) if context["consumer_contract_path"] else None,
+            "contract_type": context["consumer_contract"].get("contract_type"),
+            "consumer_ready": context["consumer_contract"].get("consumer_ready"),
+            "preferred_owner_package_id": context["consumer_contract"].get("preferred_owner_package_id"),
+            "preferred_attach_target": context["consumer_contract"].get("preferred_attach_target"),
+        },
+        "failures": failures,
+        "warnings": warnings,
+        "score": 100 if not failures and not warnings else 90 if not failures else 0,
+        "status": "pass" if not failures else "fail",
+    }
+
+    write_json(context["import_report_path"], import_report)
+    write_json(context["validation_report_path"], validation_report)
+
+    return {
+        **import_report,
+        "import_report_path": str(context["import_report_path"]),
+        "validation_report_path": str(context["validation_report_path"]),
+        "validation_status": validation_report["status"],
+        "validation_score": validation_report["score"],
+        "dry_run": False,
+        "warnings": warnings,
+        "errors": failures,
+    }
+
+
+def dispatch(request: dict) -> dict:
+    command = request["command"]
+    if command == "inspect-host":
+        return inspect_host(request)
+    if command == "inspect-host-visual":
+        return inspect_host_visual(request)
+    if command == "debug-physics-api":
+        return debug_physics_api(request)
+    if command == "load-level":
+        return load_level(request)
+    if command == "spawn-host":
+        return spawn_host(request)
+    if command == "inspect-stage-anchors":
+        return inspect_stage_anchors(request)
+    if command == "ensure-stage-anchors":
+        return ensure_stage_anchors(request)
+    if command == "capture-frame":
+        return capture_frame(request)
+    if command == "stage-capture":
+        stage_request = dict(request)
+        stage_request["command"] = "capture-frame"
+        return capture_frame(stage_request)
+    if command == "run-scene-sweep":
+        return run_scene_sweep(request)
+    if command == "list-assets":
+        return list_assets(request)
+    if command == "build-equipment-registry":
+        return build_equipment_registry(request)
+    if command == "import-package" and request.get("dry_run"):
+        return import_package_dry_run(request)
+    if command == "import-package":
+        return import_package(request)
+    return {
+        "warnings": [],
+        "errors": [f"unsupported_command:{command}"],
+    }
+
+
+def main() -> int:
+    if len(sys.argv) >= 3:
+        request_path = Path(sys.argv[1]).expanduser().resolve()
+        response_path = Path(sys.argv[2]).expanduser().resolve()
+    else:
+        request_env = os.environ.get("AIUE_REQUEST_PATH")
+        response_env = os.environ.get("AIUE_RESPONSE_PATH")
+        if not request_env or not response_env:
+            raise RuntimeError("AIUE_REQUEST_PATH and AIUE_RESPONSE_PATH must be provided")
+        request_path = Path(request_env).expanduser().resolve()
+        response_path = Path(response_env).expanduser().resolve()
+    request = json.loads(request_path.read_text(encoding="utf-8-sig"))
+    try:
+        result = dispatch(request)
+        payload = {
+            "success": not result.get("errors"),
+            "result": result,
+            "warnings": result.get("warnings", []),
+            "errors": result.get("errors", []),
+        }
+    except Exception as exc:
+        payload = {
+            "success": False,
+            "result": {},
+            "warnings": [],
+            "errors": [str(exc), traceback.format_exc()],
+        }
+    response_path.parent.mkdir(parents=True, exist_ok=True)
+    response_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return 0 if payload["success"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

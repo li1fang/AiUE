@@ -6,6 +6,20 @@ from pathlib import Path
 
 from aiue_core.schema_utils import load_json, load_workspace_config
 
+DEFAULT_HOST_ROUTES = {
+    "import-package": "kernel",
+    "build-equipment-registry": "kernel",
+    "inspect-host": "kernel",
+    "inspect-host-visual": "kernel",
+    "composition-validation": "kernel",
+    "validate-package": "kernel",
+    "load-level": "demo",
+    "stage-capture": "demo",
+    "run-scene-sweep": "demo",
+    "action-preview": "demo",
+    "demo-gate": "demo",
+}
+
 
 def _workspace_dict(workspace_or_config) -> dict:
     if isinstance(workspace_or_config, dict):
@@ -13,11 +27,30 @@ def _workspace_dict(workspace_or_config) -> dict:
     return load_workspace_config(workspace_or_config)
 
 
-def resolve_host_paths(workspace_or_config) -> dict:
+def _resolved_host_key(workspace: dict, command: str | None = None, host_key: str | None = None) -> str:
+    requested = str(host_key or "").strip()
+    if requested:
+        return requested
+    routes = dict(DEFAULT_HOST_ROUTES)
+    routes.update(workspace.get("default_host_routes") or {})
+    resolved = str(routes.get(str(command or "")) or "").strip()
+    if resolved:
+        return resolved
+    if workspace.get("hosts", {}).get("kernel"):
+        return "kernel"
+    return "default"
+
+
+def resolve_host_paths(workspace_or_config, command: str | None = None, host_key: str | None = None) -> dict:
     workspace = _workspace_dict(workspace_or_config)
-    project_root = Path(workspace["paths"]["unreal_project_root"]).expanduser().resolve()
+    resolved_host_key = _resolved_host_key(workspace, command=command, host_key=host_key)
+    host_entry = dict((workspace.get("hosts") or {}).get(resolved_host_key) or {})
+    project_root_value = host_entry.get("project_root") or workspace["paths"]["unreal_project_root"]
+    project_root = Path(project_root_value).expanduser().resolve()
     return {
         "workspace": workspace,
+        "host_key": resolved_host_key,
+        "host_entry": host_entry,
         "project_root": project_root,
         "auto_ue_cli_ps1": project_root / "auto_ue_cli.ps1",
         "probe_ps1": project_root / "probe_ue_capabilities.ps1",
@@ -52,9 +85,11 @@ def _run_powershell(script_path: Path, arguments: list[str]) -> dict:
     }
 
 
-def run_host_probe(workspace_or_config, mode: str = "dual", run_id: str | None = None) -> dict:
-    paths = resolve_host_paths(workspace_or_config)
+def run_host_probe(workspace_or_config, mode: str = "dual", run_id: str | None = None, host_key: str | None = None) -> dict:
+    paths = resolve_host_paths(workspace_or_config, command="probe-capabilities", host_key=host_key)
     arguments = ["-WorkspaceConfig", paths["workspace"]["config_path"], "-Mode", mode]
+    if paths.get("host_key"):
+        arguments += ["-HostKey", paths["host_key"]]
     if run_id:
         arguments += ["-RunId", run_id]
     invocation = _run_powershell(paths["probe_ps1"], arguments)
@@ -68,6 +103,7 @@ def run_host_probe(workspace_or_config, mode: str = "dual", run_id: str | None =
         )
     return {
         "invocation": invocation,
+        "host_key": paths["host_key"],
         "capabilities_path": str(capabilities_path),
         "probe_index_path": str(probe_index_path),
         "probe_report_path": str(probe_report_path),
@@ -85,9 +121,10 @@ def run_host_auto_ue_cli(
     output_path: str | None = None,
     allow_destructive: bool = False,
     dry_run: bool = False,
-    post_exit_finalize_wait_seconds: int | None = None
+    post_exit_finalize_wait_seconds: int | None = None,
+    host_key: str | None = None,
 ) -> dict:
-    paths = resolve_host_paths(workspace_or_config)
+    paths = resolve_host_paths(workspace_or_config, command=command, host_key=host_key)
     arguments = [
         "run",
         "-WorkspaceConfig",
@@ -97,6 +134,8 @@ def run_host_auto_ue_cli(
         "-Command",
         command
     ]
+    if paths.get("host_key"):
+        arguments += ["-HostKey", paths["host_key"]]
     if params:
         arguments += ["-ParamsJson", json.dumps(params, ensure_ascii=False, separators=(",", ":"))]
     if output_path:
@@ -120,6 +159,7 @@ def run_host_auto_ue_cli(
         raise RuntimeError(invocation["stderr"] or invocation["stdout"] or "host auto_ue_cli failed")
     return {
         "invocation": invocation,
+        "host_key": paths["host_key"],
         "payload": payload,
         "output_path": str(Path(output_path).expanduser().resolve()) if output_path else None
     }

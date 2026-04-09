@@ -42,6 +42,18 @@ def expand_workspace_value(value, project_root: Path, config_dir: Path):
     return str((config_dir / expanded).resolve())
 
 
+def expand_workspace_mapping(values: dict | None, project_root: Path, config_dir: Path) -> dict:
+    payload = {}
+    for key, value in (values or {}).items():
+        if isinstance(value, dict):
+            payload[key] = expand_workspace_mapping(value, project_root, config_dir)
+        elif key.endswith("_root") or key.endswith("_path") or key.endswith("_dir") or key == "project_root":
+            payload[key] = expand_workspace_value(value, project_root, config_dir)
+        else:
+            payload[key] = value
+    return payload
+
+
 def load_workspace_config(config_path) -> dict:
     resolved_path = Path(config_path).expanduser().resolve()
     raw = load_json(resolved_path)
@@ -53,7 +65,7 @@ def load_workspace_config(config_path) -> dict:
         for key, value in (raw.get("paths") or {}).items()
     }
     sections = {}
-    for section_name in ("defaults", "visual_review", "portability", "open_source", "animation", "probe"):
+    for section_name in ("defaults", "visual_review", "portability", "open_source", "animation", "probe", "visual_proof"):
         values = {}
         for key, value in (raw.get(section_name) or {}).items():
             if key.endswith("_root") or key.endswith("_path"):
@@ -61,6 +73,8 @@ def load_workspace_config(config_path) -> dict:
             else:
                 values[key] = value
         sections[section_name] = values
+    hosts = expand_workspace_mapping(raw.get("hosts") or {}, project_root, config_dir)
+    default_host_routes = dict(raw.get("default_host_routes") or {})
     return {
         "schema_version": raw.get("schema_version", 1),
         "version": workspace_version,
@@ -68,6 +82,8 @@ def load_workspace_config(config_path) -> dict:
         "config_path": str(resolved_path),
         "config_hash": hash_file(resolved_path),
         "paths": resolved_paths,
+        "hosts": hosts,
+        "default_host_routes": default_host_routes,
         **sections,
         "raw": raw,
     }
