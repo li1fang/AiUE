@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import copy
 import json
 import subprocess
 import sys
@@ -44,10 +45,44 @@ def suite_report_root(workspace: dict, suite_name: str) -> Path:
     return Path(workspace["paths"]["conversion_root"]).resolve() / "_ue_suite_reports" / suite_name
 
 
-def ready_host_package_ids(suite_root: Path, explicit_package_id: str | None = None) -> list[str]:
+def latest_matching_file(root: Path, pattern: str) -> Path | None:
+    if not root.exists():
+        return None
+    candidates = sorted(root.rglob(pattern), key=lambda item: item.stat().st_mtime, reverse=True)
+    return candidates[0] if candidates else None
+
+
+def resolve_suite_summary_path(workspace: dict, suite_name: str) -> Path:
+    suite_root = suite_report_root(workspace, suite_name)
+    direct = suite_root / "ue_suite_summary.json"
+    if direct.exists():
+        return direct
+    conversion_root = Path(workspace["paths"]["conversion_root"]).resolve()
+    fallback = latest_matching_file(conversion_root / "_e2e_runs", "ue_suite_summary.json")
+    if fallback:
+        return fallback
+    raise FileNotFoundError(f"No ue_suite_summary.json found for suite {suite_name}")
+
+
+def resolve_equipment_report_path(workspace: dict, suite_name: str) -> Path:
+    suite_root = suite_report_root(workspace, suite_name)
+    direct = suite_root / "ue_equipment_assets_report.json"
+    if direct.exists():
+        return direct
+    local_auto_report = Path(workspace["paths"].get("auto_ue_cli_output_root") or "") / "ue_equipment_assets_report.local.json"
+    if local_auto_report.exists():
+        return local_auto_report.resolve()
+    conversion_root = Path(workspace["paths"]["conversion_root"]).resolve()
+    fallback = latest_matching_file(conversion_root / "_e2e_runs", "ue_equipment_assets_report.json")
+    if fallback:
+        return fallback
+    raise FileNotFoundError(f"No ue_equipment_assets_report.json found for suite {suite_name}")
+
+
+def ready_host_package_ids(equipment_report_path: Path, explicit_package_id: str | None = None) -> list[str]:
     if explicit_package_id:
         return [explicit_package_id]
-    equipment_report = load_json(suite_root / "ue_equipment_assets_report.json")
+    equipment_report = load_json(equipment_report_path)
     return [
         entry["character_package_id"]
         for entry in equipment_report.get("host_blueprints") or []
@@ -61,14 +96,25 @@ def default_output_root(workspace: dict, suite_name: str) -> Path:
     return aiue_root / "Saved" / "capture_lab" / suite_name / run_id
 
 
+def callable_capture_modes(capabilities_payload: dict) -> set[str]:
+    modes = set()
+    for entry in capabilities_payload.get("capabilities") or []:
+        if entry.get("capability_id") != "capture_frame":
+            continue
+        if entry.get("callable") and entry.get("reliable"):
+            modes.add(entry.get("mode"))
+    return modes
+
+
 def run_experiment(workspace: dict, suite_name: str, package_id: str, experiment: dict, experiment_root: Path) -> dict:
     host_wrapper = host_auto_ue_cli_path(workspace)
     capture_root = experiment_root / "captures"
     summary_root = experiment_root / "suite"
-    summary_path = suite_report_root(workspace, suite_name) / "ue_suite_summary.json"
+    summary_path = resolve_suite_summary_path(workspace, suite_name)
     scenarios = experiment["scenario_order"]
     scenario_sets = [[scenario] for scenario in scenarios] if experiment["scenario_scheduling"] == "single_scenario" else [list(scenarios)]
     action_results = []
+    actual_modes = []
     for index, scenario_names in enumerate(scenario_sets, start=1):
         output_path = experiment_root / f"run-scene-sweep_{index}.json"
         params = {
@@ -120,12 +166,15 @@ def run_experiment(workspace: dict, suite_name: str, package_id: str, experiment
             encoding="utf-8",
             errors="replace"
         )
+        payload = load_json(output_path) if output_path.exists() else {}
+        actual_modes.append(payload.get("mode") or experiment["mode"])
         action_results.append(
             {
                 "returncode": completed.returncode,
                 "stdout": completed.stdout,
                 "stderr": completed.stderr,
                 "output_path": str(output_path),
+                "mode": payload.get("mode") or experiment["mode"],
             }
         )
 
@@ -147,6 +196,7 @@ def run_experiment(workspace: dict, suite_name: str, package_id: str, experiment
     return {
         "package_id": package_id,
         "config": experiment,
+        "effective_mode": actual_modes[0] if actual_modes else experiment["mode"],
         "experiment_root": str(experiment_root),
         "action_results": action_results,
         "capture_entries": evaluated_entries,
@@ -168,14 +218,14 @@ def run_experiment(workspace: dict, suite_name: str, package_id: str, experiment
 def rank_experiments(experiments: list[dict]) -> list[dict]:
     def score_key(item: dict):
         counts = item["counts"]
-        preferred_mode = 1 if item["config"]["mode"] == "editor_rendered" else 0
+        effective_mode = item.get("effective_mode") or item["config"]["mode"]
         return (
             counts["captured_before_report"],
             counts["valid_images"],
             -counts["late_captures"],
             -counts["captured_after_exit"],
             -counts["motion_inconclusive"],
-            preferred_mode,
+            1 if effective_mode == "editor_rendered" else 0,
             -float(item["config"]["capture_delay_seconds"]),
         )
 
@@ -203,7 +253,7 @@ def summarize_scenarios(experiments: list[dict]) -> dict:
         for mode in ("cmd_rendered", "editor_rendered"):
             mode_valid = 0
             for experiment in experiments:
-                if experiment.get("config", {}).get("mode") != mode:
+                if (experiment.get("effective_mode") or experiment.get("config", {}).get("mode")) != mode:
                     continue
                 mode_valid += sum(
                     1
@@ -278,7 +328,7 @@ def summarize_completion_strategies(experiments: list[dict]) -> dict:
         )
         bucket["experiments"] += 1
         bucket["packages"].add(experiment.get("package_id"))
-        bucket["modes"].add(experiment.get("config", {}).get("mode"))
+        bucket["modes"].add(experiment.get("effective_mode") or experiment.get("config", {}).get("mode"))
         counts = experiment.get("counts", {})
         for key in (
             "valid_images",
@@ -355,7 +405,7 @@ def write_matrix_csv(path: Path, experiments: list[dict]):
             writer.writerow(
                 {
                     "package_id": experiment["package_id"],
-                    "mode": experiment["config"]["mode"],
+                    "mode": experiment.get("effective_mode") or experiment["config"]["mode"],
                     "level_lifecycle": experiment["config"]["level_lifecycle"],
                     "camera_lifecycle": experiment["config"]["camera_lifecycle"],
                     "scenario_scheduling": experiment["config"]["scenario_scheduling"],
@@ -381,11 +431,23 @@ def write_matrix_csv(path: Path, experiments: list[dict]):
 def main():
     args = parse_args()
     workspace = load_workspace_config(args.workspace_config)
-    experiments = generate_capture_experiments(focus=args.focus)
+    capabilities_path = Path(workspace["paths"]["capability_probe_root"]) / "latest_capabilities.json"
+    capabilities = load_json(capabilities_path)
+    available_modes = callable_capture_modes(capabilities)
+    experiments = [
+        experiment
+        for experiment in generate_capture_experiments(focus=args.focus)
+        if experiment.get("mode") in available_modes
+    ]
+    if not experiments:
+        supported_modes = ", ".join(sorted(available_modes)) if available_modes else "none"
+        raise RuntimeError(
+            f"No callable reliable capture experiments available. Supported modes: {supported_modes}"
+        )
     if args.experiment_limit:
         experiments = experiments[: args.experiment_limit]
-    suite_root = suite_report_root(workspace, args.suite)
-    package_ids = ready_host_package_ids(suite_root, explicit_package_id=args.package_id)
+    equipment_report_path = resolve_equipment_report_path(workspace, args.suite)
+    package_ids = ready_host_package_ids(equipment_report_path, explicit_package_id=args.package_id)
     output_root = Path(args.output_root).expanduser().resolve() if args.output_root else default_output_root(workspace, args.suite)
     output_root.mkdir(parents=True, exist_ok=True)
 
@@ -400,8 +462,13 @@ def main():
     ranked = rank_experiments(results)
     scenario_summary = summarize_scenarios(results)
     completion_strategy_summary = summarize_completion_strategies(results)
-    capabilities = load_json(Path(workspace["paths"]["capability_probe_root"]) / "latest_capabilities.json")
-    policy = derive_capture_policy(capabilities, {"ranked_experiments": ranked, "run_id": output_root.name}, workspace["probe"].get("preferred_capture_mode", "editor_rendered"))
+    policy_ranked = []
+    for item in ranked:
+        normalized = copy.deepcopy(item)
+        normalized.setdefault("requested_mode", item.get("config", {}).get("mode"))
+        normalized["config"]["mode"] = item.get("effective_mode") or item.get("config", {}).get("mode")
+        policy_ranked.append(normalized)
+    policy = derive_capture_policy(capabilities, {"ranked_experiments": policy_ranked, "run_id": output_root.name}, workspace["probe"].get("preferred_capture_mode", "editor_rendered"))
     matrix_path = output_root / "aiue_capture_lab_matrix.csv"
     policy_path = output_root / "recommended_capture_policy.json"
     report_path = output_root / "aiue_capture_lab_report.json"
