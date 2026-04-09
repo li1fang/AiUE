@@ -1,4 +1,8 @@
 Saved/
+local/
+deps/
+tools/unreal_plugins/**/Binaries/
+tools/unreal_plugins/**/Intermediate/
 __pycache__/
 *.pyc
 *.pyo
