@@ -1,0 +1,12 @@
+{
+  "gate_id": "demo_cross_bundle_regression_d12",
+  "status": "pass",
+  "generated_at_utc": "2026-04-11T00:02:00+00:00",
+  "workflow_pack": "pmx_pipeline",
+  "compatibility": {
+    "schema_family": "aiue_demo_cross_bundle_regression_report"
+  },
+  "counts": {
+    "passing_pipeline_steps": 6
+  }
+}

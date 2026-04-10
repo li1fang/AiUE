@@ -1,0 +1,13 @@
+{
+  "gate_id": "demo_stage_d1_onboarding",
+  "status": "pass",
+  "generated_at_utc": "2026-04-11T00:01:00+00:00",
+  "workflow_pack": "pmx_pipeline",
+  "compatibility": {
+    "schema_family": "aiue_demo_gate_report"
+  },
+  "counts": {
+    "imports_passed": 4,
+    "runtime_ready_host_blueprints": 2
+  }
+}

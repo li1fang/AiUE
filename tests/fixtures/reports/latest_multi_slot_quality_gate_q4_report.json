@@ -1,0 +1,45 @@
+{
+  "gate_id": "multi_slot_quality_gate_q4",
+  "status": "pass",
+  "generated_at_utc": "2026-04-11T00:05:00+00:00",
+  "workflow_pack": "pmx_pipeline",
+  "compatibility": {
+    "schema_family": "aiue_multi_slot_quality_report"
+  },
+  "per_package_results": [
+    {
+      "package_id": "pkg_alpha",
+      "sample_id": "sample_alpha",
+      "status": "pass",
+      "hero_shot_ids": [
+        "front"
+      ],
+      "strict_shot_results": [
+        {
+          "shot_id": "front",
+          "status": "pass",
+          "weapon_visible": true,
+          "subject_visible": true,
+          "line_of_sight_clear": true,
+          "capture_succeeded": true,
+          "weapon_screen_coverage": 0.02,
+          "clothing_screen_coverage": 0.01,
+          "fx_screen_coverage": 0.05,
+          "image_path": "__FIXTURE_ROOT__/images/front.ppm"
+        },
+        {
+          "shot_id": "side",
+          "status": "pass",
+          "weapon_visible": true,
+          "subject_visible": true,
+          "line_of_sight_clear": true,
+          "capture_succeeded": true,
+          "weapon_screen_coverage": 0.018,
+          "clothing_screen_coverage": 0.008,
+          "fx_screen_coverage": 0.03,
+          "image_path": "__FIXTURE_ROOT__/images/side.ppm"
+        }
+      ]
+    }
+  ]
+}

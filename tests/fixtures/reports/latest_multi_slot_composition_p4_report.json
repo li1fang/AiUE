@@ -1,0 +1,173 @@
+{
+  "gate_id": "multi_slot_composition_p4",
+  "status": "pass",
+  "generated_at_utc": "2026-04-11T00:04:00+00:00",
+  "workflow_pack": "pmx_pipeline",
+  "compatibility": {
+    "schema_family": "aiue_multi_slot_composition_report"
+  },
+  "runtime_checks": [
+    {
+      "package_id": "pkg_alpha",
+      "sample_id": "sample_alpha",
+      "status": "pass",
+      "host_blueprint_asset": "/Game/Test/BP_PkgAlpha",
+      "weapon_binding": {
+        "slot_name": "weapon",
+        "item_package_id": "weapon_pkg",
+        "item_kind": "skeletal_mesh",
+        "attach_socket_name": "WeaponSocket",
+        "skeletal_mesh_asset": "/Game/Test/SKM_Weapon",
+        "consumer_ready": true
+      },
+      "weapon_component": {
+        "component_name": "DefaultWeaponMeshComponent",
+        "class_name": "SkeletalMeshComponent",
+        "asset_path": "/Game/Test/SKM_Weapon",
+        "visible": true,
+        "hidden_in_game": false,
+        "bounds": {
+          "diagonal_length": 10.0
+        },
+        "attach": {
+          "attach_socket_name": "Bone_hand_r"
+        }
+      },
+      "weapon_attach_state": {
+        "slot_name": "weapon",
+        "requested_attach_socket_name": "WeaponSocket",
+        "resolved_attach_socket_name": "Bone_hand_r",
+        "resolved_attach_socket_exists": true,
+        "resolution_strategy": "fallback_bone_score"
+      },
+      "clothing_binding": {
+        "slot_name": "clothing",
+        "item_package_id": "hair_pkg",
+        "item_kind": "skeletal_mesh",
+        "attach_socket_name": "Head",
+        "skeletal_mesh_asset": "/Game/Test/SKM_Hair",
+        "consumer_ready": true
+      },
+      "clothing_component": {
+        "component_name": "PMXSlot_clothing_SkeletalMeshComponent",
+        "class_name": "SkeletalMeshComponent",
+        "asset_path": "/Game/Test/SKM_Hair",
+        "visible": true,
+        "hidden_in_game": false,
+        "bounds": {
+          "diagonal_length": 8.0
+        },
+        "attach": {
+          "attach_socket_name": "Bone_head"
+        }
+      },
+      "clothing_attach_state": {
+        "slot_name": "clothing",
+        "requested_attach_socket_name": "Head",
+        "resolved_attach_socket_name": "Bone_head",
+        "resolved_attach_socket_exists": true,
+        "resolution_strategy": "fallback_bone_score"
+      },
+      "fx_binding": {
+        "slot_name": "fx",
+        "item_package_id": "fx_pkg",
+        "item_kind": "niagara_system",
+        "attach_socket_name": "WeaponSocket",
+        "niagara_system_asset": "/Game/Test/NS_TestFx",
+        "consumer_ready": true
+      },
+      "fx_component": {
+        "component_name": "PMXSlot_fx_NiagaraComponent",
+        "class_name": "NiagaraComponent",
+        "asset_path": "/Game/Test/NS_TestFx",
+        "visible": true,
+        "hidden_in_game": false,
+        "bounds": {
+          "diagonal_length": 12.0
+        },
+        "attach": {
+          "attach_socket_name": "Bone_hand_r"
+        }
+      },
+      "fx_attach_state": {
+        "slot_name": "fx",
+        "requested_attach_socket_name": "WeaponSocket",
+        "resolved_attach_socket_name": "Bone_hand_r",
+        "resolved_attach_socket_exists": true,
+        "resolution_strategy": "fallback_bone_score"
+      },
+      "slot_conflicts": [
+        {
+          "slot_name": "fx",
+          "reason": "override_latest"
+        }
+      ],
+      "superseded_bindings": [
+        {
+          "slot_name": "fx",
+          "item_package_id": "older_fx"
+        }
+      ]
+    }
+  ],
+  "visual_checks": [
+    {
+      "package_id": "pkg_alpha",
+      "status": "pass",
+      "shots": [
+        {
+          "shot_id": "front",
+          "image_path": "__FIXTURE_ROOT__/images/front.ppm",
+          "weapon_visible": true,
+          "weapon_screen_coverage": 0.02,
+          "tracked_slot_coverages": {
+            "clothing": {
+              "coverage_ratio": 0.01,
+              "screen_rect": {
+                "min_x": 10,
+                "min_y": 10,
+                "max_x": 20,
+                "max_y": 20
+              }
+            },
+            "fx": {
+              "coverage_ratio": 0.05,
+              "screen_rect": {
+                "min_x": 12,
+                "min_y": 12,
+                "max_x": 22,
+                "max_y": 22
+              }
+            }
+          }
+        },
+        {
+          "shot_id": "side",
+          "image_path": "__FIXTURE_ROOT__/images/side.ppm",
+          "weapon_visible": true,
+          "weapon_screen_coverage": 0.018,
+          "tracked_slot_coverages": {
+            "clothing": {
+              "coverage_ratio": 0.008,
+              "screen_rect": {
+                "min_x": 14,
+                "min_y": 12,
+                "max_x": 22,
+                "max_y": 20
+              }
+            },
+            "fx": {
+              "coverage_ratio": 0.03,
+              "screen_rect": {
+                "min_x": 16,
+                "min_y": 10,
+                "max_x": 24,
+                "max_y": 18
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

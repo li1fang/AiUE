@@ -1,0 +1,12 @@
+{
+  "gate_id": "generic_slot_abstraction_p1",
+  "status": "pass",
+  "generated_at_utc": "2026-04-11T00:03:00+00:00",
+  "workflow_pack": "pmx_pipeline",
+  "compatibility": {
+    "schema_family": "aiue_generic_slot_abstraction_report"
+  },
+  "counts": {
+    "passing_weapon_slot_checks": 2
+  }
+}

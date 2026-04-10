@@ -1,0 +1,62 @@
+{
+  "gate_id": "live_fx_visual_quality_r3",
+  "status": "pass",
+  "generated_at_utc": "2026-04-11T00:06:00+00:00",
+  "workflow_pack": "core",
+  "compatibility": {
+    "schema_family": "aiue_live_fx_visual_quality_report"
+  },
+  "per_package_results": [
+    {
+      "package_id": "pkg_alpha",
+      "sample_id": "sample_alpha",
+      "status": "pass",
+      "host_blueprint_asset": "/Game/Test/BP_PkgAlpha",
+      "fx_binding": {
+        "slot_name": "fx",
+        "item_package_id": "fx_pkg",
+        "item_kind": "niagara_system",
+        "attach_socket_name": "WeaponSocket",
+        "niagara_system_asset": "/Game/Test/NS_TestFx",
+        "consumer_ready": true
+      },
+      "with_fx_component": {
+        "component_name": "PMXSlot_fx_NiagaraComponent",
+        "class_name": "NiagaraComponent",
+        "asset_path": "/Game/Test/NS_TestFx",
+        "visible": true,
+        "hidden_in_game": false
+      },
+      "shot_results": [
+        {
+          "shot_id": "front",
+          "status": "pass",
+          "baseline_image_path": "__FIXTURE_ROOT__/images/before.ppm",
+          "with_fx_image_path": "__FIXTURE_ROOT__/images/after.ppm",
+          "crop_metrics": {
+            "histogram_l1": 0.02,
+            "mean_abs_pixel_delta": 0.01
+          },
+          "full_frame_metrics": {
+            "histogram_l1": 0.015,
+            "mean_abs_pixel_delta": 0.008
+          }
+        },
+        {
+          "shot_id": "side",
+          "status": "pass",
+          "baseline_image_path": "__FIXTURE_ROOT__/images/before.ppm",
+          "with_fx_image_path": "__FIXTURE_ROOT__/images/after.ppm",
+          "crop_metrics": {
+            "histogram_l1": 0.018,
+            "mean_abs_pixel_delta": 0.007
+          },
+          "full_frame_metrics": {
+            "histogram_l1": 0.013,
+            "mean_abs_pixel_delta": 0.006
+          }
+        }
+      ]
+    }
+  ]
+}

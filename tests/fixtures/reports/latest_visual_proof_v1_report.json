@@ -1,0 +1,21 @@
+{
+  "gate_id": "visual_proof_v1",
+  "status": "pass",
+  "generated_at_utc": "2026-04-11T00:00:00+00:00",
+  "workflow_pack": "pmx_pipeline",
+  "compatibility": {
+    "schema_family": "aiue_visual_proof_gate_report"
+  },
+  "visual_result": {
+    "shots": [
+      {
+        "shot_id": "front",
+        "image_path": "__FIXTURE_ROOT__/images/front.ppm"
+      },
+      {
+        "shot_id": "side",
+        "image_path": "__FIXTURE_ROOT__/images/side.ppm"
+      }
+    ]
+  }
+}
