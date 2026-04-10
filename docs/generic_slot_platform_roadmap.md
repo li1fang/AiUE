@@ -83,3 +83,7 @@ Goals:
 - Slot conflicts are `Override Latest`.
 - `G2` stays retired.
 - `P2` is higher priority than `P3`.
+- After `P4` and `Q4`, `P5` is deferred.
+- The next two roadmap priorities are:
+  - `R1`: clothing attach hardening
+  - `R2`: real FX item kind
