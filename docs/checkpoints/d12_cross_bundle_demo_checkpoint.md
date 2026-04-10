@@ -54,20 +54,17 @@ The latest report is:
 
 ## Residual Quality Note
 
-One of the second-bundle `walk_forward` side shots emitted a framing-related warning:
+At the time `D12` was introduced, one of the second-bundle `walk_forward` side shots could emit:
 
 - `subject_not_visible_in_camera_plan`
 
-The case still passed because actual screenshot evidence and external motion evidence remained valid.
-
-So the stack is working, but shot-quality enforcement is still softer than it should be.
+That warning has since been reconciled by `Q1`, which now evaluates real post-capture shot evidence and removes this false-positive class from passing reports.
 
 ## Recommended Next Step
 
-The most useful next move is no longer “can another bundle pass”.
+The most useful next move is no longer "can another bundle pass?"
 
 It is:
 
-- add a stricter shot-quality / subject-visibility gate
-- make framing warnings first-class quality signals
-- only after that scale wider across more bundles or content classes
+- keep `Q1` as the strict shot-quality layer
+- then scale that quality gate across more bundles or stronger composition checks

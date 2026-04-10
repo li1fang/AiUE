@@ -1409,6 +1409,74 @@ def evaluate_subject_visibility(target_actor, camera_actor, camera_location, cam
     }
 
 
+def reconcile_camera_plan_warning(subject_visibility: dict, warnings: list[str], actual_subject_visible: bool, line_clear: bool, capture_succeeded: bool) -> tuple[list[str], dict]:
+    normalized_warnings = list(warnings or [])
+    plan_visible = bool((subject_visibility or {}).get("visible"))
+    warning_code = "subject_not_visible_in_camera_plan"
+    warning_present = warning_code in normalized_warnings
+    warning_reconciled = False
+    if warning_present and capture_succeeded and actual_subject_visible and line_clear:
+        normalized_warnings = [item for item in normalized_warnings if item != warning_code]
+        warning_reconciled = True
+    return normalized_warnings, {
+        "plan_visible": plan_visible,
+        "plan_reason": str((subject_visibility or {}).get("reason") or ""),
+        "warning_code": warning_code,
+        "warning_present": warning_present,
+        "warning_reconciled": warning_reconciled,
+        "warning_retained": warning_present and not warning_reconciled,
+        "matches_post_capture": None if not capture_succeeded else bool(plan_visible == actual_subject_visible),
+        "actual_subject_visible": bool(actual_subject_visible),
+        "line_of_sight_clear": bool(line_clear),
+        "capture_succeeded": bool(capture_succeeded),
+    }
+
+
+def build_shot_quality_payload(
+    capture_result: dict,
+    subject_coverage: dict,
+    weapon_coverage: dict,
+    line_of_sight: dict,
+    subject_min_screen_coverage: float,
+    weapon_min_screen_coverage: float,
+) -> dict:
+    shot_errors = list(capture_result.get("errors") or [])
+    shot_warnings = list(capture_result.get("warnings") or [])
+    subject_visible = bool(subject_coverage.get("coverage_ratio", 0.0) >= subject_min_screen_coverage)
+    weapon_visible = bool(weapon_coverage.get("coverage_ratio", 0.0) >= weapon_min_screen_coverage)
+    line_clear = bool(line_of_sight.get("clear"))
+    capture_succeeded = bool(capture_result.get("output_exists"))
+    shot_warnings, camera_plan_assessment = reconcile_camera_plan_warning(
+        dict(capture_result.get("subject_visibility") or {}),
+        shot_warnings,
+        subject_visible,
+        line_clear,
+        capture_succeeded,
+    )
+    if not subject_visible:
+        shot_errors.append("out_of_frame")
+    if not line_clear:
+        shot_errors.append("occluded")
+    if not capture_succeeded:
+        shot_errors.append("capture_failed")
+    shot_status = "pass" if not shot_errors else "fail"
+    return {
+        "status": shot_status,
+        "warnings": sorted(set(shot_warnings)),
+        "errors": sorted(set(shot_errors)),
+        "quality_gate": {
+            "status": shot_status,
+            "capture_succeeded": capture_succeeded,
+            "subject_visible": subject_visible,
+            "weapon_visible": weapon_visible,
+            "line_of_sight_clear": line_clear,
+            "subject_min_screen_coverage": float(subject_min_screen_coverage),
+            "weapon_min_screen_coverage": float(weapon_min_screen_coverage),
+        },
+        "camera_plan_assessment": camera_plan_assessment,
+    }
+
+
 def component_asset_path(component) -> str:
     if not component:
         return ""
@@ -2842,18 +2910,14 @@ def capture_visual_shot(
         },
         output_path,
     )
-    shot_errors = list(capture_result.get("errors") or [])
-    shot_warnings = list(capture_result.get("warnings") or [])
-    subject_visible = bool(subject_coverage.get("coverage_ratio", 0.0) >= subject_min_screen_coverage)
-    weapon_visible = bool(weapon_coverage.get("coverage_ratio", 0.0) >= weapon_min_screen_coverage)
-    line_clear = bool(line_of_sight.get("clear"))
-    if not subject_visible:
-        shot_errors.append("out_of_frame")
-    if not line_clear:
-        shot_errors.append("occluded")
-    if not capture_result.get("output_exists"):
-        shot_errors.append("capture_failed")
-    shot_status = "pass" if not shot_errors else "fail"
+    shot_quality = build_shot_quality_payload(
+        capture_result,
+        subject_coverage,
+        weapon_coverage,
+        line_of_sight,
+        subject_min_screen_coverage,
+        weapon_min_screen_coverage,
+    )
     return {
         "shot_id": shot_plan["shot_id"],
         "camera_id": shot_plan["camera_id"],
@@ -2863,14 +2927,16 @@ def capture_visual_shot(
         "image_path": str(output_path.resolve()),
         "subject_screen_coverage": float(subject_coverage.get("coverage_ratio") or 0.0),
         "weapon_screen_coverage": float(weapon_coverage.get("coverage_ratio") or 0.0),
-        "line_of_sight_clear": line_clear,
+        "line_of_sight_clear": bool((shot_quality.get("quality_gate") or {}).get("line_of_sight_clear")),
         "line_of_sight": line_of_sight,
         "subject_coverage": subject_coverage,
         "weapon_coverage": weapon_coverage,
         "capture_backend": capture_result.get("capture_backend"),
-        "status": shot_status,
-        "warnings": sorted(set(shot_warnings)),
-        "errors": sorted(set(shot_errors)),
+        "status": shot_quality["status"],
+        "warnings": shot_quality["warnings"],
+        "errors": shot_quality["errors"],
+        "quality_gate": shot_quality["quality_gate"],
+        "camera_plan_assessment": shot_quality["camera_plan_assessment"],
     }
 
 
@@ -6402,20 +6468,20 @@ def inspect_host_visual(request: dict) -> dict:
                     "poll_interval_seconds": float(request.get("poll_interval_seconds") or 0.1),
                 }
             )
-            shot_errors = list(capture_result.get("errors") or [])
-            shot_warnings = list(capture_result.get("warnings") or [])
-            subject_visible = bool(subject_coverage.get("coverage_ratio", 0.0) >= subject_min_screen_coverage)
-            weapon_visible = bool(weapon_coverage.get("coverage_ratio", 0.0) >= weapon_min_screen_coverage)
-            line_clear = bool(line_of_sight.get("clear"))
-            if not subject_visible:
-                shot_errors.append("out_of_frame")
-            if not line_clear:
-                shot_errors.append("occluded")
-            if not capture_result.get("output_exists"):
-                shot_errors.append("capture_failed")
-            shot_status = "pass" if not shot_errors else "fail"
-            subject_pass_count += int(subject_visible and line_clear and bool(capture_result.get("output_exists")))
-            weapon_pass_count += int(weapon_visible)
+            shot_quality = build_shot_quality_payload(
+                capture_result,
+                subject_coverage,
+                weapon_coverage,
+                line_of_sight,
+                subject_min_screen_coverage,
+                weapon_min_screen_coverage,
+            )
+            subject_pass_count += int(
+                bool((shot_quality.get("quality_gate") or {}).get("subject_visible"))
+                and bool((shot_quality.get("quality_gate") or {}).get("line_of_sight_clear"))
+                and bool((shot_quality.get("quality_gate") or {}).get("capture_succeeded"))
+            )
+            weapon_pass_count += int(bool((shot_quality.get("quality_gate") or {}).get("weapon_visible")))
             shots.append(
                 {
                     "shot_id": shot_plan["shot_id"],
@@ -6426,13 +6492,15 @@ def inspect_host_visual(request: dict) -> dict:
                     "camera_rotation": shot_plan["camera_rotation"],
                     "subject_screen_coverage": float(subject_coverage.get("coverage_ratio") or 0.0),
                     "weapon_screen_coverage": float(weapon_coverage.get("coverage_ratio") or 0.0),
-                    "line_of_sight_clear": line_clear,
+                    "line_of_sight_clear": bool((shot_quality.get("quality_gate") or {}).get("line_of_sight_clear")),
                     "line_of_sight": line_of_sight,
                     "subject_coverage": subject_coverage,
                     "weapon_coverage": weapon_coverage,
-                    "status": shot_status,
-                    "warnings": sorted(set(shot_warnings)),
-                    "errors": sorted(set(shot_errors)),
+                    "status": shot_quality["status"],
+                    "warnings": shot_quality["warnings"],
+                    "errors": shot_quality["errors"],
+                    "quality_gate": shot_quality["quality_gate"],
+                    "camera_plan_assessment": shot_quality["camera_plan_assessment"],
                 }
             )
 
