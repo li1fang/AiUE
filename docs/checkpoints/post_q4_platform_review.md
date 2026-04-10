@@ -2,7 +2,7 @@
 
 ## Summary
 
-After `P1 -> P4` and `Q1 -> Q4`, AiUE is no longer a weapon-only demo line.
+After `P1 -> P4`, `Q1 -> Q4`, and the follow-up hardening line `R1 -> R3`, AiUE is no longer a weapon-only demo line.
 
 It now has:
 
@@ -11,6 +11,7 @@ It now has:
 - generic slot data and runtime application
 - validated `weapon + clothing + fx` coexistence
 - slot-aware quality gates on top of coexistence
+- live Niagara FX screenshot evidence
 
 This means the project has crossed an important line:
 
@@ -24,12 +25,15 @@ The current active evidence chain is:
 - `V1` kernel visual proof
 - `D1` demo host onboarding
 - `D12` cross-bundle demo regression
-- `Q1 -> Q3` subject/composition/semantic framing
+- `Q1 -> Q4` subject/composition/semantic framing/multi-slot quality
 - `P1` generic slot abstraction
 - `P2` clothing vertical slice
 - `P3` FX vertical slice
 - `P4` multi-slot composition
 - `Q4` multi-slot quality
+- `R1` clothing attach hardening
+- `R2` real FX item kind
+- `R3` live FX visual quality
 
 Current latest reports:
 
@@ -41,6 +45,9 @@ Current latest reports:
 - `P3`: `Saved/verification/latest_fx_vertical_slice_p3_report.json`
 - `P4`: `Saved/verification/latest_multi_slot_composition_p4_report.json`
 - `Q4`: `Saved/verification/latest_multi_slot_quality_gate_q4_report.json`
+- `R1`: validated through the latest `P2/P4/Q4` reports
+- `R2`: `Saved/verification/latest_real_fx_item_kind_r2_report.json`
+- `R3`: `Saved/verification/latest_live_fx_visual_quality_r3_report.json`
 
 ## Module Assessment
 
@@ -103,19 +110,20 @@ Current judgment:
 - good enough to rely on for future vertical slices
 - should continue to be treated as a verification layer, not as the primary location for platform logic
 
-### 5. Quality gates
+### 5. Quality gates and FX visual proof
 
-Status: strong but intentionally narrow
+Status: strong and expanding in the right direction
 
 Reason:
 
 - `Q1 -> Q4` are now progressively stricter
 - `Q4` is the first gate that explicitly reasons about `weapon + clothing + fx` together
+- `R3` closes the earlier gap between “FX component exists” and “FX pixels really enter the screenshot”
 
 Current judgment:
 
 - the quality line is now meaningful
-- but it is still image-evidence QA, not full content QA
+- but it is still mostly screenshot/evidence QA, not full automated content QA
 
 ### 6. Legacy compatibility layer
 
@@ -134,36 +142,22 @@ Current judgment:
 
 ## Remaining Risks
 
-### 1. Clothing owner-origin fallback still exists
+### 1. Runtime modules are large enough to warrant another structure pass
 
-This is the most visible unresolved runtime quality issue.
-
-Current evidence:
-
-- `Q4` passes
-- but one ready package still uses `owner_origin` for `clothing`
-- that fallback is tolerated only because the component is valid and remains visible
-
-Why it matters:
-
-- this is acceptable as a transitional rule
-- it is not a good long-term platform invariant
-
-### 2. FX is still a static-mesh proxy
-
-This is intentional, not an accident.
+This is now the clearest maintainability risk.
 
 Current evidence:
 
-- `P3` and `P4` prove a third slot axis
-- but they do not yet prove a true time-based effect system
+- [retarget.py](C:/AiUE/adapters/unreal/host_project/runtime/retarget.py) is large enough to behave like a subsystem
+- [common.py](C:/AiUE/adapters/unreal/host_project/runtime/common.py) is carrying too many cross-domain helpers
+- workflow runners are numerous enough that tooling and discoverability now matter
 
 Why it matters:
 
-- the platform can carry a third slot
-- but not yet a real production FX runtime
+- the platform is succeeding functionally
+- but its internal cost of extension is climbing
 
-### 3. Legacy weapon API is still present
+### 2. Legacy weapon API is still present
 
 This is expected technical debt.
 
@@ -179,43 +173,54 @@ Do **not** start `P5 Deprecation & Cleanup` yet.
 Reason:
 
 - the generic slot path is proven
-- but two quality-adjacent platform assumptions are still intentionally soft:
-  - clothing attach fallback
-  - FX as static-mesh proxy
+- `R1 -> R3` have removed the most obvious runtime softness
+- but the platform still needs better metrics, better tools, and a clearer bridge toward richer QA and future motion-generation systems
 
-If `P5` starts too early, cleanup will remove compatibility pressure before these soft assumptions are either hardened or explicitly replaced.
+If `P5` starts too early, cleanup will consume bandwidth that is better spent on stronger measurement and interfaces.
 
 ## Recommended Next Phases
 
-### R1: Clothing Attach Hardening
+### T1: Metrics + Tooling Foundation
 
 Goal:
 
-- reduce or eliminate `owner_origin` fallback for `clothing`
-- improve slot-specific attach heuristics for wearable content
+- strengthen image and inspection metrics before heavier QA phases
+- build the tooling needed to inspect evidence and slot state quickly
 
 Success condition:
 
-- the current two ready bundles both resolve `clothing` to a meaningful bone/socket target
-- `Q4` keeps passing without relying on `allow_clothing_owner_origin_fallback`
+- the platform has reusable image-analysis utilities
+- latest reports and key artifacts are easier to inspect
+- slot/attach debugging no longer depends on manually reading raw JSON
 
-### R2: Real FX Item Kind
+### Q5: Dual-Layer Automated Inspection
 
 Goal:
 
-- add a real effect-carrying item kind instead of only `static_mesh` proxy FX
-- likely candidate: a dedicated effect asset path and runtime component type
+- add deterministic assembly QA on top of the current visual proof line
+- combine visible conflict checks with spatial/fit checks
 
 Success condition:
 
-- `fx` no longer means only `static_mesh`
-- the platform can host a real FX slot without breaking `P4/Q4`
+- the platform can automatically flag visible cross-slot conflicts
+- the platform can quantify attach-fit quality strongly enough to support future slot-aware auto-fix
+
+### A1: Action Candidate Provider Interface
+
+Goal:
+
+- define the boundary for future motion-generation systems without embedding them into the runtime
+
+Success condition:
+
+- AiUE has a clean ingestion/preview/validation interface for externally produced motion candidates
+- future learned action systems can plug into the platform without rewriting the host runtime
 
 ### P5: Deprecation & Cleanup
 
 Goal:
 
-- only after `R1` and `R2` are stable
+- only after `T1`, `Q5`, and the first `A1` interface pass are stable
 - begin shrinking weapon-only shims and legacy compatibility fields
 
 Success condition:
@@ -231,11 +236,13 @@ The biggest shift is this:
 
 - before `P1`, the system mostly proved that a narrow character+weapon line could be made to work
 - after `P4/Q4`, the system proves that AiUE can behave like a reusable content platform with multiple equipment axes and layered quality checks
+- after `R3`, the system also proves that real FX can be measured at the final screenshot layer
 
 That does not mean the platform is finished.
 
 It means the next work should be selective and architectural:
 
-- harden the two remaining soft assumptions
+- build stronger metrics and debugging tools
+- add dual-layer automated inspection
+- define the future action-candidate interface
 - then clean up compatibility
-- then expand to richer content QA

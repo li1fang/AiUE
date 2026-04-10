@@ -7,9 +7,14 @@ AiUE now has a stable active line for:
 - `V1`: kernel visual proof
 - `D1`: demo host onboarding
 - `D12`: cross-bundle demo regression
-- `Q1 -> Q3`: visibility, composition, and semantic framing quality
+- `Q1 -> Q4`: visibility, composition, semantic framing, and multi-slot quality
 
-The next platform direction is to remove the remaining `weapon-only` assumptions from the shared runtime and replace them with a generic slot abstraction that can later host clothing and FX.
+The platform direction is no longer only about escaping `weapon-only` assumptions. That transition is already complete enough to support a broader roadmap:
+
+- `T1`: metrics and tooling foundation
+- `Q5`: dual-layer automated inspection
+- `A1`: action-candidate provider interface
+- `P5`: deferred compatibility cleanup after the stronger QA/tooling layers exist
 
 ## Phases
 
@@ -77,6 +82,81 @@ Goals:
 - Retire legacy weapon-only data and runtime shims after `P2` and `P3` are stable.
 - Collapse the platform onto the generic slot abstraction as the only active path.
 
+### T1: Metrics + Tooling Foundation
+
+Goals:
+
+- Strengthen the measurement layer before adding heavier QA logic.
+- Introduce reusable visual/inspection tooling rather than embedding all analysis inside gates.
+- Reduce the cost of understanding evidence across `V1`, `D*`, `P*`, `Q*`, and `R*`.
+
+Planned scope:
+
+- image metrics foundation built on `OpenCV`, `scikit-image`, and `NumPy`
+- lightweight Python tests for non-UE evaluation logic
+- evidence dashboard for latest reports and key before/after captures
+- slot/attach debugger for `slot -> component -> socket/bone -> bounds -> coverage`
+
+Execution rule:
+
+- `T1` is the next direct implementation phase
+- it does not replace existing gates
+- it exists to make later `Q5` and `A1` work more reliably
+
+### Q5: Dual-Layer Automated Inspection
+
+Goals:
+
+- Move platform QA beyond “visible enough” into “assembled correctly.”
+- Add deterministic inspection for AI-generated assets without requiring manual review.
+- Create the measurement basis for future slot-aware auto-fix.
+
+Layers:
+
+- `Q5A Visible Conflict Inspection`
+  - slot/body masking
+  - OpenCV-based cross-slot conflict detection
+  - specialized QA render passes rather than relying only on final-color screenshots
+- `Q5B Spatial Fit Inspection`
+  - attach-distance / bounds / overlap / fit checks
+  - progressive path toward deeper volumetric embedding inspection
+- `Q5C Slot-Aware Auto-Fix`
+  - deferred until `Q5A/Q5B` are numerically stable
+  - limited, slot-aware offset solving rather than unconstrained transform pushing
+
+Execution rule:
+
+- `Q5` is a post-`T1` QA expansion line
+- it should reuse the generic slot runtime and host inspection stack
+- it should not be implemented as ad-hoc per-slot scripts
+
+### A1: Action Candidate Provider Interface
+
+Goals:
+
+- Define a clean interface for future motion-generation systems without binding the platform to one model or one vendor.
+- Keep learned motion generation external to the shared runtime.
+- Let AiUE consume, retarget, preview, and validate motion candidates produced elsewhere.
+
+Planned scope:
+
+- provider-side contract for:
+  - prompt
+  - current slot state
+  - reference images/video
+  - candidate motion asset or intermediate representation
+- platform-side contract for:
+  - candidate import
+  - retarget
+  - preview
+  - gate-based validation
+
+Execution rule:
+
+- `A1` is initially design/interface work only
+- no built-in video diffusion or pose-generation stack is planned in the near term
+- later action-learning systems should plug into this interface instead of being embedded into `AiUEPmxRuntime`
+
 ## Current Decisions
 
 - `P1` supports `skeletal_mesh` and `static_mesh`.
@@ -96,5 +176,8 @@ Goals:
   - current status is `pass`
   - the gate now uses same-session `baseline` vs `with-fx` pair capture on the same spawned host
   - the current passing profile is `SCS_FINAL_COLOR_HDR + warmup`
-- The next roadmap priority is:
-  - strengthen FX quality from `live pixel delta exists` to stronger `FX prominence / semantic readability`
+- The next roadmap priorities are staged as:
+  1. `T1 Metrics + Tooling Foundation`
+  2. `Q5 Dual-Layer Automated Inspection`
+  3. `A1 Action Candidate Provider Interface`
+  4. `P5 Deprecation & Cleanup` only after the newer layers have stabilized
