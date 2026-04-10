@@ -17,6 +17,10 @@ DEFAULT_HOST_ROUTES = {
     "stage-capture": "demo",
     "run-scene-sweep": "demo",
     "action-preview": "demo",
+    "animation-preview": "demo",
+    "retarget-preflight": "demo",
+    "retarget-bootstrap": "demo",
+    "retarget-author-chains": "demo",
     "demo-gate": "demo",
 }
 

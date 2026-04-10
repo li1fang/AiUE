@@ -19,6 +19,10 @@ COMMANDS = {
     "stage-capture": {"module": "stage_capture", "category": "capture", "workflow_pack": "pmx_pipeline", "destructive": False},
     "run-scene-sweep": {"module": "run_scene_sweep", "category": "capture", "workflow_pack": "pmx_pipeline", "destructive": False},
     "action-preview": {"module": "action_preview", "category": "capture", "workflow_pack": "pmx_pipeline", "destructive": False},
+    "animation-preview": {"module": "animation_preview", "category": "capture", "workflow_pack": "pmx_pipeline", "destructive": False},
+    "retarget-preflight": {"module": "retarget_preflight", "category": "probe", "workflow_pack": "pmx_pipeline", "destructive": False},
+    "retarget-bootstrap": {"module": "retarget_bootstrap", "category": "workflow", "workflow_pack": "pmx_pipeline", "destructive": False},
+    "retarget-author-chains": {"module": "retarget_author_chains", "category": "workflow", "workflow_pack": "pmx_pipeline", "destructive": False},
     "delete-generated-assets": {"module": "delete_generated_assets", "category": "maintenance", "workflow_pack": "pmx_pipeline", "destructive": True},
     "delete-suite-registry": {"module": "delete_suite_registry", "category": "maintenance", "workflow_pack": "pmx_pipeline", "destructive": True},
     "rebuild-package": {"module": "rebuild_package", "category": "maintenance", "workflow_pack": "pmx_pipeline", "destructive": True}

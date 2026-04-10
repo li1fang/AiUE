@@ -48,6 +48,10 @@ function Get-HostProjectRoot {
         "stage-capture" = "demo"
         "run-scene-sweep" = "demo"
         "action-preview" = "demo"
+        "animation-preview" = "demo"
+        "retarget-preflight" = "demo"
+        "retarget-bootstrap" = "demo"
+        "retarget-author-chains" = "demo"
         "demo-gate" = "demo"
     }
     if ($raw.default_host_routes) {

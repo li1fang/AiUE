@@ -5,31 +5,78 @@ param(
     [string]$AfterPath,
     [int]$SampleWidth = 160,
     [int]$SampleHeight = 90,
-    [int]$HistogramBins = 32
+    [int]$HistogramBins = 32,
+    [double]$CropX = -1,
+    [double]$CropY = -1,
+    [double]$CropWidth = -1,
+    [double]$CropHeight = -1
 )
 
 $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.Drawing
 
+function Resolve-CropRectangle {
+    param(
+        [System.Drawing.Bitmap]$Bitmap,
+        [double]$X,
+        [double]$Y,
+        [double]$Width,
+        [double]$Height
+    )
+
+    $fullRect = New-Object System.Drawing.Rectangle(0, 0, $Bitmap.Width, $Bitmap.Height)
+    if ($Width -le 1 -or $Height -le 1) {
+        return $fullRect
+    }
+    $x0 = [Math]::Max(0, [int][Math]::Floor($X))
+    $y0 = [Math]::Max(0, [int][Math]::Floor($Y))
+    $x1 = [Math]::Min($Bitmap.Width, [int][Math]::Ceiling($X + $Width))
+    $y1 = [Math]::Min($Bitmap.Height, [int][Math]::Ceiling($Y + $Height))
+    if ($x1 -le $x0 -or $y1 -le $y0) {
+        return $fullRect
+    }
+    return New-Object System.Drawing.Rectangle($x0, $y0, ($x1 - $x0), ($y1 - $y0))
+}
+
 function Get-ScaledBitmap {
     param(
         [string]$Path,
         [int]$Width,
-        [int]$Height
+        [int]$Height,
+        [double]$RequestedCropX,
+        [double]$RequestedCropY,
+        [double]$RequestedCropWidth,
+        [double]$RequestedCropHeight
     )
 
     $source = [System.Drawing.Bitmap]::FromFile($Path)
     try {
+        $sourceRect = Resolve-CropRectangle -Bitmap $source -X $RequestedCropX -Y $RequestedCropY -Width $RequestedCropWidth -Height $RequestedCropHeight
         $scaled = New-Object System.Drawing.Bitmap($Width, $Height)
         $graphics = [System.Drawing.Graphics]::FromImage($scaled)
         try {
             $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-            $graphics.DrawImage($source, 0, 0, $Width, $Height)
+            $graphics.DrawImage(
+                $source,
+                (New-Object System.Drawing.Rectangle(0, 0, $Width, $Height)),
+                $sourceRect,
+                [System.Drawing.GraphicsUnit]::Pixel
+            )
         }
         finally {
             $graphics.Dispose()
         }
-        return $scaled
+        return @{
+            bitmap = $scaled
+            crop_rect = @{
+                x = $sourceRect.X
+                y = $sourceRect.Y
+                width = $sourceRect.Width
+                height = $sourceRect.Height
+            }
+            original_width = $source.Width
+            original_height = $source.Height
+        }
     }
     finally {
         $source.Dispose()
@@ -41,8 +88,10 @@ $afterResolved = [System.IO.Path]::GetFullPath($AfterPath)
 if (-not (Test-Path -LiteralPath $beforeResolved)) { throw "Before image missing: $beforeResolved" }
 if (-not (Test-Path -LiteralPath $afterResolved)) { throw "After image missing: $afterResolved" }
 
-$beforeBitmap = Get-ScaledBitmap -Path $beforeResolved -Width $SampleWidth -Height $SampleHeight
-$afterBitmap = Get-ScaledBitmap -Path $afterResolved -Width $SampleWidth -Height $SampleHeight
+$beforeScaled = Get-ScaledBitmap -Path $beforeResolved -Width $SampleWidth -Height $SampleHeight -RequestedCropX $CropX -RequestedCropY $CropY -RequestedCropWidth $CropWidth -RequestedCropHeight $CropHeight
+$afterScaled = Get-ScaledBitmap -Path $afterResolved -Width $SampleWidth -Height $SampleHeight -RequestedCropX $CropX -RequestedCropY $CropY -RequestedCropWidth $CropWidth -RequestedCropHeight $CropHeight
+$beforeBitmap = $beforeScaled.bitmap
+$afterBitmap = $afterScaled.bitmap
 
 try {
     $binCount = [Math]::Max(4, $HistogramBins)
@@ -83,6 +132,9 @@ try {
     $result = @{
         before_path = $beforeResolved
         after_path = $afterResolved
+        crop_rect = $beforeScaled.crop_rect
+        original_width = $beforeScaled.original_width
+        original_height = $beforeScaled.original_height
         sample_width = $SampleWidth
         sample_height = $SampleHeight
         pixel_count = $pixelCount
