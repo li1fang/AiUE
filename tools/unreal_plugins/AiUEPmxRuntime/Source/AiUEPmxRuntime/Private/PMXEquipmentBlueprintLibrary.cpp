@@ -130,7 +130,10 @@ void UPMXEquipmentBlueprintLibrary::ApplySlotBindings(AActor* Actor, const TArra
         return;
     }
 
-    Component->SetDesiredSlotBindings(SlotBindings);
+    for (const FPMXEquipmentSlotBindingEntry& Binding : SlotBindings)
+    {
+        Component->SetDesiredItemForSlot(Binding);
+    }
     Component->ApplySlotBindings();
 }
 

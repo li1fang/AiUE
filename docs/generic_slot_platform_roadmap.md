@@ -63,6 +63,13 @@ Goals:
   - runtime conflicts
 - Keep reference-image QA out of scope until the slot platform is stable.
 
+Current implementation shape:
+
+- first gate validates `weapon + clothing + fx` on the same host
+- `clothing` remains a wearable skeletal mesh fixture
+- `fx` remains a `static_mesh` proxy fixture
+- first QA expansion only checks coexistence and on-screen co-presence, not semantic correctness
+
 ### P5: Deprecation & Cleanup
 
 Goals:
