@@ -17,6 +17,8 @@ ACTIVE_LINE_GATE_IDS = [
 PLATFORM_LINE_GATE_IDS = [
     "generic_slot_abstraction_p1",
     "clothing_vertical_slice_p2",
+    "visible_conflict_inspection_q5a",
+    "volumetric_fit_inspection_q5b",
     "fx_vertical_slice_p3",
     "multi_slot_composition_p4",
     "real_fx_item_kind_r2",
