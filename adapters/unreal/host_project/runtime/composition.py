@@ -309,9 +309,15 @@ def default_slot_binding_dict(
     attach_socket_name: str = "WeaponSocket",
     skeletal_mesh_path: str | None = None,
     static_mesh_path: str | None = None,
+    niagara_system_path: str | None = None,
     consumer_ready: bool = False,
 ) -> dict:
-    normalized_kind = normalized_item_kind_text(item_kind, skeletal_mesh=load_asset(skeletal_mesh_path), static_mesh=load_asset(static_mesh_path))
+    normalized_kind = normalized_item_kind_text(
+        item_kind,
+        skeletal_mesh=load_asset(skeletal_mesh_path),
+        static_mesh=load_asset(static_mesh_path),
+        niagara_system=load_asset(niagara_system_path),
+    )
     return {
         "slot_name": slot_name_text(slot_name),
         "item_package_id": str(item_package_id or ""),
@@ -319,6 +325,7 @@ def default_slot_binding_dict(
         "attach_socket_name": str(attach_socket_name or "WeaponSocket"),
         "skeletal_mesh_asset": str(skeletal_mesh_path or "") if normalized_kind == "skeletal_mesh" else str(skeletal_mesh_path or ""),
         "static_mesh_asset": str(static_mesh_path or "") if normalized_kind == "static_mesh" else str(static_mesh_path or ""),
+        "niagara_system_asset": str(niagara_system_path or "") if normalized_kind == "niagara_system" else str(niagara_system_path or ""),
         "consumer_ready": bool(consumer_ready),
     }
 
@@ -351,6 +358,7 @@ def unreal_slot_binding(binding: dict):
     set_if_present(entry, "attach_socket_name", binding.get("attach_socket_name") or "WeaponSocket")
     set_if_present(entry, "skeletal_mesh", load_asset(binding.get("skeletal_mesh_asset")))
     set_if_present(entry, "static_mesh", load_asset(binding.get("static_mesh_asset")))
+    set_if_present(entry, "niagara_system", load_asset(binding.get("niagara_system_asset")))
     set_if_present(entry, "b_consumer_ready", bool(binding.get("consumer_ready")))
     set_if_present(entry, "consumer_ready", bool(binding.get("consumer_ready")))
     return entry

@@ -87,5 +87,9 @@ Goals:
 - `R1` is complete:
   - clothing no longer falls back to `owner_origin` for the two current ready bundles
   - `Q4` now requires clothing attach resolution to succeed without fallback tolerance
+- `R2` is complete:
+  - real `niagara_system` item kind now runs through the generic slot runtime
+  - the current passing fixture is `/Niagara/DefaultAssets/Templates/Systems/FountainLightweight.FountainLightweight`
+  - the current proof uses Niagara system fixed bounds as spatial evidence in the editor-driven inspection path
 - The next roadmap priority is:
-  - `R2`: real FX item kind
+  - `R3`: live FX visual prominence / semantic FX quality

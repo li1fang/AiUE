@@ -331,6 +331,7 @@ def summarize_render_components(actor) -> list[dict]:
         if class_name not in {
             "SkeletalMeshComponent",
             "StaticMeshComponent",
+            "NiagaraComponent",
             "ChildActorComponent",
             "CapsuleComponent",
         }:
@@ -358,6 +359,15 @@ def summarize_render_components(actor) -> list[dict]:
                 static_mesh = None
             if static_mesh:
                 record["asset_path"] = static_mesh.get_path_name()
+        if class_name == "NiagaraComponent":
+            for property_name in ("asset", "niagara_system_asset", "niagara_system"):
+                try:
+                    niagara_asset = component.get_editor_property(property_name)
+                except Exception:
+                    niagara_asset = None
+                if niagara_asset:
+                    record["asset_path"] = niagara_asset.get_path_name()
+                    break
         try:
             origin, extent = component.bounds.origin, component.bounds.box_extent
             record["bounds_origin"] = serialize_vector(origin)
@@ -980,7 +990,7 @@ def build_shot_quality_payload(
 def component_asset_path(component) -> str:
     if not component:
         return ""
-    for property_name in ("skeletal_mesh_asset", "skeletal_mesh", "static_mesh"):
+    for property_name in ("skeletal_mesh_asset", "skeletal_mesh", "static_mesh", "asset", "niagara_system_asset", "niagara_system"):
         try:
             asset = component.get_editor_property(property_name)
         except Exception:
@@ -1022,6 +1032,34 @@ def bounds_payload_from_origin_extent(origin, extent, source: str) -> dict:
     }
 
 
+def bounds_payload_from_box(box, component_location, source: str) -> dict | None:
+    if not box:
+        return None
+    min_vector = getattr(box, "min", None)
+    max_vector = getattr(box, "max", None)
+    if min_vector is None or max_vector is None:
+        return None
+    try:
+        local_origin = unreal.Vector(
+            (float(min_vector.x) + float(max_vector.x)) * 0.5,
+            (float(min_vector.y) + float(max_vector.y)) * 0.5,
+            (float(min_vector.z) + float(max_vector.z)) * 0.5,
+        )
+        local_extent = unreal.Vector(
+            abs(float(max_vector.x) - float(min_vector.x)) * 0.5,
+            abs(float(max_vector.y) - float(min_vector.y)) * 0.5,
+            abs(float(max_vector.z) - float(min_vector.z)) * 0.5,
+        )
+        world_origin = unreal.Vector(
+            float(component_location.x) + float(local_origin.x),
+            float(component_location.y) + float(local_origin.y),
+            float(component_location.z) + float(local_origin.z),
+        )
+        return bounds_payload_from_origin_extent(world_origin, local_extent, source)
+    except Exception:
+        return None
+
+
 def asset_bounds_payload_for_component(component) -> dict:
     if not component:
         return {
@@ -1032,7 +1070,7 @@ def asset_bounds_payload_for_component(component) -> dict:
             "source": "asset_bounds_unavailable",
         }
     asset = None
-    for property_name in ("skeletal_mesh_asset", "skeletal_mesh", "static_mesh"):
+    for property_name in ("skeletal_mesh_asset", "skeletal_mesh", "static_mesh", "asset", "niagara_system_asset", "niagara_system"):
         try:
             asset = component.get_editor_property(property_name)
         except Exception:
@@ -1066,6 +1104,32 @@ def asset_bounds_payload_for_component(component) -> dict:
             if bounds_value and hasattr(bounds_value, "origin") and hasattr(bounds_value, "box_extent"):
                 local_origin = bounds_value.origin
                 local_extent = bounds_value.box_extent
+    component_location = component_world_location(component) or unreal.Vector(0.0, 0.0, 0.0)
+    if (local_origin is None or local_extent is None) and component_class_name(component) == "NiagaraComponent":
+        for method_name, source_name in (
+            ("get_fixed_bounds", "niagara_fixed_bounds"),
+            ("get_initial_streaming_bounds", "niagara_initial_streaming_bounds"),
+        ):
+            if not hasattr(asset, method_name):
+                continue
+            try:
+                box_bounds = getattr(asset, method_name)()
+            except Exception:
+                box_bounds = None
+            box_payload = bounds_payload_from_box(box_bounds, component_location, source_name)
+            if box_payload and box_payload.get("non_zero"):
+                return box_payload
+        for property_name, source_name in (
+            ("fixed_bounds", "niagara_fixed_bounds_property"),
+            ("initial_streaming_bounds", "niagara_initial_streaming_bounds_property"),
+        ):
+            try:
+                box_bounds = asset.get_editor_property(property_name)
+            except Exception:
+                box_bounds = None
+            box_payload = bounds_payload_from_box(box_bounds, component_location, source_name)
+            if box_payload and box_payload.get("non_zero"):
+                return box_payload
     if local_origin is None or local_extent is None:
         return {
             "origin": {},
@@ -1074,7 +1138,6 @@ def asset_bounds_payload_for_component(component) -> dict:
             "non_zero": False,
             "source": "asset_bounds_unavailable",
         }
-    component_location = component_world_location(component) or unreal.Vector(0.0, 0.0, 0.0)
     world_origin = unreal.Vector(
         component_location.x + float(local_origin.x),
         component_location.y + float(local_origin.y),
@@ -1225,12 +1288,16 @@ def slot_name_text(value, default: str = "weapon") -> str:
     return text or default
 
 
-def normalized_item_kind_text(item_kind: str | None, skeletal_mesh=None, static_mesh=None) -> str:
+def normalized_item_kind_text(item_kind: str | None, skeletal_mesh=None, static_mesh=None, niagara_system=None) -> str:
     lower = str(item_kind or "").strip().lower()
+    if niagara_system:
+        return "niagara_system"
     if static_mesh:
         return "static_mesh"
     if skeletal_mesh:
         return "skeletal_mesh"
+    if lower in {"niagara_system", "niagara", "fx"}:
+        return "niagara_system"
     if lower in {"static_mesh", "static"}:
         return "static_mesh"
     if lower in {"skeletal_mesh", "skeletal", "skeletalmesh"}:
@@ -1247,21 +1314,29 @@ def slot_binding_payload(binding) -> dict:
             "attach_socket_name": "WeaponSocket",
             "skeletal_mesh_asset": "",
             "static_mesh_asset": "",
+            "niagara_system_asset": "",
             "asset_path": "",
             "consumer_ready": False,
         }
     skeletal_mesh = getattr(binding, "skeletal_mesh", None)
     static_mesh = getattr(binding, "static_mesh", None)
+    niagara_system = getattr(binding, "niagara_system", None)
     payload = {
         "slot_name": slot_name_text(getattr(binding, "slot_name", None)),
         "item_package_id": str(getattr(binding, "item_package_id", "") or ""),
-        "item_kind": normalized_item_kind_text(getattr(binding, "item_kind", ""), skeletal_mesh=skeletal_mesh, static_mesh=static_mesh),
+        "item_kind": normalized_item_kind_text(
+            getattr(binding, "item_kind", ""),
+            skeletal_mesh=skeletal_mesh,
+            static_mesh=static_mesh,
+            niagara_system=niagara_system,
+        ),
         "attach_socket_name": str(getattr(binding, "attach_socket_name", "") or "WeaponSocket"),
         "skeletal_mesh_asset": loaded_asset_path(skeletal_mesh),
         "static_mesh_asset": loaded_asset_path(static_mesh),
+        "niagara_system_asset": loaded_asset_path(niagara_system),
         "consumer_ready": bool(getattr(binding, "b_consumer_ready", getattr(binding, "consumer_ready", False))),
     }
-    payload["asset_path"] = payload["static_mesh_asset"] or payload["skeletal_mesh_asset"]
+    payload["asset_path"] = payload["niagara_system_asset"] or payload["static_mesh_asset"] or payload["skeletal_mesh_asset"]
     return payload
 
 
@@ -1287,6 +1362,7 @@ def legacy_weapon_slot_binding_payload(pmx_component) -> dict | None:
         "attach_socket_name": attach_socket_name or "WeaponSocket",
         "skeletal_mesh_asset": loaded_asset_path(desired_weapon_mesh),
         "static_mesh_asset": "",
+        "niagara_system_asset": "",
         "asset_path": loaded_asset_path(desired_weapon_mesh),
         "consumer_ready": bool(desired_weapon_mesh),
     }
@@ -1378,7 +1454,11 @@ def pmx_slot_attach_states_payload(pmx_component) -> list[dict]:
 def find_component_by_name(actor, component_name: str):
     if not actor or not component_name:
         return None
-    for component_class in (getattr(unreal, "SkeletalMeshComponent", None), getattr(unreal, "StaticMeshComponent", None)):
+    for component_class in (
+        getattr(unreal, "SkeletalMeshComponent", None),
+        getattr(unreal, "StaticMeshComponent", None),
+        getattr(unreal, "NiagaraComponent", None),
+    ):
         if component_class is None:
             continue
         try:

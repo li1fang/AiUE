@@ -10,6 +10,7 @@
 class USceneComponent;
 class USkeletalMeshComponent;
 class UStaticMeshComponent;
+class UNiagaraComponent;
 
 UCLASS(ClassGroup=(PMXPipeline), BlueprintType, Blueprintable, meta=(BlueprintSpawnableComponent))
 class AIUEPMXRUNTIME_API UPMXCharacterEquipmentComponent : public UActorComponent

@@ -8,6 +8,7 @@
 
 class UPMXEquipmentLoadoutAsset;
 class UPMXEquipmentPairAsset;
+class UNiagaraSystem;
 
 USTRUCT(BlueprintType)
 struct FPMXAnimationPoseProbeResult
@@ -97,6 +98,9 @@ struct FPMXEquipmentSlotBindingEntry
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
     TObjectPtr<UStaticMesh> StaticMesh = nullptr;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    TObjectPtr<UNiagaraSystem> NiagaraSystem = nullptr;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
     bool bConsumerReady = false;

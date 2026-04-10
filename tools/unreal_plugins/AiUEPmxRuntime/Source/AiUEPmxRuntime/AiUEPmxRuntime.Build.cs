@@ -11,7 +11,8 @@ public class AiUEPmxRuntime : ModuleRules
             {
                 "Core",
                 "CoreUObject",
-                "Engine"
+                "Engine",
+                "Niagara"
             }
         );
     }

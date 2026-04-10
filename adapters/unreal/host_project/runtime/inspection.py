@@ -262,6 +262,7 @@ def runtime_slot_binding_entries_from_request(bindings: list[dict]) -> list:
         set_if_present(entry, "attach_socket_name", binding.get("attach_socket_name") or "WeaponSocket")
         set_if_present(entry, "skeletal_mesh", load_asset(binding.get("skeletal_mesh_asset")))
         set_if_present(entry, "static_mesh", load_asset(binding.get("static_mesh_asset")))
+        set_if_present(entry, "niagara_system", load_asset(binding.get("niagara_system_asset")))
         set_if_present(entry, "b_consumer_ready", bool(binding.get("consumer_ready")))
         set_if_present(entry, "consumer_ready", bool(binding.get("consumer_ready")))
         entries.append(entry)

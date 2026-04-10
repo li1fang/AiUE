@@ -6,6 +6,9 @@
 #include "Components/StaticMeshComponent.h"
 #include "Engine/EngineTypes.h"
 #include "GameFramework/Actor.h"
+#include "NiagaraComponent.h"
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraSystem.h"
 #include "ReferenceSkeleton.h"
 
 namespace
@@ -13,6 +16,7 @@ namespace
 const FName WeaponSlotName(TEXT("weapon"));
 const FString SkeletalMeshItemKind(TEXT("skeletal_mesh"));
 const FString StaticMeshItemKind(TEXT("static_mesh"));
+const FString NiagaraSystemItemKind(TEXT("niagara_system"));
 
 FName NormalizeSlotName(FName SlotName)
 {
@@ -53,6 +57,13 @@ bool IsSkeletalMeshKind(const FString& ItemKind)
         || ItemKind.Equals(TEXT("skeletalmesh"), ESearchCase::IgnoreCase);
 }
 
+bool IsNiagaraSystemKind(const FString& ItemKind)
+{
+    return ItemKind.Equals(NiagaraSystemItemKind, ESearchCase::IgnoreCase)
+        || ItemKind.Equals(TEXT("niagara"), ESearchCase::IgnoreCase)
+        || ItemKind.Equals(TEXT("fx"), ESearchCase::IgnoreCase);
+}
+
 FString ComponentAssetPath(USceneComponent* Component)
 {
     if (!Component)
@@ -73,6 +84,14 @@ FString ComponentAssetPath(USceneComponent* Component)
         if (UStaticMesh* StaticMesh = StaticMeshComponent->GetStaticMesh())
         {
             return StaticMesh->GetPathName();
+        }
+    }
+
+    if (UNiagaraComponent* NiagaraComponent = Cast<UNiagaraComponent>(Component))
+    {
+        if (UNiagaraSystem* NiagaraSystem = NiagaraComponent->GetAsset())
+        {
+            return NiagaraSystem->GetPathName();
         }
     }
 
@@ -511,6 +530,10 @@ FPMXEquipmentSlotBindingEntry UPMXCharacterEquipmentComponent::BuildWeaponBindin
 
 FString UPMXCharacterEquipmentComponent::NormalizeItemKind(const FString& ItemKind, const FPMXEquipmentSlotBindingEntry& Binding) const
 {
+    if (Binding.NiagaraSystem)
+    {
+        return NiagaraSystemItemKind;
+    }
     if (Binding.StaticMesh)
     {
         return StaticMeshItemKind;
@@ -522,6 +545,10 @@ FString UPMXCharacterEquipmentComponent::NormalizeItemKind(const FString& ItemKi
     if (IsStaticMeshKind(ItemKind))
     {
         return StaticMeshItemKind;
+    }
+    if (IsNiagaraSystemKind(ItemKind))
+    {
+        return NiagaraSystemItemKind;
     }
     if (IsSkeletalMeshKind(ItemKind))
     {
@@ -573,7 +600,9 @@ FName UPMXCharacterEquipmentComponent::ManagedComponentNameForSlot(FName SlotNam
         return TEXT("DefaultWeaponMeshComponent");
     }
 
-    const FString Suffix = IsStaticMeshKind(NormalizedItemKind) ? TEXT("StaticMeshComponent") : TEXT("SkeletalMeshComponent");
+    const FString Suffix = IsNiagaraSystemKind(NormalizedItemKind)
+        ? TEXT("NiagaraComponent")
+        : (IsStaticMeshKind(NormalizedItemKind) ? TEXT("StaticMeshComponent") : TEXT("SkeletalMeshComponent"));
     return FName(*FString::Printf(TEXT("PMXSlot_%s_%s"), *SanitizeSlotToken(NormalizedSlotName), *Suffix));
 }
 
@@ -586,6 +615,18 @@ USceneComponent* UPMXCharacterEquipmentComponent::FindExistingManagedComponent(F
     }
 
     const FName ExpectedName = ManagedComponentNameForSlot(SlotName, NormalizedItemKind);
+    if (IsNiagaraSystemKind(NormalizedItemKind))
+    {
+        TInlineComponentArray<UNiagaraComponent*> Components(Owner);
+        for (UNiagaraComponent* Component : Components)
+        {
+            if (Component && Component->GetFName() == ExpectedName)
+            {
+                return Component;
+            }
+        }
+        return nullptr;
+    }
     if (IsStaticMeshKind(NormalizedItemKind))
     {
         TInlineComponentArray<UStaticMeshComponent*> Components(Owner);
@@ -636,9 +677,11 @@ USceneComponent* UPMXCharacterEquipmentComponent::EnsureManagedComponentForSlot(
     }
 
     const bool WantsStaticMesh = IsStaticMeshKind(NormalizedItemKind);
+    const bool WantsNiagaraSystem = IsNiagaraSystemKind(NormalizedItemKind);
     const bool HasCompatibleExisting =
-        (WantsStaticMesh && Cast<UStaticMeshComponent>(ExistingComponent) != nullptr)
-        || (!WantsStaticMesh && Cast<USkeletalMeshComponent>(ExistingComponent) != nullptr);
+        (WantsNiagaraSystem && Cast<UNiagaraComponent>(ExistingComponent) != nullptr)
+        || (WantsStaticMesh && Cast<UStaticMeshComponent>(ExistingComponent) != nullptr)
+        || (!WantsNiagaraSystem && !WantsStaticMesh && Cast<USkeletalMeshComponent>(ExistingComponent) != nullptr);
 
     if (!HasCompatibleExisting && ExistingComponent)
     {
@@ -676,7 +719,38 @@ USceneComponent* UPMXCharacterEquipmentComponent::EnsureManagedComponentForSlot(
 
     const FName ComponentName = ManagedComponentNameForSlot(SlotName, NormalizedItemKind);
     USceneComponent* CreatedComponent = nullptr;
-    if (WantsStaticMesh)
+    if (WantsNiagaraSystem)
+    {
+        if (Binding.NiagaraSystem)
+        {
+            UNiagaraComponent* SpawnedNiagaraComponent = UNiagaraFunctionLibrary::SpawnSystemAttached(
+                Binding.NiagaraSystem,
+                OwnerMesh,
+                Binding.AttachSocketName,
+                FVector::ZeroVector,
+                FRotator::ZeroRotator,
+                FVector(1.0f, 1.0f, 1.0f),
+                EAttachLocation::SnapToTarget,
+                false,
+                ENCPoolMethod::None,
+                true,
+                false
+            );
+            if (SpawnedNiagaraComponent)
+            {
+                SpawnedNiagaraComponent->Rename(*ComponentName.ToString(), Owner);
+                SpawnedNiagaraComponent->SetAsset(Binding.NiagaraSystem);
+                SpawnedNiagaraComponent->SetAutoDestroy(false);
+                RefreshManagedMeshComponent(SpawnedNiagaraComponent);
+                ManagedComponentsBySlot.Add(SlotName, SpawnedNiagaraComponent);
+                return SpawnedNiagaraComponent;
+            }
+        }
+
+        UNiagaraComponent* NiagaraComponent = NewObject<UNiagaraComponent>(Owner, ComponentName);
+        CreatedComponent = NiagaraComponent;
+    }
+    else if (WantsStaticMesh)
     {
         UStaticMeshComponent* StaticMeshComponent = NewObject<UStaticMeshComponent>(Owner, ComponentName);
         CreatedComponent = StaticMeshComponent;
@@ -826,7 +900,14 @@ USceneComponent* UPMXCharacterEquipmentComponent::ApplyItemForSlot(FName SlotNam
         AttachState.AttachResolutionMode = TEXT("owner_mesh_missing");
     }
 
-    if (IsStaticMeshKind(NormalizedItemKind))
+    if (IsNiagaraSystemKind(NormalizedItemKind))
+    {
+        if (UNiagaraComponent* NiagaraComponent = Cast<UNiagaraComponent>(MeshComponent))
+        {
+            NiagaraComponent->SetAsset(Binding.NiagaraSystem);
+        }
+    }
+    else if (IsStaticMeshKind(NormalizedItemKind))
     {
         if (UStaticMeshComponent* StaticMeshComponent = Cast<UStaticMeshComponent>(MeshComponent))
         {
@@ -1043,6 +1124,19 @@ void UPMXCharacterEquipmentComponent::RefreshManagedMeshComponent(USceneComponen
         SkeletalMeshComponent->RefreshBoneTransforms();
         SkeletalMeshComponent->UpdateBounds();
         SkeletalMeshComponent->MarkRenderDynamicDataDirty();
+    }
+    else if (UNiagaraComponent* NiagaraComponent = Cast<UNiagaraComponent>(MeshComponent))
+    {
+        NiagaraComponent->SetAutoDestroy(false);
+        NiagaraComponent->SetForceSolo(true);
+        NiagaraComponent->SetPaused(false);
+        NiagaraComponent->SetAutoActivate(true);
+        NiagaraComponent->ResetSystem();
+        NiagaraComponent->ReinitializeSystem();
+        NiagaraComponent->Activate(true);
+        NiagaraComponent->AdvanceSimulation(12, 1.0f / 30.0f);
+        NiagaraComponent->UpdateBounds();
+        NiagaraComponent->MarkRenderDynamicDataDirty();
     }
     else if (UStaticMeshComponent* StaticMeshComponent = Cast<UStaticMeshComponent>(MeshComponent))
     {
