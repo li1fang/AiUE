@@ -30,8 +30,10 @@ That distinction matters because a platform can technically carry three slots at
 
 ## Current Caveat
 
-One ready bundle still uses `owner_origin` fallback for the clothing slot. `Q4` currently allows that only because:
+`Q4` no longer depends on `owner_origin` fallback for the clothing slot.
 
-- the clothing component remains valid
-- the clothing component remains visually present
-- the stricter `front/side` thresholds still pass
+The current narrower caveat is:
+
+- one ready bundle still resolves `clothing` through a generic fallback PMX bone rather than a semantically named head or hair anchor
+
+That is materially better than `owner_origin`, and the current `front/side` thresholds still pass cleanly.

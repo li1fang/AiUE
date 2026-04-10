@@ -48,13 +48,16 @@ The clothing slice is carried by:
 - tracked slot coverage in shot payloads
 
 ## Residual Risk
-`P2` passes, but it still records one real follow-up:
+`P2` now passes with stronger attach behavior than the original slice:
 
 - one ready bundle resolves `clothing` through a hair-like fallback bone pattern
-- the other ready bundle falls back to `owner_origin`
+- the other resolves through a stronger generic PMX fallback bone instead of `owner_origin`
 
-That `owner_origin` fallback still produces valid visual evidence in `P2`, so the slice is accepted as a platform proof.  
-It should still be treated as a future refinement target before a richer clothing system is considered finished.
+That means the old soft failure mode is gone, but one narrower risk remains:
+
+- some wearable fixtures may still resolve to a generic upper-body PMX anchor instead of a semantically named head or hair socket
+
+That is acceptable for the current platform slice, but it should still be treated as a refinement target before richer clothing semantics are considered finished.
 
 ## Active-Line Regression
 After `P2`, these latest reports still pass:
@@ -74,4 +77,4 @@ The next roadmap target remains:
 
 But a smaller follow-up is also justified:
 
-- tighten clothing attach semantics so more bundles resolve beyond `owner_origin`
+- tighten clothing attach semantics so more bundles resolve beyond generic fallback bones

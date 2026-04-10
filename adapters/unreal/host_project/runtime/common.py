@@ -1007,13 +1007,15 @@ def component_visibility_record(component) -> dict:
     payload = {
         "visible": None,
         "hidden_in_game": None,
+        "render_in_main_pass": None,
+        "render_in_depth_pass": None,
         "component_name": str(getattr(component, "get_name", lambda: "")() or "") if component else "",
         "class_name": component_class_name(component) if component else "",
         "asset_path": component_asset_path(component),
     }
     if not component:
         return payload
-    for property_name in ("visible", "hidden_in_game", "cast_shadow"):
+    for property_name in ("visible", "hidden_in_game", "cast_shadow", "render_in_main_pass", "render_in_depth_pass"):
         try:
             payload[property_name] = component.get_editor_property(property_name)
         except Exception:
@@ -1904,17 +1906,38 @@ def wait_for_screenshot(task, desired_output_path: Path, timeout_seconds: float,
     return final_candidate, task_done_once or final_task_done
 
 
-def apply_scene_capture_show_flags(component) -> list[str]:
+def apply_scene_capture_show_flags(component, capture_profile: str | None = None) -> list[str]:
     warnings = []
-    flag_specs = [
-        ("Particles", True),
-        ("Niagara", True),
-        ("Translucency", True),
-        ("TranslucentLighting", True),
-        ("Lighting", True),
-        ("Materials", True),
-        ("PostProcessing", True),
-    ]
+    profile_name = str(capture_profile or "").strip().lower()
+    if profile_name == "qa_mask_skeletal_only":
+        flag_specs = [
+            ("Materials", True),
+            ("Lighting", False),
+            ("PostProcessing", False),
+            ("Atmosphere", False),
+            ("Fog", False),
+            ("Bloom", False),
+            ("AntiAliasing", False),
+            ("Translucency", True),
+            ("TranslucentLighting", False),
+            ("Particles", False),
+            ("Niagara", False),
+            ("StaticMeshes", False),
+            ("Landscape", False),
+            ("BSP", False),
+            ("InstancedStaticMeshes", False),
+            ("SkeletalMeshes", True),
+        ]
+    else:
+        flag_specs = [
+            ("Particles", True),
+            ("Niagara", True),
+            ("Translucency", True),
+            ("TranslucentLighting", True),
+            ("Lighting", True),
+            ("Materials", True),
+            ("PostProcessing", True),
+        ]
     settings = []
     for flag_name, enabled in flag_specs:
         try:
@@ -1933,6 +1956,78 @@ def apply_scene_capture_show_flags(component) -> list[str]:
             component.set_editor_property("show_flag_settings", settings)
     except Exception as exc:
         warnings.append(f"scene_capture_show_flags_apply_failed:{exc}")
+    return warnings
+
+
+def apply_scene_capture_component_filters(component, show_only_components: list | None = None) -> list[str]:
+    warnings = []
+    filtered_components = [item for item in list(show_only_components or []) if item]
+    try:
+        if hasattr(component, "clear_hidden_components"):
+            component.clear_hidden_components()
+    except Exception as exc:
+        warnings.append(f"scene_capture_clear_hidden_components_failed:{exc}")
+    try:
+        if hasattr(component, "clear_show_only_components"):
+            component.clear_show_only_components()
+    except Exception as exc:
+        warnings.append(f"scene_capture_clear_show_only_components_failed:{exc}")
+    try:
+        if hasattr(unreal, "SceneCapturePrimitiveRenderMode"):
+            if filtered_components:
+                component.set_editor_property(
+                    "primitive_render_mode",
+                    unreal.SceneCapturePrimitiveRenderMode.PRM_USE_SHOW_ONLY_LIST,
+                )
+            else:
+                component.set_editor_property(
+                    "primitive_render_mode",
+                    unreal.SceneCapturePrimitiveRenderMode.PRM_RENDER_SCENE_PRIMITIVES,
+                )
+    except Exception as exc:
+        warnings.append(f"scene_capture_primitive_render_mode_failed:{exc}")
+    filtered_component_keys = {
+        str(getattr(item, "get_path_name", lambda: "")() or "") or str(id(item))
+        for item in filtered_components
+    }
+    owner_components_map = {}
+    for filtered_component in filtered_components:
+        try:
+            owner = filtered_component.get_owner()
+        except Exception:
+            owner = None
+        if not owner:
+            continue
+        owner_key = str(getattr(owner, "get_path_name", lambda: "")() or "") or str(id(owner))
+        if owner_key in owner_components_map:
+            continue
+        owner_components = []
+        for component_class in (getattr(unreal, "SkeletalMeshComponent", None), getattr(unreal, "StaticMeshComponent", None)):
+            if component_class is None:
+                continue
+            try:
+                owner_components.extend(list(owner.get_components_by_class(component_class) or []))
+            except Exception:
+                continue
+        owner_components_map[owner_key] = {"owner": owner, "components": owner_components}
+        try:
+            component.show_only_actor_components(owner)
+        except Exception as exc:
+            warnings.append(f"scene_capture_show_only_actor_components_failed:{owner_key}:{exc}")
+    for owner_entry in owner_components_map.values():
+        for owner_component in list(owner_entry.get("components") or []):
+            owner_component_key = str(getattr(owner_component, "get_path_name", lambda: "")() or "") or str(id(owner_component))
+            if owner_component_key in filtered_component_keys:
+                continue
+            try:
+                component.remove_show_only_component(owner_component)
+            except Exception:
+                continue
+    for filtered_component in filtered_components:
+        try:
+            component.show_only_component(filtered_component)
+        except Exception as exc:
+            warnings.append(f"scene_capture_show_only_component_failed:{component_class_name(filtered_component)}:{exc}")
     return warnings
 
 
@@ -1998,6 +2093,8 @@ def capture_to_render_target(
     scene_capture_source_name: str | None = None,
     scene_capture_warmup_count: int = 2,
     scene_capture_warmup_delay_seconds: float = 0.05,
+    capture_profile: str | None = None,
+    show_only_components: list | None = None,
 ) -> dict:
     world = unreal.EditorLevelLibrary.get_editor_world()
     actor_subsystem = editor_actor_subsystem()
@@ -2043,7 +2140,8 @@ def capture_to_render_target(
         component.set_editor_property("capture_every_frame", False)
         component.set_editor_property("capture_on_movement", False)
         set_if_present(component, "always_persist_rendering_state", True)
-        warnings.extend(apply_scene_capture_show_flags(component))
+        warnings.extend(apply_scene_capture_show_flags(component, capture_profile=capture_profile))
+        warnings.extend(apply_scene_capture_component_filters(component, show_only_components=show_only_components))
         if hasattr(component, "fov_angle") and hasattr(capture_camera, "get_camera_component"):
             try:
                 camera_component = capture_camera.get_camera_component()
@@ -2081,12 +2179,14 @@ def capture_to_render_target(
             "capture_backend": "scene_capture_render_target",
             "scene_capture_source": resolved_capture_source_name,
             "scene_capture_warmup_count": warmup_count,
+            "capture_profile": str(capture_profile or ""),
         }
     except Exception as exc:
         return {
             "output_exists": False,
             "warnings": warnings,
             "errors": [f"render_target_capture_failed:{exc}"],
+            "capture_profile": str(capture_profile or ""),
         }
     finally:
         if scene_capture_actor:

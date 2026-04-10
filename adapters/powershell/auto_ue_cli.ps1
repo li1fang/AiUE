@@ -42,6 +42,7 @@ function Get-HostProjectRoot {
         "build-equipment-registry" = "kernel"
         "inspect-host" = "kernel"
         "inspect-host-visual" = "kernel"
+        "inspect-visible-conflict" = "demo"
         "inspect-slot-runtime" = "kernel"
         "composition-validation" = "kernel"
         "validate-package" = "kernel"

@@ -6,7 +6,7 @@
   "Description": "Shared PMX host runtime and registry assets for AiUE kernel and demo hosts.",
   "Category": "Animation",
   "EnabledByDefault": true,
-  "CanContainContent": false,
+    "CanContainContent": true,
   "Installed": false,
   "Plugins": [
     {

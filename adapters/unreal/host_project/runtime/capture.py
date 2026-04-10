@@ -420,6 +420,7 @@ def capture_frame(request: dict) -> dict:
     capture_hdr = bool(request.get("capture_hdr", False))
     force_game_view = bool(request.get("force_game_view", True))
     force_automation_capture = bool(request.get("force_automation_capture", False))
+    capture_profile = str(request.get("capture_profile") or "")
     level_editor = level_editor_subsystem()
     temp_camera = None
     capture_camera = None
@@ -472,6 +473,8 @@ def capture_frame(request: dict) -> dict:
                 str(request.get("scene_capture_source") or ""),
                 int(request.get("scene_capture_warmup_count") or 2),
                 float(request.get("scene_capture_warmup_delay_seconds") or 0.05),
+                capture_profile,
+                list(request.get("_show_only_components") or []),
             )
             warnings.extend(render_target_capture.get("warnings") or [])
             actual_output_path = Path(render_target_capture["output_path"]).resolve() if render_target_capture.get("output_path") else None
@@ -479,7 +482,11 @@ def capture_frame(request: dict) -> dict:
             screenshot_exists = bool(render_target_capture.get("output_exists"))
             capture_backend = str(render_target_capture.get("capture_backend") or "")
             resolved_scene_capture_source = str(render_target_capture.get("scene_capture_source") or "")
-            if screenshot_exists and int(render_target_capture.get("file_size_bytes") or 0) < 400000:
+            if (
+                screenshot_exists
+                and int(render_target_capture.get("file_size_bytes") or 0) < 400000
+                and capture_profile.lower() != "qa_mask_skeletal_only"
+            ):
                 warnings.append("render_target_capture_too_small_fallback_to_automation")
                 screenshot_exists = False
         else:
@@ -532,6 +539,7 @@ def capture_frame(request: dict) -> dict:
             "camera_plan": camera_plan,
             "capture_backend": capture_backend,
             "scene_capture_source": resolved_scene_capture_source,
+            "capture_profile": capture_profile,
             "niagara_capture_prep": niagara_capture_prep,
             "subject_visibility": subject_visibility,
             "subject_visible": bool(subject_visibility.get("visible")),
@@ -729,8 +737,10 @@ def build_visual_proof_shots(actor, request: dict) -> list[dict]:
     forward = actor.get_actor_forward_vector()
     right = actor.get_actor_right_vector()
     up = unreal.Vector(0.0, 0.0, 1.0)
-    base_distance = max(float(request.get("camera_distance") or 0.0), max(extent.x, extent.y, 90.0) * 2.4)
-    base_height = max(float(request.get("camera_height") or 0.0), max(extent.z * 1.15, 110.0))
+    distance_scale = max(float(request.get("camera_distance_scale") or 1.0), 0.1)
+    height_scale = max(float(request.get("camera_height_scale") or 1.0), 0.1)
+    base_distance = max(float(request.get("camera_distance") or 0.0), max(extent.x, extent.y, 90.0) * 2.4 * distance_scale)
+    base_height = max(float(request.get("camera_height") or 0.0), max(extent.z * 1.15, 110.0) * height_scale)
     top_height = max(float(request.get("top_camera_height") or 0.0), base_distance * 1.65)
     target_location = origin + unreal.Vector(0.0, 0.0, max(extent.z * 0.6, 90.0))
 

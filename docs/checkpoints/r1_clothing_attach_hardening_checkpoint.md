@@ -35,7 +35,7 @@ Current outcome:
 
 - `mingchao_sample_c0aeb7ff_character_35215ba5`
   - clothing attach mode: `fallback_bone_score`
-  - resolved target: `Bone_002`
+  - resolved target: `Bone_160`
 - `mingchao_xjqy8yn4h6_b6e33424_character_f91ab5d6`
   - clothing attach mode: `fallback_bone_pattern`
   - resolved target: `Bone_Ctr_B_HairB_01_091`
@@ -48,9 +48,9 @@ Most important gate result:
 
 ## Residual Risk
 
-`R1` removed the soft fallback, but one package still resolves clothing through a generic central PMX bone:
+`R1` removed the soft fallback, but one package still resolves clothing through a generic PMX fallback bone:
 
-- `Bone_002`
+- `Bone_160`
 
 That is much better than `owner_origin`, but it is not yet as semantically strong as a true head / hair / hat socket or bone.
 

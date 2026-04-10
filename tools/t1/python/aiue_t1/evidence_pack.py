@@ -70,6 +70,30 @@ def _collect_preview_artifacts(report_index: dict) -> list[dict]:
                 if image_path:
                     suffix = "baseline" if phase_name == "baseline_image_path" else "with_fx"
                     artifacts.append({"title": f"R3 {package_id} {shot.get('shot_id')} {suffix}", "section": "Live FX Visual Quality", "source_path": image_path, "key": f"r3_{package_id}_{shot.get('shot_id')}_{suffix}"})
+
+    q5a_report = dict((reports_by_gate_id.get("visible_conflict_inspection_q5a") or {}).get("report") or {})
+    for package in list(q5a_report.get("per_package_results") or []):
+        package_id = str(package.get("package_id") or "")
+        for shot in list(package.get("shot_results") or []):
+            shot_id = str(shot.get("shot_id") or "")
+            artifacts_payload = dict(shot.get("artifacts") or {})
+            preview_specs = [
+                ("body_only_image_path", "body_only"),
+                ("slot_only_image_path", "slot_only"),
+                ("combined_visible_image_path", "combined_visible"),
+                ("debug_overlay_path", "debug_overlay"),
+            ]
+            for artifact_field, artifact_suffix in preview_specs:
+                image_path = str(artifacts_payload.get(artifact_field) or "")
+                if image_path:
+                    artifacts.append(
+                        {
+                            "title": f"Q5A {package_id} {shot_id} {artifact_suffix}",
+                            "section": "Visible Conflict Inspection",
+                            "source_path": image_path,
+                            "key": f"q5a_{package_id}_{shot_id}_{artifact_suffix}",
+                        }
+                    )
     return artifacts
 
 

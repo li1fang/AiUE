@@ -442,6 +442,49 @@ int32 ScoreFallbackBoneName(const FString& Name, FName SlotName, FName Requested
 
     return Score;
 }
+
+int32 ScoreWearableFallbackBoneSpatial(USkeletalMeshComponent* OwnerMesh, FName BoneName)
+{
+    if (!OwnerMesh || BoneName.IsNone())
+    {
+        return 0;
+    }
+
+    const FBoxSphereBounds Bounds = OwnerMesh->Bounds;
+    if (Bounds.BoxExtent.Z <= KINDA_SMALL_NUMBER)
+    {
+        return 0;
+    }
+
+    const FVector BoneLocation = OwnerMesh->GetBoneLocation(BoneName, EBoneSpaces::WorldSpace);
+    const FVector BoundsBottom = Bounds.Origin - Bounds.BoxExtent;
+    const float HeightSpan = FMath::Max(Bounds.BoxExtent.Z * 2.0f, 1.0f);
+    const float HeightAlpha = FMath::Clamp((BoneLocation.Z - BoundsBottom.Z) / HeightSpan, 0.0f, 1.0f);
+    if (HeightAlpha < 0.55f)
+    {
+        return 0;
+    }
+
+    const float XNorm = Bounds.BoxExtent.X > KINDA_SMALL_NUMBER
+        ? FMath::Abs(BoneLocation.X - Bounds.Origin.X) / Bounds.BoxExtent.X
+        : 0.0f;
+    const float YNorm = Bounds.BoxExtent.Y > KINDA_SMALL_NUMBER
+        ? FMath::Abs(BoneLocation.Y - Bounds.Origin.Y) / Bounds.BoxExtent.Y
+        : 0.0f;
+    const float LateralNorm = FMath::Min(2.0f, FMath::Sqrt((XNorm * XNorm) + (YNorm * YNorm)));
+
+    int32 Score = FMath::RoundToInt(HeightAlpha * 120.0f);
+    if (HeightAlpha >= 0.75f)
+    {
+        Score += 25;
+    }
+    if (HeightAlpha >= 0.9f)
+    {
+        Score += 35;
+    }
+    Score -= FMath::RoundToInt(LateralNorm * 15.0f);
+    return Score;
+}
 }
 
 UPMXCharacterEquipmentComponent::UPMXCharacterEquipmentComponent()
@@ -1060,6 +1103,7 @@ FName UPMXCharacterEquipmentComponent::ResolveAttachSocketName(
     {
         const FReferenceSkeleton& ReferenceSkeleton = OwnerMeshAsset->GetRefSkeleton();
         const int32 BoneCount = ReferenceSkeleton.GetNum();
+        const bool bWearableSlot = IsWearableSlotProfile(SlotName, RequestedSocketName);
         FName BestBoneName = NAME_None;
         int32 BestBoneScore = 0;
         for (int32 BoneIndex = 0; BoneIndex < BoneCount; ++BoneIndex)
@@ -1077,7 +1121,11 @@ FName UPMXCharacterEquipmentComponent::ResolveAttachSocketName(
                 return BoneName;
             }
 
-            const int32 BoneScore = ScoreFallbackBoneName(BoneNameString, SlotName, RequestedSocketName);
+            int32 BoneScore = ScoreFallbackBoneName(BoneNameString, SlotName, RequestedSocketName);
+            if (bWearableSlot)
+            {
+                BoneScore += ScoreWearableFallbackBoneSpatial(OwnerMesh, BoneName);
+            }
             if (BoneScore > BestBoneScore)
             {
                 BestBoneScore = BoneScore;
