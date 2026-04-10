@@ -1,10 +1,11 @@
 #include "PMXEquipmentBlueprintLibrary.h"
 
 #include "Animation/AnimationAsset.h"
+#include "Components/SceneComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Actor.h"
 #include "PMXCharacterEquipmentComponent.h"
-#include "PMXEquipmentReflection.h"
+#include "ReferenceSkeleton.h"
 
 namespace
 {
@@ -55,13 +56,27 @@ UPMXCharacterEquipmentComponent* UPMXEquipmentBlueprintLibrary::FindOrAddEquipme
 
 bool UPMXEquipmentBlueprintLibrary::SetEquipmentAttachSocket(AActor* Actor, FName SocketName)
 {
+    return SetEquipmentAttachSocketForSlot(Actor, TEXT("weapon"), SocketName);
+}
+
+bool UPMXEquipmentBlueprintLibrary::SetEquipmentAttachSocketForSlot(AActor* Actor, FName SlotName, FName SocketName)
+{
     UPMXCharacterEquipmentComponent* Component = FindOrAddEquipmentComponent(Actor);
     if (!Component)
     {
         return false;
     }
 
-    Component->SetAttachSocketName(SocketName);
+    if (SlotName.IsNone() || SlotName == TEXT("weapon"))
+    {
+        Component->SetAttachSocketName(SocketName);
+        return true;
+    }
+
+    FPMXEquipmentSlotBindingEntry Binding;
+    Binding.SlotName = SlotName;
+    Binding.AttachSocketName = SocketName;
+    Component->SetDesiredItemForSlot(Binding);
     return true;
 }
 
@@ -83,15 +98,82 @@ USkeletalMeshComponent* UPMXEquipmentBlueprintLibrary::EquipWeaponMeshToSocket(A
     return Component->ApplyWeaponMeshToOwner();
 }
 
+USceneComponent* UPMXEquipmentBlueprintLibrary::SetDesiredItemForSlot(AActor* Actor, const FPMXEquipmentSlotBindingEntry& SlotBinding)
+{
+    UPMXCharacterEquipmentComponent* Component = FindOrAddEquipmentComponent(Actor);
+    if (!Component)
+    {
+        return nullptr;
+    }
+
+    Component->SetDesiredItemForSlot(SlotBinding);
+    return Component->GetManagedComponentForSlot(SlotBinding.SlotName);
+}
+
+USceneComponent* UPMXEquipmentBlueprintLibrary::ApplyItemForSlot(AActor* Actor, const FPMXEquipmentSlotBindingEntry& SlotBinding)
+{
+    UPMXCharacterEquipmentComponent* Component = FindOrAddEquipmentComponent(Actor);
+    if (!Component)
+    {
+        return nullptr;
+    }
+
+    Component->SetDesiredItemForSlot(SlotBinding);
+    return Component->ApplyItemForSlot(SlotBinding.SlotName);
+}
+
+void UPMXEquipmentBlueprintLibrary::ApplySlotBindings(AActor* Actor, const TArray<FPMXEquipmentSlotBindingEntry>& SlotBindings)
+{
+    UPMXCharacterEquipmentComponent* Component = FindOrAddEquipmentComponent(Actor);
+    if (!Component)
+    {
+        return;
+    }
+
+    Component->SetDesiredSlotBindings(SlotBindings);
+    Component->ApplySlotBindings();
+}
+
+USceneComponent* UPMXEquipmentBlueprintLibrary::GetManagedComponentForSlot(AActor* Actor, FName SlotName)
+{
+    UPMXCharacterEquipmentComponent* Component = FindOrAddEquipmentComponent(Actor);
+    if (!Component)
+    {
+        return nullptr;
+    }
+
+    return Component->GetManagedComponentForSlot(SlotName);
+}
+
 USkeletalMeshComponent* UPMXEquipmentBlueprintLibrary::ApplyEquipmentLoadout(AActor* Actor, UPMXEquipmentLoadoutAsset* LoadoutAsset)
 {
-    if (!LoadoutAsset)
+    if (!Actor || !LoadoutAsset)
+    {
+        return nullptr;
+    }
+
+    UPMXCharacterEquipmentComponent* Component = FindOrAddEquipmentComponent(Actor);
+    if (!Component)
     {
         return nullptr;
     }
 
     const FPMXEquipmentLoadoutEntry& Loadout = LoadoutAsset->Loadout;
-    return EquipWeaponMeshToSocket(Actor, Loadout.WeaponMesh, Loadout.AttachSocketName);
+    if (Loadout.SlotBindings.Num() > 0)
+    {
+        Component->SetDesiredSlotBindings(Loadout.SlotBindings);
+        Component->ApplySlotBindings();
+    }
+    else
+    {
+        Component->SetAttachSocketName(Loadout.AttachSocketName);
+        Component->SetDesiredWeaponMesh(Loadout.WeaponMesh);
+        if (Loadout.WeaponMesh)
+        {
+            Component->ApplyWeaponMeshToOwner();
+        }
+    }
+    return Component->GetManagedWeaponMeshComponent();
 }
 
 FPMXAnimationPoseEvaluationResult UPMXEquipmentBlueprintLibrary::EvaluateAnimationPoseOnComponent(

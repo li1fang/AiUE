@@ -6,6 +6,7 @@ COMMANDS = {
     "list-assets": {"module": "list_assets", "category": "probe", "workflow_pack": "core", "destructive": False},
     "inspect-host": {"module": "inspect_host", "category": "probe", "workflow_pack": "pmx_pipeline", "destructive": False},
     "inspect-host-visual": {"module": "inspect_host_visual", "category": "probe", "workflow_pack": "pmx_pipeline", "destructive": False},
+    "inspect-slot-runtime": {"module": "inspect_slot_runtime", "category": "probe", "workflow_pack": "pmx_pipeline", "destructive": False},
     "inspect-loadout": {"module": "inspect_loadout", "category": "probe", "workflow_pack": "pmx_pipeline", "destructive": False},
     "import-package": {"module": "import_package", "category": "workflow", "workflow_pack": "pmx_pipeline", "destructive": False},
     "build-equipment-registry": {"module": "build_equipment_registry", "category": "workflow", "workflow_pack": "pmx_pipeline", "destructive": False},

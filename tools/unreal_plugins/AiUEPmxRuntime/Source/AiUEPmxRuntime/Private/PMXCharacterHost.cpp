@@ -2,6 +2,7 @@
 
 #include "Components/SkeletalMeshComponent.h"
 #include "PMXCharacterEquipmentComponent.h"
+#include "PMXEquipmentBlueprintLibrary.h"
 #include "PMXEquipmentReflection.h"
 
 APMXCharacterHost::APMXCharacterHost()
@@ -57,19 +58,13 @@ void APMXCharacterHost::ApplyConfiguredLoadout()
 
     if (DefaultLoadoutAsset)
     {
-        const FPMXEquipmentLoadoutEntry& Loadout = DefaultLoadoutAsset->Loadout;
-        EquipmentComponent->SetAttachSocketName(Loadout.AttachSocketName);
-        EquipmentComponent->SetDesiredWeaponMesh(Loadout.WeaponMesh);
-        if (Loadout.WeaponMesh)
-        {
-            EquipmentComponent->ApplyWeaponMeshToOwner();
-        }
+        UPMXEquipmentBlueprintLibrary::ApplyEquipmentLoadout(this, DefaultLoadoutAsset);
         return;
     }
 
-    if (EquipmentComponent->GetDesiredWeaponMesh())
+    if (EquipmentComponent->GetDesiredSlotBindings().Num() > 0 || EquipmentComponent->GetDesiredWeaponMesh())
     {
-        EquipmentComponent->ApplyWeaponMeshToOwner();
+        EquipmentComponent->ApplySlotBindings();
     }
 }
 

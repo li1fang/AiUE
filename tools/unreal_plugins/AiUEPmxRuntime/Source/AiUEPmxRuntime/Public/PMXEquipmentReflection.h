@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
 #include "Engine/SkeletalMesh.h"
+#include "Engine/StaticMesh.h"
 #include "PMXEquipmentReflection.generated.h"
 
 class UPMXEquipmentLoadoutAsset;
@@ -75,6 +76,99 @@ struct FPMXAnimationPoseEvaluationResult
 };
 
 USTRUCT(BlueprintType)
+struct FPMXEquipmentSlotBindingEntry
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    FName SlotName = TEXT("weapon");
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    FString ItemPackageId;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    FString ItemKind = TEXT("skeletal_mesh");
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    FName AttachSocketName = TEXT("WeaponSocket");
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    TObjectPtr<USkeletalMesh> SkeletalMesh = nullptr;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    TObjectPtr<UStaticMesh> StaticMesh = nullptr;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    bool bConsumerReady = false;
+};
+
+USTRUCT(BlueprintType)
+struct FPMXEquipmentSlotConflictEntry
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    FName SlotName = NAME_None;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    FString Resolution = TEXT("override_latest");
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    FString PreviousItemPackageId;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    FString IncomingItemPackageId;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    FString PreviousItemKind;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    FString IncomingItemKind;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    FName PreviousAttachSocketName = NAME_None;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    FName IncomingAttachSocketName = NAME_None;
+};
+
+USTRUCT(BlueprintType)
+struct FPMXEquipmentSlotAttachState
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    FName SlotName = NAME_None;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    FString ItemPackageId;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    FString ItemKind;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    FName RequestedAttachSocketName = NAME_None;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    FName ResolvedAttachSocketName = NAME_None;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    bool bResolvedAttachSocketExists = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    FString AttachResolutionMode = TEXT("unresolved");
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    FString ManagedComponentName;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    FString ManagedComponentClass;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    FString ManagedComponentAssetPath;
+};
+
+USTRUCT(BlueprintType)
 struct FPMXEquipmentPairEntry
 {
     GENERATED_BODY()
@@ -105,6 +199,9 @@ struct FPMXEquipmentPairEntry
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
     bool bConsumerReady = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    TArray<FPMXEquipmentSlotBindingEntry> SlotBindings;
 };
 
 UCLASS(BlueprintType, Blueprintable)
@@ -154,6 +251,9 @@ struct FPMXEquipmentLoadoutEntry
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
     bool bConsumerReady = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    TArray<FPMXEquipmentSlotBindingEntry> SlotBindings;
 };
 
 UCLASS(BlueprintType, Blueprintable)

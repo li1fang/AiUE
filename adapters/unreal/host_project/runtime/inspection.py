@@ -51,6 +51,15 @@ def inspect_host_visual(request: dict) -> dict:
             spawned_host.apply_configured_loadout()
         except Exception as exc:
             warnings.append(f"apply_configured_loadout_failed:{exc}")
+        override_bindings = list(request.get("slot_binding_overrides") or [])
+        if override_bindings:
+            if hasattr(unreal, "PMXEquipmentBlueprintLibrary"):
+                unreal.PMXEquipmentBlueprintLibrary.apply_slot_bindings(
+                    spawned_host,
+                    runtime_slot_binding_entries_from_request(override_bindings),
+                )
+            else:
+                failed_requirements.append("pmx_blueprint_library_unavailable")
 
         time.sleep(max(float(request.get("settle_delay_seconds") or 0.2), 0.05))
         try:
@@ -67,6 +76,18 @@ def inspect_host_visual(request: dict) -> dict:
         weapon_mesh_world_transform = component_transform_payload(weapon_mesh)
         weapon_attachment = component_attach_payload(weapon_mesh)
         equipment_diagnostics = pmx_equipment_diagnostics(pmx_component, primary_mesh)
+        slot_bindings = pmx_slot_bindings_payload(pmx_component)
+        slot_attach_state = pmx_slot_attach_states_payload(pmx_component)
+        slot_conflicts = pmx_slot_conflicts_payload(pmx_component)
+        managed_components_by_slot = actor_managed_components_by_slot(spawned_host, pmx_component, primary_component=primary_mesh)
+        applied_slot_bindings = [
+            {
+                **binding,
+                "managed_component": dict(managed_components_by_slot.get(binding.get("slot_name")) or {}),
+                "attach_state": next((state for state in slot_attach_state if state.get("slot_name") == binding.get("slot_name")), {}),
+            }
+            for binding in slot_bindings
+        ]
         component_visibility = {
             "main_mesh": main_mesh_component,
             "weapon_mesh": weapon_mesh_component,
@@ -93,6 +114,7 @@ def inspect_host_visual(request: dict) -> dict:
         height = int(request.get("height") or request.get("capture_height") or 720)
         subject_min_screen_coverage = float(request.get("subject_min_screen_coverage") or 0.015)
         weapon_min_screen_coverage = float(request.get("weapon_min_screen_coverage") or 0.001)
+        tracked_slot_names = [slot_name_text(value) for value in list(request.get("tracked_slots") or []) if str(value)]
         shot_plans = build_visual_proof_shots(spawned_host, request)
 
         subject_pass_count = 0
@@ -107,11 +129,18 @@ def inspect_host_visual(request: dict) -> dict:
             line_of_sight = {"clear": False, "reason": "metric_camera_spawn_failed"}
             subject_coverage = {"coverage_ratio": 0.0, "reason": "metric_camera_spawn_failed"}
             weapon_coverage = {"coverage_ratio": 0.0, "reason": "metric_camera_spawn_failed"}
+            tracked_slot_coverages = {
+                slot_name: {"coverage_ratio": 0.0, "reason": "metric_camera_spawn_failed"}
+                for slot_name in tracked_slot_names
+            }
             if metric_camera:
                 try:
                     line_of_sight = line_of_sight_to_actor(metric_camera, spawned_host)
                     subject_coverage = screen_coverage_for_component(primary_mesh, metric_camera, width, height, fallback_actor=spawned_host)
                     weapon_coverage = screen_coverage_for_component(weapon_mesh, metric_camera, width, height)
+                    for slot_name in tracked_slot_names:
+                        tracked_component = actor_managed_component_for_slot(spawned_host, slot_name, primary_component=primary_mesh)
+                        tracked_slot_coverages[slot_name] = screen_coverage_for_component(tracked_component, metric_camera, width, height)
                 finally:
                     try:
                         actor_subsystem.destroy_actor(metric_camera)
@@ -163,6 +192,7 @@ def inspect_host_visual(request: dict) -> dict:
                     "line_of_sight": line_of_sight,
                     "subject_coverage": subject_coverage,
                     "weapon_coverage": weapon_coverage,
+                    "tracked_slot_coverages": tracked_slot_coverages,
                     "status": shot_quality["status"],
                     "warnings": shot_quality["warnings"],
                     "errors": shot_quality["errors"],
@@ -202,6 +232,13 @@ def inspect_host_visual(request: dict) -> dict:
             "weapon_mesh_world_transform": weapon_mesh_world_transform,
             "weapon_attachment": weapon_attachment,
             "equipment_diagnostics": equipment_diagnostics,
+            "slot_bindings": slot_bindings,
+            "applied_slot_bindings": applied_slot_bindings,
+            "managed_components_by_slot": managed_components_by_slot,
+            "slot_attach_state": slot_attach_state,
+            "slot_conflicts": slot_conflicts,
+            "superseded_bindings": slot_conflicts,
+            "tracked_slots": tracked_slot_names,
             "component_visibility": component_visibility,
             "shots": shots,
             "failed_requirements": sorted(set(failed_requirements)),
@@ -213,6 +250,143 @@ def inspect_host_visual(request: dict) -> dict:
             actor_subsystem.destroy_actor(spawned_host)
         except Exception:
             pass
+
+
+def runtime_slot_binding_entries_from_request(bindings: list[dict]) -> list:
+    entries = []
+    for binding in bindings:
+        entry = unreal.PMXEquipmentSlotBindingEntry()
+        set_if_present(entry, "slot_name", binding.get("slot_name") or "weapon")
+        set_if_present(entry, "item_package_id", str(binding.get("item_package_id") or ""))
+        set_if_present(entry, "item_kind", str(binding.get("item_kind") or "skeletal_mesh"))
+        set_if_present(entry, "attach_socket_name", binding.get("attach_socket_name") or "WeaponSocket")
+        set_if_present(entry, "skeletal_mesh", load_asset(binding.get("skeletal_mesh_asset")))
+        set_if_present(entry, "static_mesh", load_asset(binding.get("static_mesh_asset")))
+        set_if_present(entry, "b_consumer_ready", bool(binding.get("consumer_ready")))
+        set_if_present(entry, "consumer_ready", bool(binding.get("consumer_ready")))
+        entries.append(entry)
+    return entries
+
+
+def inspect_slot_runtime(request: dict) -> dict:
+    warnings = []
+    level_path = request.get("level_path") or request.get("scene_level_path")
+    if level_path:
+        load_result = load_level({"level_path": level_path})
+        warnings.extend(load_result.get("warnings") or [])
+        if load_result.get("errors"):
+            return {
+                "status": "fail",
+                "warnings": warnings,
+                "errors": list(load_result.get("errors") or []),
+            }
+
+    host_asset_path, host_record, host_warnings = resolve_host_blueprint_asset_path(
+        {
+            **request,
+            "runtime_ready_only": request.get("runtime_ready_only", True),
+        }
+    )
+    warnings.extend(host_warnings)
+    actor_subsystem = editor_actor_subsystem()
+    blueprint_asset = unreal.EditorAssetLibrary.load_asset(object_path_from_asset_path(host_asset_path))
+    if not blueprint_asset:
+        return {
+            "status": "fail",
+            "warnings": warnings,
+            "errors": [f"host_blueprint_load_failed:{host_asset_path}"],
+        }
+
+    spawn_location = vector_from_request(request.get("location") or request.get("cell_origin"), unreal.Vector(0.0, 0.0, 120.0))
+    spawn_rotation = rotator_from_request(request.get("rotation") or request.get("cell_rotation"), make_rotator(0.0, 180.0, 0.0))
+    actor_label = str(request.get("actor_label") or f"AIUE_SlotRuntime_{sanitize_segment(host_record.get('character_package_id') if host_record else host_asset_path)}")
+    spawned_host = actor_subsystem.spawn_actor_from_object(blueprint_asset, spawn_location, spawn_rotation, True)
+    if not spawned_host:
+        return {
+            "status": "fail",
+            "warnings": warnings,
+            "errors": [f"failed_to_spawn_host:{host_asset_path}"],
+        }
+
+    spawned_host.set_actor_label(actor_label)
+    failed_requirements = []
+    try:
+        try:
+            spawned_host.apply_configured_loadout()
+        except Exception as exc:
+            warnings.append(f"apply_configured_loadout_failed:{exc}")
+
+        override_bindings = list(request.get("slot_binding_overrides") or [])
+        if override_bindings:
+            if hasattr(unreal, "PMXEquipmentBlueprintLibrary"):
+                unreal.PMXEquipmentBlueprintLibrary.apply_slot_bindings(
+                    spawned_host,
+                    runtime_slot_binding_entries_from_request(override_bindings),
+                )
+            else:
+                failed_requirements.append("pmx_blueprint_library_unavailable")
+        time.sleep(max(float(request.get("settle_delay_seconds") or 0.2), 0.05))
+
+        try:
+            pmx_component = spawned_host.get_component_by_class(unreal.PMXCharacterEquipmentComponent)
+        except Exception:
+            pmx_component = None
+        primary_mesh = actor_primary_mesh_component(spawned_host)
+        weapon_mesh = actor_weapon_mesh_component(spawned_host, primary_mesh)
+        slot_bindings = pmx_slot_bindings_payload(pmx_component)
+        slot_attach_state = pmx_slot_attach_states_payload(pmx_component)
+        slot_conflicts = pmx_slot_conflicts_payload(pmx_component)
+        managed_components_by_slot = actor_managed_components_by_slot(spawned_host, pmx_component, primary_component=primary_mesh)
+        applied_slot_bindings = [
+            {
+                **binding,
+                "managed_component": dict(managed_components_by_slot.get(binding.get("slot_name")) or {}),
+                "attach_state": next((state for state in slot_attach_state if state.get("slot_name") == binding.get("slot_name")), {}),
+            }
+            for binding in slot_bindings
+        ]
+        required_slots = [slot_name_text(value) for value in list(request.get("required_slots") or []) if str(value)]
+        if not required_slots:
+            required_slots = [binding.get("slot_name") for binding in slot_bindings if binding.get("slot_name")]
+        required_slots = sorted(set(required_slots))
+
+        for slot_name in required_slots:
+            managed_component = dict(managed_components_by_slot.get(slot_name) or {})
+            attach_state = next((state for state in slot_attach_state if state.get("slot_name") == slot_name), {})
+            binding = next((item for item in slot_bindings if item.get("slot_name") == slot_name), {})
+            if not managed_component.get("component_name"):
+                failed_requirements.append(f"slot_missing:{slot_name}")
+            if not managed_component.get("asset_path") and not binding.get("asset_path"):
+                failed_requirements.append(f"slot_asset_missing:{slot_name}")
+            if attach_state and attach_state.get("resolved_attach_socket_exists") is False:
+                failed_requirements.append(f"slot_attach_unresolved:{slot_name}")
+
+        return {
+            "status": "pass" if not failed_requirements else "fail",
+            "package_id": host_record.get("character_package_id") if host_record else request.get("package_id"),
+            "sample_id": host_record.get("sample_id") if host_record else request.get("sample_id"),
+            "host_id": spawned_host.get_path_name(),
+            "host_blueprint_asset": host_asset_path,
+            "level_path": level_path or get_current_level_path(),
+            "character_mesh_asset": component_asset_path(primary_mesh),
+            "weapon_mesh_asset": component_asset_path(weapon_mesh),
+            "slot_bindings": slot_bindings,
+            "applied_slot_bindings": applied_slot_bindings,
+            "managed_components_by_slot": managed_components_by_slot,
+            "slot_attach_state": slot_attach_state,
+            "slot_conflicts": slot_conflicts,
+            "superseded_bindings": slot_conflicts,
+            "required_slots": required_slots,
+            "equipment_diagnostics": pmx_equipment_diagnostics(pmx_component, primary_mesh),
+            "warnings": warnings,
+            "errors": sorted(set(failed_requirements)),
+        }
+    finally:
+        try:
+            actor_subsystem.destroy_actor(spawned_host)
+        except Exception:
+            pass
+
 
 def list_assets(request: dict) -> dict:
     asset_path = request.get("asset_path") or request.get("asset_root") or "/Game"

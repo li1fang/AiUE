@@ -11,6 +11,7 @@ DEFAULT_HOST_ROUTES = {
     "build-equipment-registry": "kernel",
     "inspect-host": "kernel",
     "inspect-host-visual": "kernel",
+    "inspect-slot-runtime": "kernel",
     "composition-validation": "kernel",
     "validate-package": "kernel",
     "load-level": "demo",

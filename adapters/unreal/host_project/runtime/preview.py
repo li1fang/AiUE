@@ -116,8 +116,25 @@ def animation_preview(request: dict) -> dict:
             warnings.append(f"apply_configured_loadout_failed:{exc}")
 
         time.sleep(max(float(request.get("settle_delay_seconds") or 0.2), 0.05))
+        try:
+            pmx_component = spawned_host.get_component_by_class(unreal.PMXCharacterEquipmentComponent)
+        except Exception:
+            pmx_component = None
         primary_mesh = actor_primary_mesh_component(spawned_host)
         weapon_mesh = actor_weapon_mesh_component(spawned_host, primary_mesh)
+        slot_bindings = pmx_slot_bindings_payload(pmx_component)
+        slot_attach_state = pmx_slot_attach_states_payload(pmx_component)
+        slot_conflicts = pmx_slot_conflicts_payload(pmx_component)
+        managed_components_by_slot = actor_managed_components_by_slot(spawned_host, pmx_component, primary_component=primary_mesh)
+        applied_slot_bindings = [
+            {
+                **binding,
+                "managed_component": dict(managed_components_by_slot.get(binding.get("slot_name")) or {}),
+                "attach_state": next((state for state in slot_attach_state if state.get("slot_name") == binding.get("slot_name")), {}),
+            }
+            for binding in slot_bindings
+        ]
+        equipment_diagnostics = pmx_equipment_diagnostics(pmx_component, primary_mesh)
         primary_mesh_asset = skeletal_mesh_asset_from_component(primary_mesh)
         primary_reference_skeleton = reference_skeleton_from_assets(
             skeleton_asset_from_skeletal_mesh_asset(primary_mesh_asset),
@@ -308,6 +325,13 @@ def animation_preview(request: dict) -> dict:
             "pose_probe_before": pose_probe_before,
             "pose_probe_after": pose_probe_after,
             "pose_probe_delta": pose_probe_delta,
+            "slot_bindings": slot_bindings,
+            "applied_slot_bindings": applied_slot_bindings,
+            "managed_components_by_slot": managed_components_by_slot,
+            "slot_attach_state": slot_attach_state,
+            "slot_conflicts": slot_conflicts,
+            "superseded_bindings": slot_conflicts,
+            "equipment_diagnostics": equipment_diagnostics,
             "main_mesh_component": {
                 "component_name": main_mesh_component.get("component_name"),
                 "class_name": main_mesh_component.get("class_name"),
@@ -393,6 +417,18 @@ def action_preview(request: dict) -> dict:
         weapon_mesh_world_transform = component_transform_payload(weapon_mesh)
         weapon_attachment = component_attach_payload(weapon_mesh)
         equipment_diagnostics = pmx_equipment_diagnostics(pmx_component, primary_mesh)
+        slot_bindings = pmx_slot_bindings_payload(pmx_component)
+        slot_attach_state = pmx_slot_attach_states_payload(pmx_component)
+        slot_conflicts = pmx_slot_conflicts_payload(pmx_component)
+        managed_components_by_slot = actor_managed_components_by_slot(spawned_host, pmx_component, primary_component=primary_mesh)
+        applied_slot_bindings = [
+            {
+                **binding,
+                "managed_component": dict(managed_components_by_slot.get(binding.get("slot_name")) or {}),
+                "attach_state": next((state for state in slot_attach_state if state.get("slot_name") == binding.get("slot_name")), {}),
+            }
+            for binding in slot_bindings
+        ]
         component_visibility = {
             "main_mesh": main_mesh_component,
             "weapon_mesh": weapon_mesh_component,
@@ -515,6 +551,12 @@ def action_preview(request: dict) -> dict:
             "weapon_mesh_world_transform": weapon_mesh_world_transform,
             "weapon_attachment": weapon_attachment,
             "equipment_diagnostics": equipment_diagnostics,
+            "slot_bindings": slot_bindings,
+            "applied_slot_bindings": applied_slot_bindings,
+            "managed_components_by_slot": managed_components_by_slot,
+            "slot_attach_state": slot_attach_state,
+            "slot_conflicts": slot_conflicts,
+            "superseded_bindings": slot_conflicts,
             "component_visibility": component_visibility,
             "action_kind": action_result.get("action_kind"),
             "requested_action_distance": action_result.get("requested_action_distance"),

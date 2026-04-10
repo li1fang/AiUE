@@ -1211,6 +1211,236 @@ def component_attach_payload(component) -> dict:
     return payload
 
 
+def loaded_asset_path(asset) -> str:
+    if not asset:
+        return ""
+    try:
+        return str(asset.get_path_name() or "")
+    except Exception:
+        return ""
+
+
+def slot_name_text(value, default: str = "weapon") -> str:
+    text = str(value or "").strip()
+    return text or default
+
+
+def normalized_item_kind_text(item_kind: str | None, skeletal_mesh=None, static_mesh=None) -> str:
+    lower = str(item_kind or "").strip().lower()
+    if static_mesh:
+        return "static_mesh"
+    if skeletal_mesh:
+        return "skeletal_mesh"
+    if lower in {"static_mesh", "static"}:
+        return "static_mesh"
+    if lower in {"skeletal_mesh", "skeletal", "skeletalmesh"}:
+        return "skeletal_mesh"
+    return "skeletal_mesh"
+
+
+def slot_binding_payload(binding) -> dict:
+    if not binding:
+        return {
+            "slot_name": "weapon",
+            "item_package_id": "",
+            "item_kind": "skeletal_mesh",
+            "attach_socket_name": "WeaponSocket",
+            "skeletal_mesh_asset": "",
+            "static_mesh_asset": "",
+            "asset_path": "",
+            "consumer_ready": False,
+        }
+    skeletal_mesh = getattr(binding, "skeletal_mesh", None)
+    static_mesh = getattr(binding, "static_mesh", None)
+    payload = {
+        "slot_name": slot_name_text(getattr(binding, "slot_name", None)),
+        "item_package_id": str(getattr(binding, "item_package_id", "") or ""),
+        "item_kind": normalized_item_kind_text(getattr(binding, "item_kind", ""), skeletal_mesh=skeletal_mesh, static_mesh=static_mesh),
+        "attach_socket_name": str(getattr(binding, "attach_socket_name", "") or "WeaponSocket"),
+        "skeletal_mesh_asset": loaded_asset_path(skeletal_mesh),
+        "static_mesh_asset": loaded_asset_path(static_mesh),
+        "consumer_ready": bool(getattr(binding, "b_consumer_ready", getattr(binding, "consumer_ready", False))),
+    }
+    payload["asset_path"] = payload["static_mesh_asset"] or payload["skeletal_mesh_asset"]
+    return payload
+
+
+def legacy_weapon_slot_binding_payload(pmx_component) -> dict | None:
+    if not pmx_component:
+        return None
+    try:
+        desired_weapon_mesh = pmx_component.get_desired_weapon_mesh()
+    except Exception:
+        desired_weapon_mesh = None
+    if not desired_weapon_mesh:
+        return None
+    attach_socket_name = ""
+    if hasattr(pmx_component, "get_attach_socket_name"):
+        try:
+            attach_socket_name = str(pmx_component.get_attach_socket_name() or "WeaponSocket")
+        except Exception:
+            attach_socket_name = "WeaponSocket"
+    return {
+        "slot_name": "weapon",
+        "item_package_id": "",
+        "item_kind": "skeletal_mesh",
+        "attach_socket_name": attach_socket_name or "WeaponSocket",
+        "skeletal_mesh_asset": loaded_asset_path(desired_weapon_mesh),
+        "static_mesh_asset": "",
+        "asset_path": loaded_asset_path(desired_weapon_mesh),
+        "consumer_ready": bool(desired_weapon_mesh),
+    }
+
+
+def pmx_slot_bindings_payload(pmx_component) -> list[dict]:
+    bindings = []
+    if pmx_component and hasattr(pmx_component, "get_desired_slot_bindings"):
+        try:
+            bindings = [slot_binding_payload(binding) for binding in list(pmx_component.get_desired_slot_bindings() or [])]
+        except Exception:
+            bindings = []
+    if bindings:
+        return bindings
+    legacy = legacy_weapon_slot_binding_payload(pmx_component)
+    return [legacy] if legacy else []
+
+
+def slot_conflict_payload(conflict) -> dict:
+    if not conflict:
+        return {
+            "slot_name": "",
+            "resolution": "override_latest",
+            "previous_item_package_id": "",
+            "incoming_item_package_id": "",
+            "previous_item_kind": "",
+            "incoming_item_kind": "",
+            "previous_attach_socket_name": "",
+            "incoming_attach_socket_name": "",
+        }
+    return {
+        "slot_name": slot_name_text(getattr(conflict, "slot_name", None), default=""),
+        "resolution": str(getattr(conflict, "resolution", "") or "override_latest"),
+        "previous_item_package_id": str(getattr(conflict, "previous_item_package_id", "") or ""),
+        "incoming_item_package_id": str(getattr(conflict, "incoming_item_package_id", "") or ""),
+        "previous_item_kind": str(getattr(conflict, "previous_item_kind", "") or ""),
+        "incoming_item_kind": str(getattr(conflict, "incoming_item_kind", "") or ""),
+        "previous_attach_socket_name": str(getattr(conflict, "previous_attach_socket_name", "") or ""),
+        "incoming_attach_socket_name": str(getattr(conflict, "incoming_attach_socket_name", "") or ""),
+    }
+
+
+def pmx_slot_conflicts_payload(pmx_component) -> list[dict]:
+    if not pmx_component or not hasattr(pmx_component, "get_slot_conflicts"):
+        return []
+    try:
+        return [slot_conflict_payload(conflict) for conflict in list(pmx_component.get_slot_conflicts() or [])]
+    except Exception:
+        return []
+
+
+def slot_attach_state_payload(state) -> dict:
+    if not state:
+        return {
+            "slot_name": "",
+            "item_package_id": "",
+            "item_kind": "",
+            "requested_attach_socket_name": "",
+            "resolved_attach_socket_name": "",
+            "resolved_attach_socket_exists": None,
+            "attach_resolution_mode": "",
+            "managed_component_name": "",
+            "managed_component_class": "",
+            "managed_component_asset_path": "",
+        }
+    return {
+        "slot_name": slot_name_text(getattr(state, "slot_name", None), default=""),
+        "item_package_id": str(getattr(state, "item_package_id", "") or ""),
+        "item_kind": str(getattr(state, "item_kind", "") or ""),
+        "requested_attach_socket_name": str(getattr(state, "requested_attach_socket_name", "") or ""),
+        "resolved_attach_socket_name": str(getattr(state, "resolved_attach_socket_name", "") or ""),
+        "resolved_attach_socket_exists": bool(getattr(state, "b_resolved_attach_socket_exists", getattr(state, "resolved_attach_socket_exists", False))),
+        "attach_resolution_mode": str(getattr(state, "attach_resolution_mode", "") or ""),
+        "managed_component_name": str(getattr(state, "managed_component_name", "") or ""),
+        "managed_component_class": str(getattr(state, "managed_component_class", "") or ""),
+        "managed_component_asset_path": str(getattr(state, "managed_component_asset_path", "") or ""),
+    }
+
+
+def pmx_slot_attach_states_payload(pmx_component) -> list[dict]:
+    if not pmx_component or not hasattr(pmx_component, "get_resolved_slot_attach_states"):
+        return []
+    try:
+        return [slot_attach_state_payload(state) for state in list(pmx_component.get_resolved_slot_attach_states() or [])]
+    except Exception:
+        return []
+
+
+def find_component_by_name(actor, component_name: str):
+    if not actor or not component_name:
+        return None
+    for component_class in (getattr(unreal, "SkeletalMeshComponent", None), getattr(unreal, "StaticMeshComponent", None)):
+        if component_class is None:
+            continue
+        try:
+            components = list(actor.get_components_by_class(component_class) or [])
+        except Exception:
+            components = []
+        for component in components:
+            try:
+                if component.get_name() == component_name:
+                    return component
+            except Exception:
+                continue
+    return None
+
+
+def actor_managed_component_for_slot(actor, slot_name: str, primary_component=None):
+    if not actor:
+        return None
+    try:
+        pmx_component = actor.get_component_by_class(unreal.PMXCharacterEquipmentComponent)
+    except Exception:
+        pmx_component = None
+    if pmx_component and hasattr(pmx_component, "get_managed_component_for_slot"):
+        try:
+            managed = pmx_component.get_managed_component_for_slot(to_name(slot_name_text(slot_name)))
+            if managed:
+                return managed
+        except Exception:
+            pass
+    if slot_name_text(slot_name) == "weapon" and pmx_component and hasattr(pmx_component, "get_managed_weapon_mesh_component"):
+        try:
+            managed = pmx_component.get_managed_weapon_mesh_component()
+            if managed:
+                return managed
+        except Exception:
+            pass
+    for attach_state in pmx_slot_attach_states_payload(pmx_component):
+        if attach_state.get("slot_name") == slot_name_text(slot_name):
+            component = find_component_by_name(actor, attach_state.get("managed_component_name") or "")
+            if component:
+                return component
+    return None
+
+
+def actor_managed_components_by_slot(actor, pmx_component=None, primary_component=None) -> dict:
+    slot_names = []
+    if pmx_component:
+        slot_names.extend(binding.get("slot_name") for binding in pmx_slot_bindings_payload(pmx_component))
+        slot_names.extend(state.get("slot_name") for state in pmx_slot_attach_states_payload(pmx_component))
+    normalized_slot_names = [slot_name_text(name) for name in slot_names if name]
+    payload = {}
+    for slot_name in sorted(set(normalized_slot_names)):
+        component = actor_managed_component_for_slot(actor, slot_name, primary_component=primary_component)
+        payload[slot_name] = {
+            **component_visibility_record(component),
+            "bounds": component_bounds_payload(component),
+            "attach": component_attach_payload(component),
+            "transform": component_transform_payload(component),
+        }
+    return payload
+
+
 def interesting_attach_targets(component) -> list[str]:
     if not component or not hasattr(component, "get_all_socket_names"):
         return []
@@ -1229,28 +1459,27 @@ def interesting_attach_targets(component) -> list[str]:
 
 
 def pmx_equipment_diagnostics(pmx_component, owner_mesh) -> dict:
+    slot_bindings = pmx_slot_bindings_payload(pmx_component)
+    slot_conflicts = pmx_slot_conflicts_payload(pmx_component)
+    slot_attach_states = pmx_slot_attach_states_payload(pmx_component)
+    weapon_slot_binding = next((entry for entry in slot_bindings if entry.get("slot_name") == "weapon"), None)
+    weapon_attach_state = next((entry for entry in slot_attach_states if entry.get("slot_name") == "weapon"), None)
     payload = {
         "component_name": str(getattr(pmx_component, "get_name", lambda: "")() or "") if pmx_component else "",
         "component_class": component_class_name(pmx_component) if pmx_component else "",
-        "desired_weapon_mesh_asset": "",
-        "requested_attach_socket_name": "",
-        "resolved_attach_socket_name": "",
-        "resolved_attach_socket_exists": None,
-        "attach_resolution_mode": "",
+        "desired_weapon_mesh_asset": (weapon_slot_binding or {}).get("skeletal_mesh_asset") or "",
+        "requested_attach_socket_name": (weapon_attach_state or {}).get("requested_attach_socket_name") or (weapon_slot_binding or {}).get("attach_socket_name") or "",
+        "resolved_attach_socket_name": (weapon_attach_state or {}).get("resolved_attach_socket_name") or "",
+        "resolved_attach_socket_exists": (weapon_attach_state or {}).get("resolved_attach_socket_exists"),
+        "attach_resolution_mode": (weapon_attach_state or {}).get("attach_resolution_mode") or "",
         "owner_socket_exists_for_requested_name": None,
         "owner_interesting_attach_targets": interesting_attach_targets(owner_mesh),
+        "slot_bindings": slot_bindings,
+        "slot_attach_state": slot_attach_states,
+        "slot_conflicts": slot_conflicts,
     }
     if not pmx_component:
         return payload
-    try:
-        desired_weapon_mesh = pmx_component.get_desired_weapon_mesh()
-    except Exception:
-        desired_weapon_mesh = None
-    if desired_weapon_mesh:
-        try:
-            payload["desired_weapon_mesh_asset"] = desired_weapon_mesh.get_path_name()
-        except Exception:
-            pass
     if hasattr(pmx_component, "get_attach_socket_name"):
         try:
             requested_name = pmx_component.get_attach_socket_name()
@@ -1277,6 +1506,8 @@ def pmx_equipment_diagnostics(pmx_component, owner_mesh) -> dict:
             payload["attach_resolution_mode"] = str(pmx_component.get_attach_resolution_mode() or "")
         except Exception:
             pass
+    if weapon_slot_binding and not payload["desired_weapon_mesh_asset"]:
+        payload["desired_weapon_mesh_asset"] = weapon_slot_binding.get("skeletal_mesh_asset") or weapon_slot_binding.get("asset_path") or ""
     return payload
 
 
@@ -1298,30 +1529,28 @@ def actor_primary_mesh_component(actor):
 
 
 def actor_weapon_mesh_component(actor, primary_component=None):
+    component = actor_managed_component_for_slot(actor, "weapon", primary_component=primary_component)
+    if component:
+        return component
     if not actor:
         return None
     try:
-        pmx_component = actor.get_component_by_class(unreal.PMXCharacterEquipmentComponent)
+        skeletal_components = list(actor.get_components_by_class(unreal.SkeletalMeshComponent) or [])
     except Exception:
-        pmx_component = None
-    if pmx_component:
-        try:
-            managed = pmx_component.get_managed_weapon_mesh_component()
-            if managed:
-                return managed
-        except Exception:
-            pass
-    try:
-        components = list(actor.get_components_by_class(unreal.SkeletalMeshComponent) or [])
-    except Exception:
-        components = []
-    for component in components:
+        skeletal_components = []
+    for component in skeletal_components:
         if primary_component and component == primary_component:
             continue
-        asset_path = component_asset_path(component)
-        if asset_path:
+        if component_asset_path(component):
             return component
-    return components[1] if len(components) > 1 else None
+    try:
+        static_components = list(actor.get_components_by_class(unreal.StaticMeshComponent) or [])
+    except Exception:
+        static_components = []
+    for component in static_components:
+        if component_asset_path(component):
+            return component
+    return skeletal_components[1] if len(skeletal_components) > 1 else None
 
 
 def bounds_corners(origin: unreal.Vector, extent: unreal.Vector) -> list[unreal.Vector]:
