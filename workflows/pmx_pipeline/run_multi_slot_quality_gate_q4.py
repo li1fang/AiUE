@@ -23,7 +23,7 @@ FIXED_EXECUTION_PROFILE = {
     "hero_weapon_min_coverage": 0.004,
     "hero_clothing_min_coverage": 0.003,
     "hero_fx_min_coverage": 0.05,
-    "allow_clothing_owner_origin_fallback": True,
+    "allow_clothing_owner_origin_fallback": False,
 }
 
 
@@ -158,7 +158,7 @@ def evaluate_package(runtime_check: dict, visual_check: dict) -> tuple[dict, lis
         failed_requirements.append(
             make_failed_requirement(
                 "q4_clothing_attach_quality_failed",
-                "Q4 requires the clothing slot attach state to be resolved or explicitly accepted as owner_origin fallback.",
+                "Q4 requires the clothing slot attach state to resolve successfully.",
                 package_id=package_id,
                 clothing_attach_state=clothing_attach_state,
             )

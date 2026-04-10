@@ -79,6 +79,93 @@ FString ComponentAssetPath(USceneComponent* Component)
     return FString();
 }
 
+bool ContainsAnyToken(const FString& Lower, std::initializer_list<const TCHAR*> Tokens)
+{
+    for (const TCHAR* Token : Tokens)
+    {
+        if (Lower.Contains(Token))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+int32 ExtractTrailingInteger(const FString& Value)
+{
+    int32 EndIndex = Value.Len() - 1;
+    while (EndIndex >= 0 && !FChar::IsDigit(Value[EndIndex]))
+    {
+        --EndIndex;
+    }
+    if (EndIndex < 0)
+    {
+        return INDEX_NONE;
+    }
+
+    int32 StartIndex = EndIndex;
+    while (StartIndex >= 0 && FChar::IsDigit(Value[StartIndex]))
+    {
+        --StartIndex;
+    }
+
+    const FString Digits = Value.Mid(StartIndex + 1, EndIndex - StartIndex);
+    return Digits.IsNumeric() ? FCString::Atoi(*Digits) : INDEX_NONE;
+}
+
+bool HasExplicitSideMarker(const FString& Lower)
+{
+    return Lower.Contains(TEXT("_r_"))
+        || Lower.Contains(TEXT("_l_"))
+        || Lower.EndsWith(TEXT("_r"))
+        || Lower.EndsWith(TEXT("_l"))
+        || Lower.Contains(TEXT("left"))
+        || Lower.Contains(TEXT("right"));
+}
+
+bool LooksLikeGenericPmxCentralBone(const FString& Lower)
+{
+    if (!Lower.StartsWith(TEXT("bone")))
+    {
+        return false;
+    }
+
+    if (HasExplicitSideMarker(Lower))
+    {
+        return false;
+    }
+
+    if (ContainsAnyToken(
+            Lower,
+            {
+                TEXT("dummy"),
+                TEXT("shadow"),
+                TEXT("weapon"),
+                TEXT("wpn"),
+                TEXT("ik_"),
+                TEXT("_ik"),
+                TEXT("groove"),
+                TEXT("waist"),
+                TEXT("view"),
+                TEXT("center"),
+                TEXT("root"),
+                TEXT("obj_"),
+                TEXT("arm_"),
+                TEXT("leg_"),
+                TEXT("foot"),
+                TEXT("hand"),
+                TEXT("finger"),
+                TEXT("toe"),
+                TEXT("ex_"),
+            }
+        ))
+    {
+        return false;
+    }
+
+    return true;
+}
+
 bool IsWearableSlotProfile(FName SlotName, FName RequestedName)
 {
     const FString SlotLower = NormalizeSlotName(SlotName).ToString().ToLower();
@@ -98,6 +185,12 @@ bool IsWearableSlotProfile(FName SlotName, FName RequestedName)
             || Text.Contains(TEXT("top"))
             || Text.Contains(TEXT("shirt"))
             || Text.Contains(TEXT("pants"))
+            || Text.Contains(TEXT("headwear"))
+            || Text.Contains(TEXT("headpiece"))
+            || Text.Contains(TEXT("face"))
+            || Text.Contains(TEXT("ear"))
+            || Text.Contains(TEXT("mimi"))
+            || Text.Contains(TEXT("collar"))
             || Text.Contains(TEXT("pouch"))
             || Text.Contains(TEXT("canister"))
             || Text.Contains(TEXT("shoulder"))
@@ -173,9 +266,19 @@ bool MatchesAttachPattern(const FString& Name, FName SlotName, FName RequestedNa
     {
         return Lower.Contains(TEXT("head"))
             || Lower.Contains(TEXT("hair"))
+            || Lower.Contains(TEXT("haira"))
+            || Lower.Contains(TEXT("hairb"))
+            || Lower.Contains(TEXT("kami"))
+            || Lower.Contains(TEXT("face"))
+            || Lower.Contains(TEXT("kao"))
+            || Lower.Contains(TEXT("ear"))
+            || Lower.Contains(TEXT("mimi"))
+            || Lower.Contains(TEXT("brow"))
+            || Lower.Contains(TEXT("eye"))
             || Lower.Contains(TEXT("neck"))
             || Lower.Contains(TEXT("upperchest"))
             || Lower.Contains(TEXT("chest"))
+            || Lower.Contains(TEXT("collar"))
             || Lower.Contains(TEXT("clavicle"))
             || Lower.Contains(TEXT("spine_03"))
             || Lower.Contains(TEXT("spine03"))
@@ -207,11 +310,27 @@ int32 ScoreFallbackBoneName(const FString& Name, FName SlotName, FName Requested
         {
             Score += 100;
         }
+        if (Lower.Contains(TEXT("haira")) || Lower.Contains(TEXT("hairb")) || Lower.Contains(TEXT("kami")))
+        {
+            Score += 25;
+        }
+        if (Lower.Contains(TEXT("face")) || Lower.Contains(TEXT("kao")))
+        {
+            Score += 95;
+        }
+        if (Lower.Contains(TEXT("ear")) || Lower.Contains(TEXT("mimi")))
+        {
+            Score += 80;
+        }
+        if (Lower.Contains(TEXT("brow")) || Lower.Contains(TEXT("eye")))
+        {
+            Score += 55;
+        }
         if (Lower.Contains(TEXT("neck")))
         {
             Score += 90;
         }
-        if (Lower.Contains(TEXT("upperchest")) || Lower.Contains(TEXT("chest")))
+        if (Lower.Contains(TEXT("upperchest")) || Lower.Contains(TEXT("chest")) || Lower.Contains(TEXT("collar")))
         {
             Score += 70;
         }
@@ -227,6 +346,21 @@ int32 ScoreFallbackBoneName(const FString& Name, FName SlotName, FName Requested
         {
             Score += 30;
         }
+        if ((Lower.Contains(TEXT("ctr")) || Lower.Contains(TEXT("control"))) && ContainsAnyToken(Lower, { TEXT("hair"), TEXT("head"), TEXT("face") }))
+        {
+            Score += 40;
+        }
+        // Generic PMX rigs sometimes expose only numbered central bones. Prefer early
+        // neutral "Bone_*" anchors over falling all the way back to owner origin.
+        if (LooksLikeGenericPmxCentralBone(Lower))
+        {
+            Score += 45;
+            const int32 TrailingNumber = ExtractTrailingInteger(Lower);
+            if (TrailingNumber != INDEX_NONE)
+            {
+                Score += FMath::Max(0, 30 - FMath::Min(TrailingNumber, 30));
+            }
+        }
         if (Lower.Contains(TEXT("weapon")) || Lower.Contains(TEXT("wpn")))
         {
             Score -= 120;
@@ -235,7 +369,19 @@ int32 ScoreFallbackBoneName(const FString& Name, FName SlotName, FName Requested
         {
             Score -= 100;
         }
+        if (HasExplicitSideMarker(Lower))
+        {
+            Score -= 40;
+        }
+        if (Lower.Contains(TEXT("groove")) || Lower.Contains(TEXT("waist")) || Lower.Contains(TEXT("view")) || Lower.Contains(TEXT("center")))
+        {
+            Score -= 35;
+        }
         if (Lower.Contains(TEXT("dummy_d_r")) || ((Lower.Contains(TEXT("dummy")) && Lower.Contains(TEXT("_r"))) || Lower.Contains(TEXT("_r_")) || Lower.EndsWith(TEXT("_r"))))
+        {
+            Score -= 75;
+        }
+        if (Lower.Contains(TEXT("dummy_d_l")) || ((Lower.Contains(TEXT("dummy")) && Lower.Contains(TEXT("_l"))) || Lower.Contains(TEXT("_l_")) || Lower.EndsWith(TEXT("_l"))))
         {
             Score -= 75;
         }
@@ -851,7 +997,7 @@ FName UPMXCharacterEquipmentComponent::ResolveAttachSocketName(
             }
 
             const int32 BoneScore = ScoreFallbackBoneName(BoneNameString, SlotName, RequestedSocketName);
-            if (BoneScore >= BestBoneScore)
+            if (BoneScore > BestBoneScore)
             {
                 BestBoneScore = BoneScore;
                 BestBoneName = BoneName;

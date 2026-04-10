@@ -84,6 +84,8 @@ Goals:
 - `G2` stays retired.
 - `P2` is higher priority than `P3`.
 - After `P4` and `Q4`, `P5` is deferred.
-- The next two roadmap priorities are:
-  - `R1`: clothing attach hardening
+- `R1` is complete:
+  - clothing no longer falls back to `owner_origin` for the two current ready bundles
+  - `Q4` now requires clothing attach resolution to succeed without fallback tolerance
+- The next roadmap priority is:
   - `R2`: real FX item kind
