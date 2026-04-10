@@ -193,6 +193,33 @@ Success condition:
 - latest reports and key artifacts are easier to inspect
 - slot/attach debugging no longer depends on manually reading raw JSON
 
+Current status:
+
+- complete
+- checkpoint: `docs/checkpoints/t1_metrics_tooling_foundation_checkpoint.md`
+- evidence pack: `Saved/tooling/t1/latest/`
+
+### T2: Windows Native Workbench
+
+Goal:
+
+- add a Windows-local evidence and diagnostics surface on top of `T1`
+- make report/image/slot evidence easier to inspect without relying on browser access
+
+Success condition:
+
+- latest `T1` evidence packs can be opened in a native desktop workbench
+- the workbench exposes machine-readable state for automated validation
+- the tool survives repeated launch, error-injection, and short soak testing
+
+Current status:
+
+- complete
+- checkpoint: `docs/checkpoints/t2_windows_native_workbench_checkpoint.md`
+- entry points:
+  - `tools/run_t2_workbench.ps1`
+  - `tools/run_t2_workbench_tests.ps1`
+
 ### Q5: Dual-Layer Automated Inspection
 
 Goal:
@@ -243,6 +270,7 @@ That does not mean the platform is finished.
 It means the next work should be selective and architectural:
 
 - build stronger metrics and debugging tools
+- extend the new native workbench as the local evidence surface when useful
 - add dual-layer automated inspection
 - define the future action-candidate interface
 - then clean up compatibility

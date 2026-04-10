@@ -12,6 +12,7 @@ AiUE now has a stable active line for:
 The platform direction is no longer only about escaping `weapon-only` assumptions. That transition is already complete enough to support a broader roadmap:
 
 - `T1`: metrics and tooling foundation
+- `T2`: Windows native workbench
 - `Q5`: dual-layer automated inspection
 - `A1`: action-candidate provider interface
 - `P5`: deferred compatibility cleanup after the stronger QA/tooling layers exist
@@ -103,6 +104,30 @@ Execution rule:
 - it does not replace existing gates
 - it exists to make later `Q5` and `A1` work more reliably
 
+Current implementation shape:
+
+- repo-managed tooling env: `C:\AiUE\.venv-tooling`
+- Python image metrics with `NumPy`, `OpenCV`, and `scikit-image` available in the tooling environment
+- static HTML evidence pack at `Saved/tooling/t1/latest/`
+- slot/attach debugger normalized from latest report evidence
+- pytest coverage for pure Python tooling logic
+
+### T2: Windows Native Workbench
+
+Goals:
+
+- turn the static T1 evidence pack into a Windows-local diagnostic surface
+- keep the tool read-only and evidence-driven rather than mixing in UE execution controls
+- expose a machine-readable native-tool state for automated smoke, error-injection, and soak testing
+
+Current implementation shape:
+
+- PySide6 desktop workbench running from `C:\AiUE\.venv-tooling`
+- reads `Saved/tooling/t1/latest/manifest.json` or an explicit manifest path
+- shows summary cards, report tree, JSON details, preview images, and slot debugger tables
+- supports `--dump-state-json` and `--exit-after-load` for automated validation
+- validated with `7` open cycles, `3` error injections, and one `5` minute short soak
+
 ### Q5: Dual-Layer Automated Inspection
 
 Goals:
@@ -176,8 +201,12 @@ Execution rule:
   - current status is `pass`
   - the gate now uses same-session `baseline` vs `with-fx` pair capture on the same spawned host
   - the current passing profile is `SCS_FINAL_COLOR_HDR + warmup`
+- `T1` is complete:
+  - `tools/bootstrap_t1_tooling.ps1`
+  - `tools/run_t1_evidence_pack.ps1`
+  - `Saved/tooling/t1/latest/`
+  - `docs/checkpoints/t1_metrics_tooling_foundation_checkpoint.md`
 - The next roadmap priorities are staged as:
-  1. `T1 Metrics + Tooling Foundation`
-  2. `Q5 Dual-Layer Automated Inspection`
-  3. `A1 Action Candidate Provider Interface`
-  4. `P5 Deprecation & Cleanup` only after the newer layers have stabilized
+  1. `Q5 Dual-Layer Automated Inspection`
+  2. `A1 Action Candidate Provider Interface`
+  3. `P5 Deprecation & Cleanup` only after the newer layers have stabilized
