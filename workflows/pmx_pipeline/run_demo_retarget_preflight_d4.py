@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import argparse
 import json
@@ -8,6 +8,8 @@ from pathlib import Path
 from _bootstrap import ensure_aiue_paths
 
 REPO_ROOT = ensure_aiue_paths()
+
+from _gate_common import build_discussion_signal, default_latest_report_path, default_output_root, make_failed_requirement, now_utc, repo_root_from_workspace, run_stamp
 
 from aiue_core.report_writer import make_compatibility_block, with_report_envelope
 from aiue_core.schema_utils import load_json, load_workspace_config, write_json
@@ -29,15 +31,6 @@ FIXED_EXECUTION_PROFILE = {
     "settle_delay_seconds": 0.2,
 }
 
-
-def now_utc() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-
-
-def run_stamp() -> str:
-    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-
-
 def parse_args():
     parser = argparse.ArgumentParser(description="Run the AiUE D4 demo retarget preflight gate.")
     parser.add_argument("--workspace-config", required=True)
@@ -49,35 +42,11 @@ def parse_args():
     parser.add_argument("--latest-report-path")
     return parser.parse_args()
 
-
-def repo_root_from_workspace(workspace: dict) -> Path:
-    return Path(workspace["paths"].get("aiue_repo_root") or REPO_ROOT).expanduser().resolve()
-
-
-def default_output_root(workspace: dict) -> Path:
-    return repo_root_from_workspace(workspace) / "Saved" / "verification" / f"{GATE_ID}_{run_stamp()}"
-
-
-def default_latest_report_path(workspace: dict) -> Path:
-    return repo_root_from_workspace(workspace) / "Saved" / "verification" / f"latest_{GATE_ID}_report.json"
-
-
 def default_latest_d1_report_path(workspace: dict) -> Path:
-    return repo_root_from_workspace(workspace) / "Saved" / "verification" / "latest_demo_stage_d1_onboarding_report.json"
-
+    return repo_root_from_workspace(workspace, REPO_ROOT) / "Saved" / "verification" / "latest_demo_stage_d1_onboarding_report.json"
 
 def default_latest_d3_report_path(workspace: dict) -> Path:
-    return repo_root_from_workspace(workspace) / "Saved" / "verification" / "latest_demo_animation_preview_d3_report.json"
-
-
-def make_failed_requirement(requirement_id: str, message: str, **details) -> dict:
-    payload = {
-        "id": requirement_id,
-        "message": message,
-    }
-    payload.update(details)
-    return payload
-
+    return repo_root_from_workspace(workspace, REPO_ROOT) / "Saved" / "verification" / "latest_demo_animation_preview_d3_report.json"
 
 def resolve_optional_report_path(explicit_path: str | None, fallback_path: Path) -> Path | None:
     if explicit_path:
@@ -89,13 +58,11 @@ def resolve_optional_report_path(explicit_path: str | None, fallback_path: Path)
         return fallback_path
     return None
 
-
 def resolve_d1_report_path(workspace: dict, explicit_path: str | None) -> Path:
     candidate = resolve_optional_report_path(explicit_path, default_latest_d1_report_path(workspace))
     if candidate:
         return candidate
     raise FileNotFoundError("No latest_demo_stage_d1_onboarding_report.json could be resolved for D4.")
-
 
 def resolve_target_package(d1_report: dict, requested_package_id: str | None) -> dict | None:
     package_results = list((((d1_report.get("scene_sweep") or {}).get("result") or {}).get("package_results") or []))
@@ -120,7 +87,6 @@ def resolve_target_package(d1_report: dict, requested_package_id: str | None) ->
         return None
     return candidates[0] if candidates else None
 
-
 def resolve_target_context(workspace: dict, args) -> tuple[dict | None, dict | None, Path | None]:
     d3_report_path = resolve_optional_report_path(args.d3_report_path, default_latest_d3_report_path(workspace))
     d3_report = load_json(d3_report_path) if d3_report_path and d3_report_path.exists() else None
@@ -139,7 +105,6 @@ def resolve_target_context(workspace: dict, args) -> tuple[dict | None, dict | N
     d1_report_path = resolve_d1_report_path(workspace, args.d1_report_path)
     d1_report = load_json(d1_report_path)
     return resolve_target_package(d1_report, args.package_id), d1_report, d1_report_path
-
 
 def load_project_plugin_state(workspace: dict, host_key: str) -> dict:
     hosts = dict(workspace.get("hosts") or {})
@@ -170,34 +135,6 @@ def load_project_plugin_state(workspace: dict, host_key: str) -> dict:
         "warnings": [],
     }
 
-
-def build_discussion_signal(status: str, failed_requirements: list[dict], previous_report: dict | None, previous_report_path: Path | None) -> dict:
-    current_failed_ids = sorted({item.get("id") for item in failed_requirements if item.get("id")})
-    previous_failed_ids = sorted(
-        {
-            item.get("id")
-            for item in ((previous_report or {}).get("failed_requirements") or [])
-            if isinstance(item, dict) and item.get("id")
-        }
-    )
-    previous_status = (previous_report or {}).get("status")
-    payload = {
-        "should_discuss": False,
-        "reason": None,
-        "previous_report_path": str(previous_report_path) if previous_report_path else None,
-        "repeated_failed_requirement_ids": [],
-    }
-    if status == "pass" and previous_status != "pass":
-        payload["should_discuss"] = True
-        payload["reason"] = "d4_first_complete_pass"
-        return payload
-    if status != "pass" and current_failed_ids and previous_status != "pass" and current_failed_ids == previous_failed_ids:
-        payload["should_discuss"] = True
-        payload["reason"] = "same_failed_requirement_two_rounds"
-        payload["repeated_failed_requirement_ids"] = current_failed_ids
-    return payload
-
-
 def choose_next_step_id(project_plugin_state: dict, host_result: dict) -> tuple[str, str]:
     plugin_enabled = dict(project_plugin_state.get("plugin_enabled") or {})
     tooling = dict(host_result.get("retarget_tooling") or {})
@@ -216,13 +153,12 @@ def choose_next_step_id(project_plugin_state: dict, host_result: dict) -> tuple[
         return "retry_animation_preview", "Direct compatibility already exists, so the next step is to retry a real animation preview."
     return "author_retarget_mapping", "Tooling is present, so the next step is to author the source and target chains for retargeting."
 
-
 def main():
     args = parse_args()
     workspace = load_workspace_config(args.workspace_config)
-    repo_root = repo_root_from_workspace(workspace)
-    output_root = Path(args.output_root).expanduser().resolve() if args.output_root else default_output_root(workspace)
-    latest_report_path = Path(args.latest_report_path).expanduser().resolve() if args.latest_report_path else default_latest_report_path(workspace)
+    repo_root = repo_root_from_workspace(workspace, REPO_ROOT)
+    output_root = Path(args.output_root).expanduser().resolve() if args.output_root else default_output_root(workspace, REPO_ROOT, GATE_ID)
+    latest_report_path = Path(args.latest_report_path).expanduser().resolve() if args.latest_report_path else default_latest_report_path(workspace, REPO_ROOT, GATE_ID)
     output_root.mkdir(parents=True, exist_ok=True)
     previous_report = load_json(latest_report_path) if latest_report_path.exists() else None
     previous_report_path = latest_report_path if latest_report_path.exists() else None
@@ -370,7 +306,7 @@ def main():
 
     recommended_next_step_id, recommended_next_step_reason = choose_next_step_id(project_plugin_state, host_result)
     status = "pass" if not failed_requirements else "fail"
-    discussion_signal = build_discussion_signal(status, failed_requirements, previous_report, previous_report_path)
+    discussion_signal = build_discussion_signal(status, failed_requirements, previous_report, previous_report_path, 'd4_first_complete_pass')
     counts = {
         "requested_packages": 1 if target_package else 0,
         "resolved_packages": 1 if target_package else 0,
@@ -430,6 +366,8 @@ def main():
     print(f"D4 demo retarget preflight report written to: {report_path}")
     raise SystemExit(0 if status == "pass" else 1)
 
-
 if __name__ == "__main__":
     main()
+
+
+

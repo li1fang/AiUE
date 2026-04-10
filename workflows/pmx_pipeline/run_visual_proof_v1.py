@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
@@ -7,6 +7,8 @@ from pathlib import Path
 from _bootstrap import ensure_aiue_paths
 
 REPO_ROOT = ensure_aiue_paths()
+
+from _gate_common import build_discussion_signal, default_latest_report_path, default_output_root, make_failed_requirement, now_utc, repo_root_from_workspace, run_stamp
 
 from aiue_core.report_writer import make_compatibility_block, with_report_envelope
 from aiue_core.schema_utils import load_json, load_workspace_config, write_json
@@ -27,15 +29,6 @@ FIXED_EXECUTION_PROFILE = {
     "weapon_min_screen_coverage": 0.001,
 }
 
-
-def now_utc() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-
-
-def run_stamp() -> str:
-    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-
-
 def parse_args():
     parser = argparse.ArgumentParser(description="Run the AiUE V1 visual proof gate on the kernel host.")
     parser.add_argument("--workspace-config", required=True)
@@ -43,19 +36,6 @@ def parse_args():
     parser.add_argument("--output-root")
     parser.add_argument("--latest-report-path")
     return parser.parse_args()
-
-
-def repo_root_from_workspace(workspace: dict) -> Path:
-    return Path(workspace["paths"].get("aiue_repo_root") or REPO_ROOT).expanduser().resolve()
-
-
-def default_output_root(workspace: dict) -> Path:
-    return repo_root_from_workspace(workspace) / "Saved" / "verification" / f"{GATE_ID}_{run_stamp()}"
-
-
-def default_latest_report_path(workspace: dict) -> Path:
-    return repo_root_from_workspace(workspace) / "Saved" / "verification" / f"latest_{GATE_ID}_report.json"
-
 
 def resolve_equipment_report_path(workspace: dict, explicit_path: str | None) -> Path:
     if explicit_path:
@@ -67,16 +47,6 @@ def resolve_equipment_report_path(workspace: dict, explicit_path: str | None) ->
     if local_auto_report.exists():
         return local_auto_report.resolve()
     raise FileNotFoundError("No ue_equipment_assets_report.local.json could be resolved for V1 visual proof.")
-
-
-def make_failed_requirement(requirement_id: str, message: str, **details) -> dict:
-    payload = {
-        "id": requirement_id,
-        "message": message,
-    }
-    payload.update(details)
-    return payload
-
 
 def verify_editor_capture_capability(workspace: dict) -> list[dict]:
     capability_path = Path(workspace["paths"]["capability_probe_root"]).expanduser().resolve() / "latest_capabilities.json"
@@ -113,14 +83,12 @@ def verify_editor_capture_capability(workspace: dict) -> list[dict]:
         )
     ]
 
-
 def build_loadout_index(equipment_report: dict) -> dict[str, dict]:
     return {
         entry.get("character_package_id"): entry
         for entry in (equipment_report.get("loadout_assets") or [])
         if entry.get("character_package_id")
     }
-
 
 def is_runtime_ready_host_record(record: dict, loadout: dict) -> bool:
     return (
@@ -134,7 +102,6 @@ def is_runtime_ready_host_record(record: dict, loadout: dict) -> bool:
         and bool(record.get("asset_path"))
         and bool(loadout.get("has_ready_weapon_pairs"))
     )
-
 
 def select_target_package(equipment_report: dict) -> dict | None:
     loadout_index = build_loadout_index(equipment_report)
@@ -156,34 +123,6 @@ def select_target_package(equipment_report: dict) -> dict | None:
         )
     selected = sorted(selected, key=lambda item: item["package_id"])
     return selected[0] if selected else None
-
-
-def build_discussion_signal(status: str, failed_requirements: list[dict], previous_report: dict | None, previous_report_path: Path | None) -> dict:
-    current_failed_ids = sorted({item.get("id") for item in failed_requirements if item.get("id")})
-    previous_failed_ids = sorted(
-        {
-            item.get("id")
-            for item in ((previous_report or {}).get("failed_requirements") or [])
-            if isinstance(item, dict) and item.get("id")
-        }
-    )
-    previous_status = (previous_report or {}).get("status")
-    payload = {
-        "should_discuss": False,
-        "reason": None,
-        "previous_report_path": str(previous_report_path) if previous_report_path else None,
-        "repeated_failed_requirement_ids": [],
-    }
-    if status == "pass" and previous_status != "pass":
-        payload["should_discuss"] = True
-        payload["reason"] = "v1_first_complete_pass"
-        return payload
-    if status != "pass" and current_failed_ids and previous_status != "pass" and current_failed_ids == previous_failed_ids:
-        payload["should_discuss"] = True
-        payload["reason"] = "same_failed_requirement_two_rounds"
-        payload["repeated_failed_requirement_ids"] = current_failed_ids
-    return payload
-
 
 def evaluate_visual_proof_result(result: dict, gate_output_root: Path) -> tuple[dict, list[dict]]:
     failed_requirements = []
@@ -281,7 +220,6 @@ def evaluate_visual_proof_result(result: dict, gate_output_root: Path) -> tuple[
         failed_requirements,
     )
 
-
 def build_report(
     workspace: dict,
     output_root: Path,
@@ -299,6 +237,7 @@ def build_report(
         failed_requirements,
         previous_report,
         previous_report_path,
+        "v1_first_complete_pass",
     )
     counts = {
         "requested_packages": 1 if selected_package else 0,
@@ -344,13 +283,12 @@ def build_report(
         ),
     )
 
-
 def main():
     args = parse_args()
     workspace = load_workspace_config(args.workspace_config)
     visual_proof_config = dict(workspace.get("visual_proof") or {})
-    output_root = Path(args.output_root).expanduser().resolve() if args.output_root else default_output_root(workspace)
-    latest_report_path = Path(args.latest_report_path).expanduser().resolve() if args.latest_report_path else default_latest_report_path(workspace)
+    output_root = Path(args.output_root).expanduser().resolve() if args.output_root else default_output_root(workspace, REPO_ROOT, GATE_ID)
+    latest_report_path = Path(args.latest_report_path).expanduser().resolve() if args.latest_report_path else default_latest_report_path(workspace, REPO_ROOT, GATE_ID)
     previous_report = load_json(latest_report_path) if latest_report_path.exists() else None
     previous_report_path = latest_report_path if latest_report_path.exists() else None
 
@@ -427,6 +365,8 @@ def main():
     print(f"V1 visual proof gate report written to: {report_path}")
     raise SystemExit(0 if report_payload.get("status") == "pass" else 1)
 
-
 if __name__ == "__main__":
     main()
+
+
+

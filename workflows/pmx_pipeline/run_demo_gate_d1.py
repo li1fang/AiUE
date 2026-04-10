@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import argparse
 from collections import Counter
@@ -8,6 +8,8 @@ from pathlib import Path
 from _bootstrap import ensure_aiue_paths
 
 REPO_ROOT = ensure_aiue_paths()
+
+from _gate_common import build_discussion_signal, default_latest_report_path, default_output_root, make_failed_requirement, now_utc, repo_root_from_workspace, run_stamp
 
 from aiue_core.report_writer import make_compatibility_block, with_report_envelope
 from aiue_core.schema_utils import load_json, load_workspace_config, write_json
@@ -43,15 +45,6 @@ FIXED_EXECUTION_PROFILE = {
     "quit_barrier_seconds": 2.0,
 }
 
-
-def now_utc() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-
-
-def run_stamp() -> str:
-    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-
-
 def parse_args():
     parser = argparse.ArgumentParser(description="Run the AiUE demo host onboarding gate D1.")
     parser.add_argument("--workspace-config", required=True)
@@ -61,28 +54,6 @@ def parse_args():
     parser.add_argument("--output-root")
     parser.add_argument("--latest-report-path")
     return parser.parse_args()
-
-
-def repo_root_from_workspace(workspace: dict) -> Path:
-    return Path(workspace["paths"].get("aiue_repo_root") or REPO_ROOT).expanduser().resolve()
-
-
-def default_output_root(workspace: dict) -> Path:
-    return repo_root_from_workspace(workspace) / "Saved" / "verification" / f"{GATE_ID}_{run_stamp()}"
-
-
-def default_latest_report_path(workspace: dict) -> Path:
-    return repo_root_from_workspace(workspace) / "Saved" / "verification" / f"latest_{GATE_ID}_report.json"
-
-
-def make_failed_requirement(requirement_id: str, message: str, **details) -> dict:
-    payload = {
-        "id": requirement_id,
-        "message": message,
-    }
-    payload.update(details)
-    return payload
-
 
 def resolve_registry_path(equipment_report: dict, summary_path: Path, explicit_path: str | None) -> Path:
     if explicit_path:
@@ -100,7 +71,6 @@ def resolve_registry_path(equipment_report: dict, summary_path: Path, explicit_p
         return candidate.resolve()
     raise FileNotFoundError("No ue_equipment_registry.json could be resolved for D1.")
 
-
 def build_local_manifest_index(summary_path: Path) -> tuple[Path, dict[str, Path]]:
     conversion_root = summary_path.parent.parent / "conversion"
     if not conversion_root.exists():
@@ -115,7 +85,6 @@ def build_local_manifest_index(summary_path: Path) -> tuple[Path, dict[str, Path
         if package_id:
             manifest_index[package_id] = manifest_path.resolve()
     return conversion_root.resolve(), manifest_index
-
 
 def filter_summary_payload(summary_payload: dict, selected_package_ids: set[str], manifest_index: dict[str, Path]) -> dict:
     successes = []
@@ -151,7 +120,6 @@ def filter_summary_payload(summary_payload: dict, selected_package_ids: set[str]
     filtered["consumer_ready_counts"] = dict(consumer_ready_counts)
     filtered["selected_package_ids"] = sorted(selected_package_ids)
     return filtered
-
 
 def filter_registry_payload(registry_payload: dict, selected_character_ids: set[str], selected_weapon_ids: set[str]) -> dict:
     selected_package_ids = selected_character_ids | selected_weapon_ids
@@ -201,34 +169,6 @@ def filter_registry_payload(registry_payload: dict, selected_character_ids: set[
     filtered["selected_package_ids"] = sorted(selected_package_ids)
     return filtered
 
-
-def build_discussion_signal(status: str, failed_requirements: list[dict], previous_report: dict | None, previous_report_path: Path | None) -> dict:
-    current_failed_ids = sorted({item.get("id") for item in failed_requirements if item.get("id")})
-    previous_failed_ids = sorted(
-        {
-            item.get("id")
-            for item in ((previous_report or {}).get("failed_requirements") or [])
-            if isinstance(item, dict) and item.get("id")
-        }
-    )
-    previous_status = (previous_report or {}).get("status")
-    payload = {
-        "should_discuss": False,
-        "reason": None,
-        "previous_report_path": str(previous_report_path) if previous_report_path else None,
-        "repeated_failed_requirement_ids": [],
-    }
-    if status == "pass" and previous_status != "pass":
-        payload["should_discuss"] = True
-        payload["reason"] = "d1_first_complete_pass"
-        return payload
-    if status != "pass" and current_failed_ids and previous_status != "pass" and current_failed_ids == previous_failed_ids:
-        payload["should_discuss"] = True
-        payload["reason"] = "same_failed_requirement_two_rounds"
-        payload["repeated_failed_requirement_ids"] = current_failed_ids
-    return payload
-
-
 def run_host_command(
     workspace: dict,
     command: str,
@@ -245,7 +185,6 @@ def run_host_command(
         host_key=host_key,
     )
     return dict(invocation.get("payload") or {})
-
 
 def evaluate_imports(import_results: list[dict], selected_package_ids: set[str]) -> tuple[list[dict], list[dict]]:
     failed_requirements: list[dict] = []
@@ -283,7 +222,6 @@ def evaluate_imports(import_results: list[dict], selected_package_ids: set[str])
             )
         )
     return import_records, failed_requirements
-
 
 def evaluate_scene_sweeps(scene_runs: list[dict], expected_packages: set[str], expected_images: int) -> tuple[dict, list[dict]]:
     failed_requirements: list[dict] = []
@@ -363,12 +301,11 @@ def evaluate_scene_sweeps(scene_runs: list[dict], expected_packages: set[str], e
         )
     return aggregated_result, failed_requirements
 
-
 def main():
     args = parse_args()
     workspace = load_workspace_config(args.workspace_config)
-    output_root = Path(args.output_root).expanduser().resolve() if args.output_root else default_output_root(workspace)
-    latest_report_path = Path(args.latest_report_path).expanduser().resolve() if args.latest_report_path else default_latest_report_path(workspace)
+    output_root = Path(args.output_root).expanduser().resolve() if args.output_root else default_output_root(workspace, REPO_ROOT, GATE_ID)
+    latest_report_path = Path(args.latest_report_path).expanduser().resolve() if args.latest_report_path else default_latest_report_path(workspace, REPO_ROOT, GATE_ID)
     output_root.mkdir(parents=True, exist_ok=True)
     previous_report = load_json(latest_report_path) if latest_report_path.exists() else None
     previous_report_path = latest_report_path if latest_report_path.exists() else None
@@ -536,7 +473,7 @@ def main():
         failed_requirements.extend(scene_failures)
 
     report_status = "pass" if not failed_requirements else "fail"
-    discussion_signal = build_discussion_signal(report_status, failed_requirements, previous_report, previous_report_path)
+    discussion_signal = build_discussion_signal(report_status, failed_requirements, previous_report, previous_report_path, 'd1_first_complete_pass')
     inspect_before_result = dict(inspect_before_payload.get("result") or {})
     inspect_after_import_result = dict(inspect_after_import_payload.get("result") or {})
     build_result = dict(build_payload.get("result") or {})
@@ -622,6 +559,8 @@ def main():
     print(f"D1 demo gate report written to: {report_path}")
     raise SystemExit(0 if report_payload.get("status") == "pass" else 1)
 
-
 if __name__ == "__main__":
     main()
+
+
+

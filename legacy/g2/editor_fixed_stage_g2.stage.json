@@ -1,0 +1,29 @@
+{
+  "stage_id": "intro_room_fixed_stage_v1",
+  "level_path": "/Game/DemoTemplate/_Core/Lvl_IntroRoom",
+  "camera_mode": "anchor_actor",
+  "scenario_order": [
+    "idle_2s",
+    "walk_forward_2s",
+    "run_forward_2s",
+    "jump_land_1cycle"
+  ],
+  "scenarios": {
+    "idle_2s": {
+      "spawn_anchor_actor_label": "AIUE_G2_Spawn_idle_2s",
+      "camera_anchor_actor_label": "AIUE_G2_Camera_idle_2s"
+    },
+    "walk_forward_2s": {
+      "spawn_anchor_actor_label": "AIUE_G2_Spawn_walk_forward_2s",
+      "camera_anchor_actor_label": "AIUE_G2_Camera_walk_forward_2s"
+    },
+    "run_forward_2s": {
+      "spawn_anchor_actor_label": "AIUE_G2_Spawn_run_forward_2s",
+      "camera_anchor_actor_label": "AIUE_G2_Camera_run_forward_2s"
+    },
+    "jump_land_1cycle": {
+      "spawn_anchor_actor_label": "AIUE_G2_Spawn_jump_land_1cycle",
+      "camera_anchor_actor_label": "AIUE_G2_Camera_jump_land_1cycle"
+    }
+  }
+}

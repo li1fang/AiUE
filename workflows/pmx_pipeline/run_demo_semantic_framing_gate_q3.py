@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
@@ -7,6 +7,9 @@ from pathlib import Path
 from _bootstrap import ensure_aiue_paths
 
 REPO_ROOT = ensure_aiue_paths()
+
+from _gate_common import build_discussion_signal, default_latest_report_path, default_output_root, make_failed_requirement, now_utc, repo_root_from_workspace, run_stamp
+from _demo_common import default_named_verification_report_path, extract_quality_subject_report, resolve_report_path
 
 from aiue_core.report_writer import make_compatibility_block, with_report_envelope
 from aiue_core.schema_utils import load_json, load_workspace_config, write_json
@@ -34,15 +37,6 @@ SHOT_PROFILES = {
     },
 }
 
-
-def now_utc() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-
-
-def run_stamp() -> str:
-    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-
-
 def parse_args():
     parser = argparse.ArgumentParser(description="Run the AiUE Q3 semantic framing gate.")
     parser.add_argument("--workspace-config", required=True)
@@ -53,96 +47,17 @@ def parse_args():
     parser.add_argument("--latest-report-path")
     return parser.parse_args()
 
-
-def repo_root_from_workspace(workspace: dict) -> Path:
-    return Path(workspace["paths"].get("aiue_repo_root") or REPO_ROOT).expanduser().resolve()
-
-
-def default_output_root(workspace: dict) -> Path:
-    return repo_root_from_workspace(workspace) / "Saved" / "verification" / f"{GATE_ID}_{run_stamp()}"
-
-
-def default_latest_report_path(workspace: dict) -> Path:
-    return repo_root_from_workspace(workspace) / "Saved" / "verification" / f"latest_{GATE_ID}_report.json"
-
-
 def default_latest_d12_report_path(workspace: dict) -> Path:
-    return repo_root_from_workspace(workspace) / "Saved" / "verification" / DEFAULT_D12_LATEST_NAME
-
+    return default_named_verification_report_path(workspace, REPO_ROOT, DEFAULT_D12_LATEST_NAME)
 
 def default_latest_q1_report_path(workspace: dict) -> Path:
-    return repo_root_from_workspace(workspace) / "Saved" / "verification" / DEFAULT_Q1_LATEST_NAME
-
+    return default_named_verification_report_path(workspace, REPO_ROOT, DEFAULT_Q1_LATEST_NAME)
 
 def default_latest_q2_report_path(workspace: dict) -> Path:
-    return repo_root_from_workspace(workspace) / "Saved" / "verification" / DEFAULT_Q2_LATEST_NAME
-
-
-def make_failed_requirement(requirement_id: str, message: str, **details) -> dict:
-    payload = {"id": requirement_id, "message": message}
-    payload.update(details)
-    return payload
-
-
-def resolve_report_path(explicit_path: str | None, default_path: Path, missing_message: str) -> Path:
-    if explicit_path:
-        candidate = Path(explicit_path).expanduser().resolve()
-        if candidate.exists():
-            return candidate
-        raise FileNotFoundError(f"Report path does not exist: {candidate}")
-    if default_path.exists():
-        return default_path
-    raise FileNotFoundError(missing_message)
-
-
-def extract_quality_subject_report(source_report: dict, source_report_path: Path) -> tuple[dict, dict]:
-    gate_id = str(source_report.get("gate_id") or "")
-    if gate_id == "demo_cross_bundle_regression_d12" and isinstance(source_report.get("final_step_report"), dict):
-        final_step_report = dict(source_report.get("final_step_report") or {})
-        return final_step_report, {
-            "source_report_kind": "d12_final_step_report",
-            "source_gate_id": gate_id,
-            "source_report_path": str(source_report_path.resolve()),
-            "source_package_id": source_report.get("secondary_package_id"),
-        }
-    return source_report, {
-        "source_report_kind": "direct_d11_report",
-        "source_gate_id": gate_id,
-        "source_report_path": str(source_report_path.resolve()),
-        "source_package_id": source_report.get("package_id"),
-    }
-
-
-def build_discussion_signal(status: str, failed_requirements: list[dict], previous_report: dict | None, previous_report_path: Path | None) -> dict:
-    current_failed_ids = sorted({item.get("id") for item in failed_requirements if item.get("id")})
-    previous_failed_ids = sorted(
-        {
-            item.get("id")
-            for item in ((previous_report or {}).get("failed_requirements") or [])
-            if isinstance(item, dict) and item.get("id")
-        }
-    )
-    previous_status = (previous_report or {}).get("status")
-    payload = {
-        "should_discuss": False,
-        "reason": None,
-        "previous_report_path": str(previous_report_path) if previous_report_path else None,
-        "repeated_failed_requirement_ids": [],
-    }
-    if status == "pass" and previous_status != "pass":
-        payload["should_discuss"] = True
-        payload["reason"] = "q3_first_complete_pass"
-        return payload
-    if status != "pass" and current_failed_ids and previous_status != "pass" and current_failed_ids == previous_failed_ids:
-        payload["should_discuss"] = True
-        payload["reason"] = "same_failed_requirement_two_rounds"
-        payload["repeated_failed_requirement_ids"] = current_failed_ids
-    return payload
-
+    return default_named_verification_report_path(workspace, REPO_ROOT, DEFAULT_Q2_LATEST_NAME)
 
 def rect_dict(payload: dict | None) -> dict:
     return dict(payload or {})
-
 
 def phase_metrics(phase_report: dict, image_width: int, image_height: int) -> dict:
     subject_rect = rect_dict(dict(phase_report.get("subject_coverage") or {}).get("screen_rect"))
@@ -172,7 +87,6 @@ def phase_metrics(phase_report: dict, image_width: int, image_height: int) -> di
         "weapon_rect_present": bool(weapon_rect),
     }
 
-
 def evaluate_phase_for_profile(phase_report: dict, shot_id: str, image_width: int, image_height: int) -> dict:
     profile = dict(SHOT_PROFILES.get(shot_id) or {})
     metrics = phase_metrics(phase_report, image_width=image_width, image_height=image_height)
@@ -191,7 +105,6 @@ def evaluate_phase_for_profile(phase_report: dict, shot_id: str, image_width: in
         "failed_checks": failed_checks,
         "metrics": metrics,
     }
-
 
 def evaluate_pair(pair_shot: dict, image_width: int, image_height: int) -> dict:
     shot_id = str(pair_shot.get("shot_id") or "")
@@ -238,12 +151,11 @@ def evaluate_pair(pair_shot: dict, image_width: int, image_height: int) -> dict:
         "semantic_weapon_phases": semantic_weapon_phases,
     }
 
-
 def main():
     args = parse_args()
     workspace = load_workspace_config(args.workspace_config)
-    output_root = Path(args.output_root).expanduser().resolve() if args.output_root else default_output_root(workspace)
-    latest_report_path = Path(args.latest_report_path).expanduser().resolve() if args.latest_report_path else default_latest_report_path(workspace)
+    output_root = Path(args.output_root).expanduser().resolve() if args.output_root else default_output_root(workspace, REPO_ROOT, GATE_ID)
+    latest_report_path = Path(args.latest_report_path).expanduser().resolve() if args.latest_report_path else default_latest_report_path(workspace, REPO_ROOT, GATE_ID)
     output_root.mkdir(parents=True, exist_ok=True)
     previous_report = load_json(latest_report_path) if latest_report_path.exists() else None
     previous_report_path = latest_report_path if latest_report_path.exists() else None
@@ -389,7 +301,7 @@ def main():
         )
 
     status = "pass" if not failed_requirements else "fail"
-    discussion_signal = build_discussion_signal(status, failed_requirements, previous_report, previous_report_path)
+    discussion_signal = build_discussion_signal(status, failed_requirements, previous_report, previous_report_path, 'q3_first_complete_pass')
     counts = {
         "evaluated_rounds": len(per_round_results),
         "passing_rounds": sum(1 for item in per_round_results if item.get("status") == "pass"),
@@ -448,6 +360,7 @@ def main():
     print(f"Q3 demo semantic framing gate report written to: {report_path}")
     raise SystemExit(0 if status == "pass" else 1)
 
-
 if __name__ == "__main__":
     main()
+
+

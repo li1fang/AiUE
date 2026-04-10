@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
@@ -8,16 +8,15 @@ from _bootstrap import ensure_aiue_paths
 
 REPO_ROOT = ensure_aiue_paths()
 
+from _gate_common import build_discussion_signal, default_latest_report_path, default_output_root, make_failed_requirement, now_utc, repo_root_from_workspace, run_stamp
+from _demo_common import evaluate_animation_result, run_animation_preview
+
 from aiue_core.report_writer import make_compatibility_block, with_report_envelope
 from aiue_core.schema_utils import load_json, load_workspace_config, write_json
 from run_demo_animation_matrix_d9 import (
     DEMO_HOST_KEY,
     REQUIRED_MODE,
     FIXED_EXECUTION_PROFILE as D9_FIXED_EXECUTION_PROFILE,
-    evaluate_animation_result,
-    make_failed_requirement,
-    repo_root_from_workspace,
-    run_animation_preview,
 )
 
 GATE_ID = "demo_animation_stability_regression_d11"
@@ -55,15 +54,6 @@ FIXED_EXECUTION_PROFILE = {
     "required_stable_rounds": ROUND_COUNT,
 }
 
-
-def now_utc() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-
-
-def run_stamp() -> str:
-    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-
-
 def parse_args():
     parser = argparse.ArgumentParser(description="Run the AiUE D11 demo animation stability regression gate.")
     parser.add_argument("--workspace-config", required=True)
@@ -72,18 +62,8 @@ def parse_args():
     parser.add_argument("--latest-report-path")
     return parser.parse_args()
 
-
-def default_output_root(workspace: dict) -> Path:
-    return repo_root_from_workspace(workspace) / "Saved" / "verification" / f"{GATE_ID}_{run_stamp()}"
-
-
-def default_latest_report_path(workspace: dict) -> Path:
-    return repo_root_from_workspace(workspace) / "Saved" / "verification" / f"latest_{GATE_ID}_report.json"
-
-
 def default_latest_d10_report_path(workspace: dict) -> Path:
-    return repo_root_from_workspace(workspace) / "Saved" / "verification" / "latest_demo_animation_family_regression_d10_report.json"
-
+    return repo_root_from_workspace(workspace, REPO_ROOT) / "Saved" / "verification" / "latest_demo_animation_family_regression_d10_report.json"
 
 def resolve_d10_report_path(workspace: dict, explicit_path: str | None) -> Path:
     if explicit_path:
@@ -95,34 +75,6 @@ def resolve_d10_report_path(workspace: dict, explicit_path: str | None) -> Path:
     if candidate.exists():
         return candidate
     raise FileNotFoundError("No latest_demo_animation_family_regression_d10_report.json could be resolved for D11.")
-
-
-def build_discussion_signal(status: str, failed_requirements: list[dict], previous_report: dict | None, previous_report_path: Path | None) -> dict:
-    current_failed_ids = sorted({item.get("id") for item in failed_requirements if item.get("id")})
-    previous_failed_ids = sorted(
-        {
-            item.get("id")
-            for item in ((previous_report or {}).get("failed_requirements") or [])
-            if isinstance(item, dict) and item.get("id")
-        }
-    )
-    previous_status = (previous_report or {}).get("status")
-    payload = {
-        "should_discuss": False,
-        "reason": None,
-        "previous_report_path": str(previous_report_path) if previous_report_path else None,
-        "repeated_failed_requirement_ids": [],
-    }
-    if status == "pass" and previous_status != "pass":
-        payload["should_discuss"] = True
-        payload["reason"] = "d11_first_complete_pass"
-        return payload
-    if status != "pass" and current_failed_ids and previous_status != "pass" and current_failed_ids == previous_failed_ids:
-        payload["should_discuss"] = True
-        payload["reason"] = "same_failed_requirement_two_rounds"
-        payload["repeated_failed_requirement_ids"] = current_failed_ids
-    return payload
-
 
 def build_case_stability_summary(per_round_results: list[dict]) -> list[dict]:
     by_case: dict[str, list[dict]] = {}
@@ -174,13 +126,12 @@ def build_case_stability_summary(per_round_results: list[dict]) -> list[dict]:
         )
     return summary
 
-
 def main():
     args = parse_args()
     workspace = load_workspace_config(args.workspace_config)
-    repo_root = repo_root_from_workspace(workspace)
-    output_root = Path(args.output_root).expanduser().resolve() if args.output_root else default_output_root(workspace)
-    latest_report_path = Path(args.latest_report_path).expanduser().resolve() if args.latest_report_path else default_latest_report_path(workspace)
+    repo_root = repo_root_from_workspace(workspace, REPO_ROOT)
+    output_root = Path(args.output_root).expanduser().resolve() if args.output_root else default_output_root(workspace, REPO_ROOT, GATE_ID)
+    latest_report_path = Path(args.latest_report_path).expanduser().resolve() if args.latest_report_path else default_latest_report_path(workspace, REPO_ROOT, GATE_ID)
     output_root.mkdir(parents=True, exist_ok=True)
     previous_report = load_json(latest_report_path) if latest_report_path.exists() else None
     previous_report_path = latest_report_path if latest_report_path.exists() else None
@@ -231,6 +182,10 @@ def main():
                     d8_report=d10_report,
                     fixed_execution_profile=case_profile,
                     animation_asset_path=str(case["animation_asset_path"]),
+                    host_key=DEMO_HOST_KEY,
+                    mode=REQUIRED_MODE,
+                    spawn_location={"x": 0.0, "y": 0.0, "z": 120.0},
+                    spawn_rotation={"pitch": 0.0, "yaw": 180.0, "roll": 0.0},
                 )
                 case_result = evaluate_animation_result(
                     repo_root=repo_root,
@@ -239,6 +194,10 @@ def main():
                     host_invocation_error=host_invocation_error,
                     result_path=result_path,
                     fixed_execution_profile=case_profile,
+                    required_engine_pass_key="required_engine_pass_shots_per_case",
+                    required_external_motion_key="required_external_motion_shots_per_case",
+                    host_failure_id="animation_preview_host",
+                    host_failure_message="The demo host animation-preview command did not complete successfully for this D11 animation run.",
                 )
                 case_result["family"] = case["family"]
                 case_result["case_id"] = case["case_id"]
@@ -308,7 +267,7 @@ def main():
         )
 
     status = "pass" if not failed_requirements else "fail"
-    discussion_signal = build_discussion_signal(status, failed_requirements, previous_report, previous_report_path)
+    discussion_signal = build_discussion_signal(status, failed_requirements, previous_report, previous_report_path, 'd11_first_complete_pass')
     counts = {
         "requested_rounds": ROUND_COUNT,
         "requested_cases_per_round": len(DEFAULT_ANIMATION_CASES),
@@ -365,6 +324,8 @@ def main():
     print(f"D11 demo animation stability regression report written to: {report_path}")
     raise SystemExit(0 if status == "pass" else 1)
 
-
 if __name__ == "__main__":
     main()
+
+
+
