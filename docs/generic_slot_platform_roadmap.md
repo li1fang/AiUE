@@ -45,6 +45,12 @@ Goals:
 - Start with attach-to-socket FX only.
 - Validate multi-axis composition with character, equipment, and FX.
 
+Current implementation shape:
+
+- first fixture uses a `static_mesh` proxy rather than Niagara
+- default fixture: `/Game/Levels/LevelPrototyping/Meshes/SM_Cylinder.SM_Cylinder`
+- purpose: prove a third slot axis without introducing a heavier FX runtime dependency too early
+
 ### P4: Multi-Slot Composition + QA Expansion
 
 Goals:
