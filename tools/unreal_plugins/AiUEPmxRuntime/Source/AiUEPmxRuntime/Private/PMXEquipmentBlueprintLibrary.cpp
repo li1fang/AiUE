@@ -4,6 +4,9 @@
 #include "Components/SceneComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Actor.h"
+#include "NiagaraComponent.h"
+#include "NiagaraSystem.h"
+#include "NiagaraWorldManager.h"
 #include "PMXCharacterEquipmentComponent.h"
 #include "ReferenceSkeleton.h"
 
@@ -17,6 +20,101 @@ float RotationAngleDeltaDegrees(const FQuat& A, const FQuat& B)
 void AddAppliedMethod(TArray<FString>& Methods, const TCHAR* MethodName)
 {
     Methods.AddUnique(MethodName);
+}
+
+FName NormalizeSlotName(FName SlotName)
+{
+    return SlotName.IsNone() ? TEXT("weapon") : SlotName;
+}
+
+void PrimeNiagaraComponentForCapture(
+    UNiagaraComponent* NiagaraComponent,
+    float DesiredAgeSeconds,
+    float SeekDeltaSeconds,
+    int32 AdvanceStepCount,
+    float AdvanceStepDeltaSeconds,
+    FPMXNiagaraCaptureWarmupEntry& Entry
+)
+{
+    if (!NiagaraComponent)
+    {
+        Entry.Errors.Add(TEXT("niagara_component_missing"));
+        return;
+    }
+
+    Entry.ComponentName = NiagaraComponent->GetName();
+    if (UNiagaraSystem* NiagaraSystem = NiagaraComponent->GetAsset())
+    {
+        Entry.AssetPath = NiagaraSystem->GetPathName();
+    }
+
+    NiagaraComponent->SetAutoDestroy(false);
+    AddAppliedMethod(Entry.AppliedMethods, TEXT("SetAutoDestroy"));
+
+    NiagaraComponent->SetForceSolo(true);
+    AddAppliedMethod(Entry.AppliedMethods, TEXT("SetForceSolo"));
+
+    NiagaraComponent->SetPaused(false);
+    AddAppliedMethod(Entry.AppliedMethods, TEXT("SetPaused"));
+
+    NiagaraComponent->SetAutoActivate(true);
+    AddAppliedMethod(Entry.AppliedMethods, TEXT("SetAutoActivate"));
+
+    NiagaraComponent->SetRenderingEnabled(true);
+    AddAppliedMethod(Entry.AppliedMethods, TEXT("SetRenderingEnabled"));
+
+    NiagaraComponent->SetCanRenderWhileSeeking(true);
+    AddAppliedMethod(Entry.AppliedMethods, TEXT("SetCanRenderWhileSeeking"));
+
+    NiagaraComponent->SetAgeUpdateMode(ENiagaraAgeUpdateMode::DesiredAge);
+    AddAppliedMethod(Entry.AppliedMethods, TEXT("SetAgeUpdateMode"));
+
+    NiagaraComponent->SetSeekDelta(FMath::Max(SeekDeltaSeconds, 1.0f / 240.0f));
+    AddAppliedMethod(Entry.AppliedMethods, TEXT("SetSeekDelta"));
+
+    NiagaraComponent->SetLockDesiredAgeDeltaTimeToSeekDelta(false);
+    AddAppliedMethod(Entry.AppliedMethods, TEXT("SetLockDesiredAgeDeltaTimeToSeekDelta"));
+
+    NiagaraComponent->SetMaxSimTime(0.0f);
+    AddAppliedMethod(Entry.AppliedMethods, TEXT("SetMaxSimTime"));
+
+    NiagaraComponent->ResetSystem();
+    AddAppliedMethod(Entry.AppliedMethods, TEXT("ResetSystem"));
+
+    NiagaraComponent->ReinitializeSystem();
+    AddAppliedMethod(Entry.AppliedMethods, TEXT("ReinitializeSystem"));
+
+    NiagaraComponent->Activate(true);
+    AddAppliedMethod(Entry.AppliedMethods, TEXT("Activate"));
+
+    NiagaraComponent->SetDesiredAge(DesiredAgeSeconds);
+    AddAppliedMethod(Entry.AppliedMethods, TEXT("SetDesiredAge"));
+
+    NiagaraComponent->SeekToDesiredAge(DesiredAgeSeconds);
+    AddAppliedMethod(Entry.AppliedMethods, TEXT("SeekToDesiredAge"));
+
+    NiagaraComponent->TickComponent(FMath::Max(SeekDeltaSeconds, AdvanceStepDeltaSeconds), ELevelTick::LEVELTICK_All, nullptr);
+    AddAppliedMethod(Entry.AppliedMethods, TEXT("TickComponent"));
+
+    if (AdvanceStepCount > 0 && AdvanceStepDeltaSeconds > 0.0f)
+    {
+        NiagaraComponent->AdvanceSimulationByTime(AdvanceStepCount * AdvanceStepDeltaSeconds, AdvanceStepDeltaSeconds);
+        AddAppliedMethod(Entry.AppliedMethods, TEXT("AdvanceSimulationByTime"));
+    }
+
+    NiagaraComponent->UpdateComponentToWorld();
+    AddAppliedMethod(Entry.AppliedMethods, TEXT("UpdateComponentToWorld"));
+
+    NiagaraComponent->UpdateBounds();
+    AddAppliedMethod(Entry.AppliedMethods, TEXT("UpdateBounds"));
+
+    NiagaraComponent->MarkRenderDynamicDataDirty();
+    AddAppliedMethod(Entry.AppliedMethods, TEXT("MarkRenderDynamicDataDirty"));
+
+    NiagaraComponent->MarkRenderStateDirty();
+    AddAppliedMethod(Entry.AppliedMethods, TEXT("MarkRenderStateDirty"));
+
+    Entry.Success = true;
 }
 
 TArray<FTransform> ResolveBaselineTransforms(USkeletalMeshComponent* MeshComponent, const FReferenceSkeleton& ReferenceSkeleton)
@@ -177,6 +275,139 @@ USkeletalMeshComponent* UPMXEquipmentBlueprintLibrary::ApplyEquipmentLoadout(AAc
         }
     }
     return Component->GetManagedWeaponMeshComponent();
+}
+
+FPMXNiagaraCaptureWarmupResult UPMXEquipmentBlueprintLibrary::PrimeNiagaraForCapture(
+    AActor* Actor,
+    const TArray<FName>& SlotNames,
+    float DesiredAgeSeconds,
+    float SeekDeltaSeconds,
+    int32 AdvanceStepCount,
+    float AdvanceStepDeltaSeconds,
+    bool bFlushWorld
+)
+{
+    FPMXNiagaraCaptureWarmupResult Result;
+    if (!Actor)
+    {
+        Result.Errors.Add(TEXT("actor_missing"));
+        return Result;
+    }
+
+    UWorld* World = Actor->GetWorld();
+    if (!World)
+    {
+        Result.Errors.Add(TEXT("world_missing"));
+        return Result;
+    }
+
+    TArray<TPair<FName, UNiagaraComponent*>> ComponentsToWarm;
+    TSet<UNiagaraComponent*> SeenComponents;
+    TArray<FName> RequestedSlotNames = SlotNames;
+    if (UPMXCharacterEquipmentComponent* EquipmentComponent = Actor->FindComponentByClass<UPMXCharacterEquipmentComponent>())
+    {
+        if (RequestedSlotNames.Num() == 0)
+        {
+            for (const FPMXEquipmentSlotBindingEntry& Binding : EquipmentComponent->GetDesiredSlotBindings())
+            {
+                RequestedSlotNames.AddUnique(NormalizeSlotName(Binding.SlotName));
+            }
+            for (const FPMXEquipmentSlotAttachState& AttachState : EquipmentComponent->GetResolvedSlotAttachStates())
+            {
+                RequestedSlotNames.AddUnique(NormalizeSlotName(AttachState.SlotName));
+            }
+        }
+
+        for (const FName& SlotName : RequestedSlotNames)
+        {
+            const FName NormalizedSlotName = NormalizeSlotName(SlotName);
+            if (UNiagaraComponent* NiagaraComponent = Cast<UNiagaraComponent>(EquipmentComponent->GetManagedComponentForSlot(NormalizedSlotName)))
+            {
+                if (!SeenComponents.Contains(NiagaraComponent))
+                {
+                    ComponentsToWarm.Add(TPair<FName, UNiagaraComponent*>(NormalizedSlotName, NiagaraComponent));
+                    SeenComponents.Add(NiagaraComponent);
+                }
+            }
+        }
+    }
+
+    Result.ComponentsRequested = RequestedSlotNames.Num();
+
+    if (ComponentsToWarm.Num() == 0)
+    {
+        TInlineComponentArray<UNiagaraComponent*> NiagaraComponents(Actor);
+        for (UNiagaraComponent* NiagaraComponent : NiagaraComponents)
+        {
+            if (!NiagaraComponent || SeenComponents.Contains(NiagaraComponent))
+            {
+                continue;
+            }
+            ComponentsToWarm.Add(TPair<FName, UNiagaraComponent*>(NAME_None, NiagaraComponent));
+            SeenComponents.Add(NiagaraComponent);
+        }
+    }
+
+    Result.ComponentsDiscovered = ComponentsToWarm.Num();
+
+    for (const TPair<FName, UNiagaraComponent*>& EntryPair : ComponentsToWarm)
+    {
+        FPMXNiagaraCaptureWarmupEntry Entry;
+        Entry.SlotName = EntryPair.Key;
+        Entry.DesiredAgeSeconds = DesiredAgeSeconds;
+        Entry.SeekDeltaSeconds = SeekDeltaSeconds;
+        Entry.AdvanceStepCount = AdvanceStepCount;
+        Entry.AdvanceStepDeltaSeconds = AdvanceStepDeltaSeconds;
+
+        PrimeNiagaraComponentForCapture(
+            EntryPair.Value,
+            DesiredAgeSeconds,
+            SeekDeltaSeconds,
+            AdvanceStepCount,
+            AdvanceStepDeltaSeconds,
+            Entry
+        );
+
+        if (Entry.Success)
+        {
+            Result.ComponentsWarmed += 1;
+        }
+        Result.AppliedMethods.Append(Entry.AppliedMethods);
+        Result.Warnings.Append(Entry.Warnings);
+        Result.Errors.Append(Entry.Errors);
+        Result.Entries.Add(Entry);
+    }
+
+    if (bFlushWorld)
+    {
+        const float WorldTickDeltaSeconds = FMath::Max(AdvanceStepDeltaSeconds, SeekDeltaSeconds);
+        const int32 WorldTickIterations = FMath::Max(AdvanceStepCount, 1);
+        FNiagaraWorldManager* NiagaraWorldManager = FNiagaraWorldManager::Get(World);
+
+        for (int32 TickIndex = 0; TickIndex < WorldTickIterations; ++TickIndex)
+        {
+            World->Tick(ELevelTick::LEVELTICK_PauseTick, WorldTickDeltaSeconds);
+            Result.AppliedMethods.AddUnique(TEXT("WorldTickPauseTick"));
+
+            World->SendAllEndOfFrameUpdates();
+            Result.AppliedMethods.AddUnique(TEXT("SendAllEndOfFrameUpdates"));
+
+            if (NiagaraWorldManager)
+            {
+                NiagaraWorldManager->FlushComputeAndDeferredQueues(false);
+                Result.AppliedMethods.AddUnique(TEXT("FlushComputeAndDeferredQueues"));
+            }
+        }
+
+        if (!NiagaraWorldManager)
+        {
+            Result.Warnings.AddUnique(TEXT("niagara_world_manager_missing"));
+        }
+        Result.WorldFlushed = true;
+    }
+
+    Result.Success = Result.Errors.Num() == 0;
+    return Result;
 }
 
 FPMXAnimationPoseEvaluationResult UPMXEquipmentBlueprintLibrary::EvaluateAnimationPoseOnComponent(

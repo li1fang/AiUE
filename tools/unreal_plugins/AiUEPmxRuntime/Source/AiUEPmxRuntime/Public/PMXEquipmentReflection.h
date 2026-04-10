@@ -107,6 +107,78 @@ struct FPMXEquipmentSlotBindingEntry
 };
 
 USTRUCT(BlueprintType)
+struct FPMXNiagaraCaptureWarmupEntry
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    FName SlotName = NAME_None;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    FString ComponentName;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    FString AssetPath;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    bool Success = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    float DesiredAgeSeconds = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    float SeekDeltaSeconds = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    int32 AdvanceStepCount = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    float AdvanceStepDeltaSeconds = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    TArray<FString> AppliedMethods;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    TArray<FString> Warnings;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    TArray<FString> Errors;
+};
+
+USTRUCT(BlueprintType)
+struct FPMXNiagaraCaptureWarmupResult
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    bool Success = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    int32 ComponentsRequested = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    int32 ComponentsDiscovered = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    int32 ComponentsWarmed = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    bool WorldFlushed = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    TArray<FString> AppliedMethods;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    TArray<FString> Warnings;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    TArray<FString> Errors;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="PMXPipeline")
+    TArray<FPMXNiagaraCaptureWarmupEntry> Entries;
+};
+
+USTRUCT(BlueprintType)
 struct FPMXEquipmentSlotConflictEntry
 {
     GENERATED_BODY()

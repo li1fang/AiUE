@@ -91,5 +91,10 @@ Goals:
   - real `niagara_system` item kind now runs through the generic slot runtime
   - the current passing fixture is `/Niagara/DefaultAssets/Templates/Systems/FountainLightweight.FountainLightweight`
   - the current proof uses Niagara system fixed bounds as spatial evidence in the editor-driven inspection path
+- `R3` is complete:
+  - `Saved/verification/latest_live_fx_visual_quality_r3_report.json`
+  - current status is `pass`
+  - the gate now uses same-session `baseline` vs `with-fx` pair capture on the same spawned host
+  - the current passing profile is `SCS_FINAL_COLOR_HDR + warmup`
 - The next roadmap priority is:
-  - `R3`: live FX visual prominence / semantic FX quality
+  - strengthen FX quality from `live pixel delta exists` to stronger `FX prominence / semantic readability`

@@ -50,6 +50,17 @@ public:
     UFUNCTION(BlueprintCallable, Category="PMXPipeline", meta=(DefaultToSelf="Actor"))
     static USkeletalMeshComponent* ApplyEquipmentLoadout(AActor* Actor, UPMXEquipmentLoadoutAsset* LoadoutAsset);
 
+    UFUNCTION(BlueprintCallable, Category="PMXPipeline", meta=(DefaultToSelf="Actor", AutoCreateRefTerm="SlotNames"))
+    static FPMXNiagaraCaptureWarmupResult PrimeNiagaraForCapture(
+        AActor* Actor,
+        const TArray<FName>& SlotNames,
+        float DesiredAgeSeconds,
+        float SeekDeltaSeconds,
+        int32 AdvanceStepCount,
+        float AdvanceStepDeltaSeconds,
+        bool bFlushWorld
+    );
+
     UFUNCTION(BlueprintCallable, Category="PMXPipeline")
     static FPMXAnimationPoseEvaluationResult EvaluateAnimationPoseOnComponent(
         USkeletalMeshComponent* MeshComponent,

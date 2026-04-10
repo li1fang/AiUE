@@ -1274,6 +1274,55 @@ def component_attach_payload(component) -> dict:
     return payload
 
 
+def niagara_capture_warmup_payload(result) -> dict:
+    payload = {
+        "success": False,
+        "components_requested": 0,
+        "components_discovered": 0,
+        "components_warmed": 0,
+        "world_flushed": False,
+        "applied_methods": [],
+        "warnings": [],
+        "errors": [],
+        "entries": [],
+    }
+    if not result:
+        return payload
+
+    entries = []
+    for entry in list(getattr(result, "entries", []) or []):
+        entries.append(
+            {
+                "slot_name": slot_name_text(getattr(entry, "slot_name", None), default=""),
+                "component_name": str(getattr(entry, "component_name", "") or ""),
+                "asset_path": str(getattr(entry, "asset_path", "") or ""),
+                "success": bool(getattr(entry, "success", False)),
+                "desired_age_seconds": float(getattr(entry, "desired_age_seconds", 0.0) or 0.0),
+                "seek_delta_seconds": float(getattr(entry, "seek_delta_seconds", 0.0) or 0.0),
+                "advance_step_count": int(getattr(entry, "advance_step_count", 0) or 0),
+                "advance_step_delta_seconds": float(getattr(entry, "advance_step_delta_seconds", 0.0) or 0.0),
+                "applied_methods": list(getattr(entry, "applied_methods", []) or []),
+                "warnings": list(getattr(entry, "warnings", []) or []),
+                "errors": list(getattr(entry, "errors", []) or []),
+            }
+        )
+
+    payload.update(
+        {
+            "success": bool(getattr(result, "success", False)),
+            "components_requested": int(getattr(result, "components_requested", 0) or 0),
+            "components_discovered": int(getattr(result, "components_discovered", 0) or 0),
+            "components_warmed": int(getattr(result, "components_warmed", 0) or 0),
+            "world_flushed": bool(getattr(result, "world_flushed", False)),
+            "applied_methods": list(getattr(result, "applied_methods", []) or []),
+            "warnings": list(getattr(result, "warnings", []) or []),
+            "errors": list(getattr(result, "errors", []) or []),
+            "entries": entries,
+        }
+    )
+    return payload
+
+
 def loaded_asset_path(asset) -> str:
     if not asset:
         return ""
@@ -1303,6 +1352,23 @@ def normalized_item_kind_text(item_kind: str | None, skeletal_mesh=None, static_
     if lower in {"skeletal_mesh", "skeletal", "skeletalmesh"}:
         return "skeletal_mesh"
     return "skeletal_mesh"
+
+
+def runtime_slot_binding_entries_from_request(bindings: list[dict]) -> list:
+    entries = []
+    for binding in bindings:
+        entry = unreal.PMXEquipmentSlotBindingEntry()
+        set_if_present(entry, "slot_name", binding.get("slot_name") or "weapon")
+        set_if_present(entry, "item_package_id", str(binding.get("item_package_id") or ""))
+        set_if_present(entry, "item_kind", str(binding.get("item_kind") or "skeletal_mesh"))
+        set_if_present(entry, "attach_socket_name", binding.get("attach_socket_name") or "WeaponSocket")
+        set_if_present(entry, "skeletal_mesh", load_asset(binding.get("skeletal_mesh_asset")))
+        set_if_present(entry, "static_mesh", load_asset(binding.get("static_mesh_asset")))
+        set_if_present(entry, "niagara_system", load_asset(binding.get("niagara_system_asset")))
+        set_if_present(entry, "b_consumer_ready", bool(binding.get("consumer_ready")))
+        set_if_present(entry, "consumer_ready", bool(binding.get("consumer_ready")))
+        entries.append(entry)
+    return entries
 
 
 def slot_binding_payload(binding) -> dict:
@@ -1817,9 +1883,11 @@ def wait_for_screenshot(task, desired_output_path: Path, timeout_seconds: float,
     deadline = time.time() + timeout_seconds
     stable_since = None
     last_size = None
+    task_done_once = False
     while time.time() < deadline:
         candidate = find_screenshot_output_path(desired_output_path)
         task_done = bool(task and task.is_valid_task() and task.is_task_done()) if task else False
+        task_done_once = task_done_once or task_done
         if candidate and candidate.exists():
             current_size = candidate.stat().st_size
             if last_size == current_size:
@@ -1830,10 +1898,91 @@ def wait_for_screenshot(task, desired_output_path: Path, timeout_seconds: float,
             else:
                 stable_since = None
                 last_size = current_size
-        elif task_done:
-            return None, True
         time.sleep(poll_interval_seconds)
-    return find_screenshot_output_path(desired_output_path), bool(task and task.is_valid_task() and task.is_task_done()) if task else False
+    final_candidate = find_screenshot_output_path(desired_output_path)
+    final_task_done = bool(task and task.is_valid_task() and task.is_task_done()) if task else False
+    return final_candidate, task_done_once or final_task_done
+
+
+def apply_scene_capture_show_flags(component) -> list[str]:
+    warnings = []
+    flag_specs = [
+        ("Particles", True),
+        ("Niagara", True),
+        ("Translucency", True),
+        ("TranslucentLighting", True),
+        ("Lighting", True),
+        ("Materials", True),
+        ("PostProcessing", True),
+    ]
+    settings = []
+    for flag_name, enabled in flag_specs:
+        try:
+            setting = unreal.EngineShowFlagsSetting()
+            setting.set_editor_property("show_flag_name", str(flag_name))
+            setting.set_editor_property("enabled", bool(enabled))
+            settings.append(setting)
+        except Exception as exc:
+            warnings.append(f"scene_capture_show_flag_build_failed:{flag_name}:{exc}")
+    if not settings:
+        return warnings
+    try:
+        if hasattr(component, "set_show_flag_settings"):
+            component.set_show_flag_settings(settings)
+        else:
+            component.set_editor_property("show_flag_settings", settings)
+    except Exception as exc:
+        warnings.append(f"scene_capture_show_flags_apply_failed:{exc}")
+    return warnings
+
+
+def available_scene_capture_source_names() -> list[str]:
+    try:
+        return sorted([name for name in dir(unreal.SceneCaptureSource) if str(name).startswith("SCS_")])
+    except Exception:
+        return []
+
+
+def resolve_scene_capture_source(scene_capture_source_name: str | None, capture_hdr: bool) -> tuple[object, str, list[str]]:
+    warnings = []
+    requested_name = str(scene_capture_source_name or "").strip()
+    available_names = available_scene_capture_source_names()
+    default_candidates = [
+        "SCS_FINAL_TONE_CURVE_HDR",
+        "SCS_FINAL_COLOR_HDR",
+        "SCS_FINAL_COLOR_LDR",
+        "SCS_SCENE_COLOR_HDR",
+        "SCS_SCENE_COLOR_HDR_NO_ALPHA",
+    ] if capture_hdr else [
+        "SCS_FINAL_COLOR_LDR",
+        "SCS_FINAL_COLOR_HDR",
+        "SCS_FINAL_TONE_CURVE_HDR",
+        "SCS_SCENE_COLOR_HDR",
+        "SCS_SCENE_COLOR_HDR_NO_ALPHA",
+    ]
+
+    if requested_name:
+        candidate_names = [requested_name]
+    else:
+        candidate_names = default_candidates
+
+    for candidate_name in candidate_names:
+        if hasattr(unreal.SceneCaptureSource, candidate_name):
+            return getattr(unreal.SceneCaptureSource, candidate_name), candidate_name, warnings
+
+    fallback_name = "SCS_FINAL_COLOR_HDR" if capture_hdr and hasattr(unreal.SceneCaptureSource, "SCS_FINAL_COLOR_HDR") else "SCS_FINAL_COLOR_LDR"
+    if not hasattr(unreal.SceneCaptureSource, fallback_name):
+        for candidate_name in available_names:
+            if hasattr(unreal.SceneCaptureSource, candidate_name):
+                fallback_name = candidate_name
+                break
+    if requested_name:
+        warnings.append(
+            "scene_capture_source_unavailable:"
+            + requested_name
+            + (f":available={','.join(available_names)}" if available_names else "")
+        )
+    return getattr(unreal.SceneCaptureSource, fallback_name), fallback_name, warnings
 
 
 def capture_to_render_target(
@@ -1846,6 +1995,9 @@ def capture_to_render_target(
     timeout_seconds: float,
     stability_window_seconds: float,
     poll_interval_seconds: float,
+    scene_capture_source_name: str | None = None,
+    scene_capture_warmup_count: int = 2,
+    scene_capture_warmup_delay_seconds: float = 0.05,
 ) -> dict:
     world = unreal.EditorLevelLibrary.get_editor_world()
     actor_subsystem = editor_actor_subsystem()
@@ -1885,12 +2037,13 @@ def capture_to_render_target(
                 "errors": ["render_target_create_failed"],
             }
         component.set_editor_property("texture_target", render_target)
-        component.set_editor_property(
-            "capture_source",
-            unreal.SceneCaptureSource.SCS_FINAL_COLOR_LDR if not capture_hdr else unreal.SceneCaptureSource.SCS_FINAL_COLOR_HDR,
-        )
+        resolved_capture_source, resolved_capture_source_name, source_warnings = resolve_scene_capture_source(scene_capture_source_name, capture_hdr)
+        warnings.extend(source_warnings)
+        component.set_editor_property("capture_source", resolved_capture_source)
         component.set_editor_property("capture_every_frame", False)
         component.set_editor_property("capture_on_movement", False)
+        set_if_present(component, "always_persist_rendering_state", True)
+        warnings.extend(apply_scene_capture_show_flags(component))
         if hasattr(component, "fov_angle") and hasattr(capture_camera, "get_camera_component"):
             try:
                 camera_component = capture_camera.get_camera_component()
@@ -1898,8 +2051,17 @@ def capture_to_render_target(
                 component.set_editor_property("fov_angle", float(fov_angle))
             except Exception:
                 pass
+        warmup_count = max(int(scene_capture_warmup_count or 0), 1)
+        warmup_delay_seconds = max(float(scene_capture_warmup_delay_seconds or 0.0), 0.01)
         time.sleep(max(delay_seconds, 0.05))
-        component.capture_scene()
+        for warmup_index in range(warmup_count):
+            component.capture_scene()
+            try:
+                world.send_all_end_of_frame_updates()
+            except Exception:
+                pass
+            if warmup_index + 1 < warmup_count:
+                time.sleep(warmup_delay_seconds)
         unreal.RenderingLibrary.export_render_target(world, render_target, str(output_path.parent), output_path.name)
         actual_output_path, _ = wait_for_screenshot(
             None,
@@ -1917,6 +2079,8 @@ def capture_to_render_target(
             "warnings": warnings,
             "errors": [] if output_exists else ["render_target_export_missing"],
             "capture_backend": "scene_capture_render_target",
+            "scene_capture_source": resolved_capture_source_name,
+            "scene_capture_warmup_count": warmup_count,
         }
     except Exception as exc:
         return {

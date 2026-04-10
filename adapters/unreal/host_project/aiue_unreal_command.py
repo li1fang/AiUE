@@ -12,7 +12,7 @@ if str(SCRIPT_DIR) not in sys.path:
 
 from runtime.capture import capture_frame, ensure_stage_anchors, inspect_stage_anchors, load_level, run_scene_sweep, spawn_host
 from runtime.composition import build_equipment_registry, import_package, import_package_dry_run
-from runtime.inspection import debug_physics_api, inspect_host, inspect_host_visual, inspect_slot_runtime, list_assets
+from runtime.inspection import debug_physics_api, inspect_host, inspect_host_visual, inspect_live_fx_visual_pair, inspect_slot_runtime, list_assets
 from runtime.preview import action_preview, animation_preview
 from runtime.retarget import retarget_author_chains, retarget_bootstrap, retarget_preflight
 
@@ -23,6 +23,8 @@ def dispatch(request: dict) -> dict:
         return inspect_host(request)
     if command == "inspect-host-visual":
         return inspect_host_visual(request)
+    if command == "inspect-live-fx-visual-pair":
+        return inspect_live_fx_visual_pair(request)
     if command == "inspect-slot-runtime":
         return inspect_slot_runtime(request)
     if command == "action-preview":

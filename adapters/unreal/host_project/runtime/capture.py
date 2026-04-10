@@ -1,6 +1,40 @@
 ﻿from __future__ import annotations
 
 from .common import *
+def prime_niagara_for_capture(actor, request: dict) -> dict:
+    payload = niagara_capture_warmup_payload(None)
+    if not actor or not hasattr(unreal, "PMXEquipmentBlueprintLibrary"):
+        return payload
+    if not bool(request.get("prime_niagara_before_capture", True)):
+        payload["warnings"] = ["niagara_capture_priming_disabled"]
+        return payload
+
+    slot_names = [
+        to_name(slot_name_text(value, default=""))
+        for value in list(request.get("niagara_slot_names") or request.get("tracked_slots") or [])
+        if str(value)
+    ]
+    desired_age_seconds = float(request.get("niagara_desired_age_seconds") or 0.35)
+    seek_delta_seconds = float(request.get("niagara_seek_delta_seconds") or (1.0 / 30.0))
+    advance_step_count = int(request.get("niagara_advance_step_count") or 8)
+    advance_step_delta_seconds = float(request.get("niagara_advance_step_delta_seconds") or (1.0 / 60.0))
+    flush_world = bool(request.get("niagara_flush_world", True))
+    try:
+        result = unreal.PMXEquipmentBlueprintLibrary.prime_niagara_for_capture(
+            actor,
+            slot_names,
+            desired_age_seconds,
+            seek_delta_seconds,
+            advance_step_count,
+            advance_step_delta_seconds,
+            flush_world,
+        )
+        return niagara_capture_warmup_payload(result)
+    except Exception as exc:
+        payload["errors"] = [f"niagara_capture_priming_failed:{exc}"]
+        return payload
+
+
 def load_level(request: dict) -> dict:
     level_path = request.get("level_path") or request.get("scene_level_path")
     if not level_path:
@@ -326,6 +360,15 @@ def capture_frame(request: dict) -> dict:
                 spawned_host.apply_configured_loadout()
             except Exception as exc:
                 warnings.append(f"apply_configured_loadout_failed:{exc}")
+            override_bindings = list(request.get("slot_binding_overrides") or [])
+            if override_bindings and hasattr(unreal, "PMXEquipmentBlueprintLibrary"):
+                try:
+                    unreal.PMXEquipmentBlueprintLibrary.apply_slot_bindings(
+                        spawned_host,
+                        runtime_slot_binding_entries_from_request(override_bindings),
+                    )
+                except Exception as exc:
+                    warnings.append(f"apply_slot_binding_overrides_failed:{exc}")
             target_actor = spawned_host
             warnings.append("target_actor_not_found_spawned_host_for_capture")
         except Exception:
@@ -376,9 +419,13 @@ def capture_frame(request: dict) -> dict:
     poll_interval_seconds = float(request.get("poll_interval_seconds") or 0.2)
     capture_hdr = bool(request.get("capture_hdr", False))
     force_game_view = bool(request.get("force_game_view", True))
+    force_automation_capture = bool(request.get("force_automation_capture", False))
     level_editor = level_editor_subsystem()
     temp_camera = None
     capture_camera = None
+    niagara_capture_prep = prime_niagara_for_capture(target_actor, request)
+    warnings.extend(list(niagara_capture_prep.get("warnings") or []))
+    warnings.extend(list(niagara_capture_prep.get("errors") or []))
     try:
         temp_camera = actor_subsystem.spawn_actor_from_class(unreal.CameraActor, camera_location, camera_rotation, True)
         if not temp_camera:
@@ -406,25 +453,37 @@ def capture_frame(request: dict) -> dict:
                 level_editor.set_exact_camera_view(True)
         except Exception:
             pass
-        render_target_capture = capture_to_render_target(
-            capture_camera,
-            width,
-            height,
-            output_path,
-            capture_hdr,
-            delay_seconds,
-            timeout_seconds,
-            stability_window_seconds,
-            poll_interval_seconds,
-        )
-        warnings.extend(render_target_capture.get("warnings") or [])
-        actual_output_path = Path(render_target_capture["output_path"]).resolve() if render_target_capture.get("output_path") else None
-        task_done = bool(render_target_capture.get("task_done"))
-        screenshot_exists = bool(render_target_capture.get("output_exists"))
-        capture_backend = str(render_target_capture.get("capture_backend") or "")
-        if screenshot_exists and int(render_target_capture.get("file_size_bytes") or 0) < 400000:
-            warnings.append("render_target_capture_too_small_fallback_to_automation")
-            screenshot_exists = False
+        actual_output_path = None
+        task_done = False
+        screenshot_exists = False
+        capture_backend = ""
+        resolved_scene_capture_source = ""
+        if not force_automation_capture:
+            render_target_capture = capture_to_render_target(
+                capture_camera,
+                width,
+                height,
+                output_path,
+                capture_hdr,
+                delay_seconds,
+                timeout_seconds,
+                stability_window_seconds,
+                poll_interval_seconds,
+                str(request.get("scene_capture_source") or ""),
+                int(request.get("scene_capture_warmup_count") or 2),
+                float(request.get("scene_capture_warmup_delay_seconds") or 0.05),
+            )
+            warnings.extend(render_target_capture.get("warnings") or [])
+            actual_output_path = Path(render_target_capture["output_path"]).resolve() if render_target_capture.get("output_path") else None
+            task_done = bool(render_target_capture.get("task_done"))
+            screenshot_exists = bool(render_target_capture.get("output_exists"))
+            capture_backend = str(render_target_capture.get("capture_backend") or "")
+            resolved_scene_capture_source = str(render_target_capture.get("scene_capture_source") or "")
+            if screenshot_exists and int(render_target_capture.get("file_size_bytes") or 0) < 400000:
+                warnings.append("render_target_capture_too_small_fallback_to_automation")
+                screenshot_exists = False
+        else:
+            warnings.append("render_target_capture_skipped_by_request")
 
         if not screenshot_exists:
             unreal.EditorLevelLibrary.set_level_viewport_camera_info(camera_location, camera_rotation)
@@ -472,6 +531,8 @@ def capture_frame(request: dict) -> dict:
             "delay_seconds": delay_seconds,
             "camera_plan": camera_plan,
             "capture_backend": capture_backend,
+            "scene_capture_source": resolved_scene_capture_source,
+            "niagara_capture_prep": niagara_capture_prep,
             "subject_visibility": subject_visibility,
             "subject_visible": bool(subject_visibility.get("visible")),
             "task_done": task_done,
@@ -532,8 +593,12 @@ def capture_frame_for_actor_object(target_actor, request: dict, output_path: Pat
     poll_interval_seconds = float(request.get("poll_interval_seconds") or 0.2)
     capture_hdr = bool(request.get("capture_hdr", False))
     force_game_view = bool(request.get("force_game_view", True))
+    force_automation_capture = bool(request.get("force_automation_capture", False))
     level_editor = level_editor_subsystem()
     temp_camera = None
+    niagara_capture_prep = prime_niagara_for_capture(target_actor, request)
+    warnings.extend(list(niagara_capture_prep.get("warnings") or []))
+    warnings.extend(list(niagara_capture_prep.get("errors") or []))
     try:
         temp_camera = actor_subsystem.spawn_actor_from_class(unreal.CameraActor, camera_location, camera_rotation, True)
         if not temp_camera:
@@ -559,25 +624,37 @@ def capture_frame_for_actor_object(target_actor, request: dict, output_path: Pat
                 level_editor.set_exact_camera_view(True)
         except Exception:
             pass
-        render_target_capture = capture_to_render_target(
-            temp_camera,
-            width,
-            height,
-            output_path,
-            capture_hdr,
-            delay_seconds,
-            timeout_seconds,
-            stability_window_seconds,
-            poll_interval_seconds,
-        )
-        warnings.extend(render_target_capture.get("warnings") or [])
-        actual_output_path = Path(render_target_capture["output_path"]).resolve() if render_target_capture.get("output_path") else None
-        task_done = bool(render_target_capture.get("task_done"))
-        screenshot_exists = bool(render_target_capture.get("output_exists"))
-        capture_backend = str(render_target_capture.get("capture_backend") or "")
-        if screenshot_exists and int(render_target_capture.get("file_size_bytes") or 0) < 400000:
-            warnings.append("render_target_capture_too_small_fallback_to_automation")
-            screenshot_exists = False
+        actual_output_path = None
+        task_done = False
+        screenshot_exists = False
+        capture_backend = ""
+        resolved_scene_capture_source = ""
+        if not force_automation_capture:
+            render_target_capture = capture_to_render_target(
+                temp_camera,
+                width,
+                height,
+                output_path,
+                capture_hdr,
+                delay_seconds,
+                timeout_seconds,
+                stability_window_seconds,
+                poll_interval_seconds,
+                str(request.get("scene_capture_source") or ""),
+                int(request.get("scene_capture_warmup_count") or 2),
+                float(request.get("scene_capture_warmup_delay_seconds") or 0.05),
+            )
+            warnings.extend(render_target_capture.get("warnings") or [])
+            actual_output_path = Path(render_target_capture["output_path"]).resolve() if render_target_capture.get("output_path") else None
+            task_done = bool(render_target_capture.get("task_done"))
+            screenshot_exists = bool(render_target_capture.get("output_exists"))
+            capture_backend = str(render_target_capture.get("capture_backend") or "")
+            resolved_scene_capture_source = str(render_target_capture.get("scene_capture_source") or "")
+            if screenshot_exists and int(render_target_capture.get("file_size_bytes") or 0) < 400000:
+                warnings.append("render_target_capture_too_small_fallback_to_automation")
+                screenshot_exists = False
+        else:
+            warnings.append("render_target_capture_skipped_by_request")
         if not screenshot_exists:
             unreal.EditorLevelLibrary.set_level_viewport_camera_info(camera_location, camera_rotation)
             level_editor.editor_set_viewport_realtime(True)
@@ -621,6 +698,8 @@ def capture_frame_for_actor_object(target_actor, request: dict, output_path: Pat
             "delay_seconds": delay_seconds,
             "camera_plan": camera_plan,
             "capture_backend": capture_backend,
+            "scene_capture_source": resolved_scene_capture_source,
+            "niagara_capture_prep": niagara_capture_prep,
             "subject_visibility": subject_visibility,
             "subject_visible": bool(subject_visibility.get("visible")),
             "task_done": task_done,
