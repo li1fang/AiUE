@@ -799,7 +799,7 @@ def run_command(
     params = json.loads(params_json) if params_json else {}
 
     effective_mode = mode
-    if command in {"import-package", "load-level", "spawn-host", "capture-frame", "run-scene-sweep", "inspect-stage-anchors", "ensure-stage-anchors", "inspect-host-visual", "stage-capture"} and not dry_run and mode != "editor_rendered":
+    if command in {"import-package", "load-level", "spawn-host", "capture-frame", "run-scene-sweep", "inspect-stage-anchors", "ensure-stage-anchors", "inspect-host-visual", "stage-capture", "action-preview"} and not dry_run and mode != "editor_rendered":
         effective_mode = "editor_rendered"
 
     if command == "run-scene-sweep":
@@ -810,7 +810,7 @@ def run_command(
             "warnings": list(result.get("warnings", [])),
             "errors": list(result.get("errors", [])),
         }
-    elif command in {"inspect-host", "inspect-host-visual", "list-assets", "debug-physics-api", "build-equipment-registry", "load-level", "spawn-host", "capture-frame", "stage-capture", "inspect-stage-anchors", "ensure-stage-anchors"}:
+    elif command in {"inspect-host", "inspect-host-visual", "list-assets", "debug-physics-api", "build-equipment-registry", "load-level", "spawn-host", "capture-frame", "stage-capture", "inspect-stage-anchors", "ensure-stage-anchors", "action-preview"}:
         request = {"command": command, "asset_root": workspace["paths"]["asset_root"], **params}
         host_payload = run_unreal_python_request(workspace, effective_mode, request)
     elif command == "import-package" and dry_run:

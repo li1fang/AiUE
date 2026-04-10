@@ -2554,6 +2554,150 @@ def capture_frame(request: dict) -> dict:
                 pass
 
 
+def capture_frame_for_actor_object(target_actor, request: dict, output_path: Path, host_asset_path: str | None = None, host_record: dict | None = None) -> dict:
+    warnings = []
+    output_path = output_path.resolve()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    actor_subsystem = editor_actor_subsystem()
+    camera_mode = str(request.get("camera_mode") or "explicit_pose")
+    if camera_mode == "explicit_pose":
+        explicit_camera_location = vector_from_request(request.get("camera_location"))
+        explicit_camera_rotation = rotator_from_request(request.get("camera_rotation"))
+        origin, extent = actor_bounds(target_actor)
+        camera_plan = {
+            "camera_source": str(request.get("camera_source") or "explicit_pose"),
+            "camera_location": serialize_vector(explicit_camera_location),
+            "camera_rotation": serialize_rotator(explicit_camera_rotation),
+            "target_location": serialize_vector(origin + unreal.Vector(0.0, 0.0, max(extent.z * 0.45, 65.0))),
+            "bounds_origin": serialize_vector(origin),
+            "bounds_extent": serialize_vector(extent),
+        }
+    else:
+        camera_plan = build_capture_camera_for_actor(target_actor, request)
+
+    camera_location = vector_from_request(camera_plan["camera_location"])
+    camera_rotation = rotator_from_request(camera_plan["camera_rotation"])
+    width = int(request.get("width") or request.get("capture_width") or 1280)
+    height = int(request.get("height") or request.get("capture_height") or 720)
+    delay_seconds = float(request.get("delay") or request.get("capture_delay_seconds") or 0.2)
+    timeout_seconds = float(request.get("timeout_seconds") or 30.0)
+    stability_window_seconds = float(request.get("file_stability_window_seconds") or 0.75)
+    poll_interval_seconds = float(request.get("poll_interval_seconds") or 0.2)
+    capture_hdr = bool(request.get("capture_hdr", False))
+    force_game_view = bool(request.get("force_game_view", True))
+    level_editor = level_editor_subsystem()
+    temp_camera = None
+    try:
+        temp_camera = actor_subsystem.spawn_actor_from_class(unreal.CameraActor, camera_location, camera_rotation, True)
+        if not temp_camera:
+            return {
+                "warnings": warnings,
+                "errors": ["temporary_camera_spawn_failed"],
+            }
+        temp_camera.set_actor_label(f"AIUE_CaptureCamera_{sanitize_segment(target_actor.get_actor_label())}")
+        subject_visibility = evaluate_subject_visibility(target_actor, temp_camera, camera_location, camera_rotation, width, height)
+        if not subject_visibility.get("visible"):
+            warnings.append("subject_not_visible_in_camera_plan")
+        try:
+            level_editor.pilot_level_actor(temp_camera)
+        except Exception as exc:
+            warnings.append(f"pilot_level_actor_failed:{exc}")
+        try:
+            if hasattr(level_editor, "set_allows_cinematic_control"):
+                level_editor.set_allows_cinematic_control(True)
+        except Exception:
+            pass
+        try:
+            if hasattr(level_editor, "set_exact_camera_view"):
+                level_editor.set_exact_camera_view(True)
+        except Exception:
+            pass
+        render_target_capture = capture_to_render_target(
+            temp_camera,
+            width,
+            height,
+            output_path,
+            capture_hdr,
+            delay_seconds,
+            timeout_seconds,
+            stability_window_seconds,
+            poll_interval_seconds,
+        )
+        warnings.extend(render_target_capture.get("warnings") or [])
+        actual_output_path = Path(render_target_capture["output_path"]).resolve() if render_target_capture.get("output_path") else None
+        task_done = bool(render_target_capture.get("task_done"))
+        screenshot_exists = bool(render_target_capture.get("output_exists"))
+        capture_backend = str(render_target_capture.get("capture_backend") or "")
+        if screenshot_exists and int(render_target_capture.get("file_size_bytes") or 0) < 400000:
+            warnings.append("render_target_capture_too_small_fallback_to_automation")
+            screenshot_exists = False
+        if not screenshot_exists:
+            unreal.EditorLevelLibrary.set_level_viewport_camera_info(camera_location, camera_rotation)
+            level_editor.editor_set_viewport_realtime(True)
+            try:
+                level_editor.editor_set_game_view(True)
+            except Exception:
+                pass
+            level_editor.editor_invalidate_viewports()
+            task = unreal.AutomationLibrary.take_high_res_screenshot(
+                width,
+                height,
+                str(output_path),
+                temp_camera,
+                False,
+                capture_hdr,
+                unreal.ComparisonTolerance.LOW,
+                "AiUE action preview capture",
+                delay_seconds,
+                force_game_view,
+            )
+            actual_output_path, task_done = wait_for_screenshot(task, output_path, timeout_seconds, stability_window_seconds, poll_interval_seconds)
+            if actual_output_path and actual_output_path != output_path:
+                shutil.copyfile(actual_output_path, output_path)
+                actual_output_path = output_path
+            screenshot_exists = bool(actual_output_path and actual_output_path.exists())
+            capture_backend = capture_backend or "automation_high_res_screenshot"
+        return {
+            "target_actor_label": target_actor.get_actor_label(),
+            "target_actor_path": target_actor.get_path_name(),
+            "host_blueprint_asset_path": host_asset_path,
+            "host_record": host_record,
+            "target_render_components": summarize_render_components(target_actor),
+            "camera_mode": camera_mode,
+            "camera_source": str(camera_plan.get("camera_source") or camera_mode),
+            "output_path": str(actual_output_path or output_path),
+            "requested_output_path": str(output_path),
+            "output_exists": screenshot_exists,
+            "file_size_bytes": actual_output_path.stat().st_size if actual_output_path and actual_output_path.exists() else 0,
+            "width": width,
+            "height": height,
+            "delay_seconds": delay_seconds,
+            "camera_plan": camera_plan,
+            "capture_backend": capture_backend,
+            "subject_visibility": subject_visibility,
+            "subject_visible": bool(subject_visibility.get("visible")),
+            "task_done": task_done,
+            "warnings": warnings if screenshot_exists else warnings + ["screenshot_output_missing_after_task_completion"],
+            "errors": [] if screenshot_exists else ["capture_frame_failed"],
+        }
+    finally:
+        try:
+            if hasattr(level_editor, "eject_pilot_level_actor"):
+                level_editor.eject_pilot_level_actor()
+        except Exception:
+            pass
+        try:
+            if hasattr(level_editor, "set_exact_camera_view"):
+                level_editor.set_exact_camera_view(False)
+        except Exception:
+            pass
+        if temp_camera:
+            try:
+                actor_subsystem.destroy_actor(temp_camera)
+            except Exception:
+                pass
+
+
 def build_visual_proof_shots(actor, request: dict) -> list[dict]:
     origin, extent = actor_bounds(actor)
     forward = actor.get_actor_forward_vector()
@@ -2595,6 +2739,398 @@ def build_visual_proof_shots(actor, request: dict) -> list[dict]:
             }
         )
     return payload
+
+
+def actor_transform_payload(actor) -> dict:
+    if not actor:
+        return {
+            "location": {},
+            "rotation": {},
+            "scale": {},
+        }
+    scale = None
+    if hasattr(actor, "get_actor_scale3d"):
+        try:
+            scale = actor.get_actor_scale3d()
+        except Exception:
+            scale = None
+    return {
+        "location": serialize_vector(actor.get_actor_location()),
+        "rotation": serialize_rotator(actor.get_actor_rotation()),
+        "scale": serialize_vector(scale) if scale is not None else {},
+    }
+
+
+def transform_delta_payload(before: dict, after: dict) -> dict:
+    before_location = vector_from_request(before.get("location"))
+    after_location = vector_from_request(after.get("location"))
+    before_rotation = rotator_from_request(before.get("rotation"))
+    after_rotation = rotator_from_request(after.get("rotation"))
+    delta_location = after_location - before_location
+    yaw_delta = normalize_degrees(after_rotation.yaw - before_rotation.yaw)
+    pitch_delta = normalize_degrees(after_rotation.pitch - before_rotation.pitch)
+    roll_delta = normalize_degrees(after_rotation.roll - before_rotation.roll)
+    return {
+        "location_delta": serialize_vector(delta_location),
+        "distance_delta": float(delta_location.length()),
+        "yaw_delta": float(yaw_delta),
+        "pitch_delta": float(pitch_delta),
+        "roll_delta": float(roll_delta),
+    }
+
+
+def filtered_visual_shots(actor, request: dict) -> list[dict]:
+    requested_order = [str(item) for item in (request.get("shot_order") or ["front", "side"]) if str(item)]
+    requested_set = set(requested_order)
+    available = {item.get("shot_id"): item for item in build_visual_proof_shots(actor, request)}
+    payload = []
+    for shot_id in requested_order:
+        shot = available.get(shot_id)
+        if shot:
+            payload.append(shot)
+    return payload
+
+
+def capture_visual_shot(
+    target_actor,
+    primary_mesh,
+    weapon_mesh,
+    shot_plan: dict,
+    output_path: Path,
+    request: dict,
+    fallback_actor=None,
+) -> dict:
+    actor_subsystem = editor_actor_subsystem()
+    width = int(request.get("width") or request.get("capture_width") or 1280)
+    height = int(request.get("height") or request.get("capture_height") or 720)
+    subject_min_screen_coverage = float(request.get("subject_min_screen_coverage") or 0.015)
+    weapon_min_screen_coverage = float(request.get("weapon_min_screen_coverage") or 0.001)
+    metric_camera = actor_subsystem.spawn_actor_from_class(
+        unreal.CameraActor,
+        vector_from_request(shot_plan["camera_location"]),
+        rotator_from_request(shot_plan["camera_rotation"]),
+        True,
+    )
+    line_of_sight = {"clear": False, "reason": "metric_camera_spawn_failed"}
+    subject_coverage = {"coverage_ratio": 0.0, "reason": "metric_camera_spawn_failed"}
+    weapon_coverage = {"coverage_ratio": 0.0, "reason": "metric_camera_spawn_failed"}
+    if metric_camera:
+        try:
+            line_of_sight = line_of_sight_to_actor(metric_camera, target_actor)
+            subject_coverage = screen_coverage_for_component(primary_mesh, metric_camera, width, height, fallback_actor=fallback_actor)
+            weapon_coverage = screen_coverage_for_component(weapon_mesh, metric_camera, width, height)
+        finally:
+            try:
+                actor_subsystem.destroy_actor(metric_camera)
+            except Exception:
+                pass
+
+    capture_result = capture_frame_for_actor_object(
+        target_actor,
+        {
+            "width": width,
+            "height": height,
+            "camera_mode": "explicit_pose",
+            "camera_source": shot_plan["camera_source"],
+            "camera_location": shot_plan["camera_location"],
+            "camera_rotation": shot_plan["camera_rotation"],
+            "capture_delay_seconds": float(request.get("capture_delay_seconds") or 0.2),
+            "timeout_seconds": float(request.get("timeout_seconds") or 15.0),
+            "file_stability_window_seconds": float(request.get("file_stability_window_seconds") or 0.75),
+            "poll_interval_seconds": float(request.get("poll_interval_seconds") or 0.1),
+        },
+        output_path,
+    )
+    shot_errors = list(capture_result.get("errors") or [])
+    shot_warnings = list(capture_result.get("warnings") or [])
+    subject_visible = bool(subject_coverage.get("coverage_ratio", 0.0) >= subject_min_screen_coverage)
+    weapon_visible = bool(weapon_coverage.get("coverage_ratio", 0.0) >= weapon_min_screen_coverage)
+    line_clear = bool(line_of_sight.get("clear"))
+    if not subject_visible:
+        shot_errors.append("out_of_frame")
+    if not line_clear:
+        shot_errors.append("occluded")
+    if not capture_result.get("output_exists"):
+        shot_errors.append("capture_failed")
+    shot_status = "pass" if not shot_errors else "fail"
+    return {
+        "shot_id": shot_plan["shot_id"],
+        "camera_id": shot_plan["camera_id"],
+        "camera_source": shot_plan["camera_source"],
+        "camera_location": shot_plan["camera_location"],
+        "camera_rotation": shot_plan["camera_rotation"],
+        "image_path": str(output_path.resolve()),
+        "subject_screen_coverage": float(subject_coverage.get("coverage_ratio") or 0.0),
+        "weapon_screen_coverage": float(weapon_coverage.get("coverage_ratio") or 0.0),
+        "line_of_sight_clear": line_clear,
+        "line_of_sight": line_of_sight,
+        "subject_coverage": subject_coverage,
+        "weapon_coverage": weapon_coverage,
+        "capture_backend": capture_result.get("capture_backend"),
+        "status": shot_status,
+        "warnings": sorted(set(shot_warnings)),
+        "errors": sorted(set(shot_errors)),
+    }
+
+
+def apply_action_preview_to_actor(actor, request: dict) -> dict:
+    before_transform = actor_transform_payload(actor)
+    action_kind = str(request.get("action_kind") or "root_translate_and_turn")
+    action_distance = float(request.get("action_distance") or 85.0)
+    action_yaw_delta = float(request.get("action_yaw_delta") or 24.0)
+    action_vertical_delta = float(request.get("action_vertical_delta") or 0.0)
+    warnings = []
+
+    before_location = actor.get_actor_location()
+    before_rotation = actor.get_actor_rotation()
+    target_location = before_location
+    target_rotation = before_rotation
+
+    if action_kind == "root_translate_and_turn":
+        target_location = before_location + (actor.get_actor_forward_vector() * action_distance) + unreal.Vector(0.0, 0.0, action_vertical_delta)
+        target_rotation = make_rotator(before_rotation.pitch, before_rotation.yaw + action_yaw_delta, before_rotation.roll)
+    elif action_kind == "root_translate_forward":
+        target_location = before_location + (actor.get_actor_forward_vector() * action_distance) + unreal.Vector(0.0, 0.0, action_vertical_delta)
+    elif action_kind == "yaw_turn":
+        target_rotation = make_rotator(before_rotation.pitch, before_rotation.yaw + action_yaw_delta, before_rotation.roll)
+    else:
+        warnings.append(f"unknown_action_kind_fallback:{action_kind}")
+        action_kind = "root_translate_and_turn"
+        target_location = before_location + (actor.get_actor_forward_vector() * action_distance) + unreal.Vector(0.0, 0.0, action_vertical_delta)
+        target_rotation = make_rotator(before_rotation.pitch, before_rotation.yaw + action_yaw_delta, before_rotation.roll)
+
+    try:
+        actor.set_actor_location_and_rotation(target_location, target_rotation, False, False)
+    except Exception:
+        try:
+            actor.set_actor_location(target_location, False, False)
+        except Exception as exc:
+            warnings.append(f"set_actor_location_failed:{exc}")
+        try:
+            actor.set_actor_rotation(target_rotation, False)
+        except Exception as exc:
+            warnings.append(f"set_actor_rotation_failed:{exc}")
+
+    time.sleep(max(float(request.get("action_settle_seconds") or 0.2), 0.05))
+    after_transform = actor_transform_payload(actor)
+    delta = transform_delta_payload(before_transform, after_transform)
+    return {
+        "action_kind": action_kind,
+        "requested_action_distance": action_distance,
+        "requested_action_yaw_delta": action_yaw_delta,
+        "requested_action_vertical_delta": action_vertical_delta,
+        "before_actor_transform": before_transform,
+        "after_actor_transform": after_transform,
+        "transform_delta": delta,
+        "warnings": warnings,
+    }
+
+
+def action_preview(request: dict) -> dict:
+    warnings = []
+    level_path = request.get("level_path") or request.get("scene_level_path")
+    if level_path:
+        load_result = load_level({"level_path": level_path})
+        warnings.extend(load_result.get("warnings") or [])
+        if load_result.get("errors"):
+            return {
+                "status": "fail",
+                "warnings": warnings,
+                "errors": list(load_result.get("errors") or []),
+            }
+
+    host_asset_path, host_record, host_warnings = resolve_host_blueprint_asset_path(
+        {
+            **request,
+            "runtime_ready_only": request.get("runtime_ready_only", True),
+        }
+    )
+    warnings.extend(host_warnings)
+    actor_subsystem = editor_actor_subsystem()
+    blueprint_asset = unreal.EditorAssetLibrary.load_asset(object_path_from_asset_path(host_asset_path))
+    if not blueprint_asset:
+        return {
+            "status": "fail",
+            "warnings": warnings,
+            "errors": [f"host_blueprint_load_failed:{host_asset_path}"],
+        }
+
+    spawn_location = vector_from_request(request.get("location"), unreal.Vector(0.0, 0.0, 120.0))
+    spawn_rotation = rotator_from_request(request.get("rotation"), make_rotator(0.0, 180.0, 0.0))
+    actor_label = str(request.get("actor_label") or f"AIUE_ActionPreview_{sanitize_segment(host_record.get('character_package_id') if host_record else host_asset_path)}")
+
+    spawned_host = actor_subsystem.spawn_actor_from_object(blueprint_asset, spawn_location, spawn_rotation, True)
+    if not spawned_host:
+        return {
+            "status": "fail",
+            "warnings": warnings,
+            "errors": [f"failed_to_spawn_host:{host_asset_path}"],
+        }
+
+    spawned_host.set_actor_label(actor_label)
+    failed_requirements = []
+    shots = []
+    try:
+        try:
+            spawned_host.apply_configured_loadout()
+        except Exception as exc:
+            warnings.append(f"apply_configured_loadout_failed:{exc}")
+
+        time.sleep(max(float(request.get("settle_delay_seconds") or 0.2), 0.05))
+        try:
+            pmx_component = spawned_host.get_component_by_class(unreal.PMXCharacterEquipmentComponent)
+        except Exception:
+            pmx_component = None
+        primary_mesh = actor_primary_mesh_component(spawned_host)
+        weapon_mesh = actor_weapon_mesh_component(spawned_host, primary_mesh)
+        main_mesh_component = component_visibility_record(primary_mesh)
+        weapon_mesh_component = component_visibility_record(weapon_mesh)
+        main_mesh_bounds = component_bounds_payload(primary_mesh, fallback_actor=spawned_host)
+        weapon_mesh_bounds = component_bounds_payload(weapon_mesh)
+        main_mesh_world_transform = component_transform_payload(primary_mesh)
+        weapon_mesh_world_transform = component_transform_payload(weapon_mesh)
+        weapon_attachment = component_attach_payload(weapon_mesh)
+        equipment_diagnostics = pmx_equipment_diagnostics(pmx_component, primary_mesh)
+        component_visibility = {
+            "main_mesh": main_mesh_component,
+            "weapon_mesh": weapon_mesh_component,
+        }
+        character_mesh_asset = main_mesh_component.get("asset_path") or ""
+        weapon_mesh_asset = weapon_mesh_component.get("asset_path") or ""
+
+        if not main_mesh_component.get("component_name") or not character_mesh_asset:
+            failed_requirements.append("mesh_missing")
+        if not main_mesh_bounds.get("non_zero"):
+            failed_requirements.append("bounds_invalid")
+        if not weapon_mesh_component.get("component_name") or not weapon_mesh_asset:
+            failed_requirements.append("weapon_missing")
+        if equipment_diagnostics.get("resolved_attach_socket_exists") is False:
+            failed_requirements.append("socket_resolution_failed")
+
+        output_root = Path(request.get("output_root") or (Path(unreal.Paths.project_saved_dir()) / "pmx_pipeline" / "action_preview")).expanduser().resolve()
+        output_root.mkdir(parents=True, exist_ok=True)
+        shot_plans = filtered_visual_shots(spawned_host, request)
+        if not shot_plans:
+            failed_requirements.append("shot_plan_missing")
+
+        before_root = output_root / "before"
+        after_root = output_root / "after"
+        before_root.mkdir(parents=True, exist_ok=True)
+        after_root.mkdir(parents=True, exist_ok=True)
+
+        before_capture_by_shot = {}
+        for shot_plan in shot_plans:
+            before_capture_by_shot[shot_plan["shot_id"]] = capture_visual_shot(
+                spawned_host,
+                primary_mesh,
+                weapon_mesh,
+                shot_plan,
+                before_root / f"{shot_plan['shot_id']}.png",
+                request,
+                fallback_actor=spawned_host,
+            )
+
+        action_result = apply_action_preview_to_actor(spawned_host, request) if not failed_requirements else {
+            "action_kind": str(request.get("action_kind") or "root_translate_and_turn"),
+            "requested_action_distance": float(request.get("action_distance") or 85.0),
+            "requested_action_yaw_delta": float(request.get("action_yaw_delta") or 24.0),
+            "requested_action_vertical_delta": float(request.get("action_vertical_delta") or 0.0),
+            "before_actor_transform": actor_transform_payload(spawned_host),
+            "after_actor_transform": actor_transform_payload(spawned_host),
+            "transform_delta": {
+                "location_delta": {"x": 0.0, "y": 0.0, "z": 0.0},
+                "distance_delta": 0.0,
+                "yaw_delta": 0.0,
+                "pitch_delta": 0.0,
+                "roll_delta": 0.0,
+            },
+            "warnings": [],
+        }
+        warnings.extend(action_result.get("warnings") or [])
+        if float((action_result.get("transform_delta") or {}).get("distance_delta") or 0.0) < float(request.get("min_distance_delta") or 10.0) and abs(float((action_result.get("transform_delta") or {}).get("yaw_delta") or 0.0)) < float(request.get("min_yaw_delta") or 5.0):
+            failed_requirements.append("action_delta_too_small")
+
+        for shot_plan in shot_plans:
+            before_capture = before_capture_by_shot.get(shot_plan["shot_id"]) or {}
+            after_capture = capture_visual_shot(
+                spawned_host,
+                primary_mesh,
+                weapon_mesh,
+                shot_plan,
+                after_root / f"{shot_plan['shot_id']}.png",
+                request,
+                fallback_actor=spawned_host,
+            )
+            shot_errors = list(before_capture.get("errors") or []) + list(after_capture.get("errors") or [])
+            shot_warnings = list(before_capture.get("warnings") or []) + list(after_capture.get("warnings") or [])
+            shot_status = "pass" if not shot_errors else "fail"
+            shots.append(
+                {
+                    "shot_id": shot_plan["shot_id"],
+                    "camera_id": shot_plan["camera_id"],
+                    "camera_source": shot_plan["camera_source"],
+                    "camera_location": shot_plan["camera_location"],
+                    "camera_rotation": shot_plan["camera_rotation"],
+                    "before": before_capture,
+                    "after": after_capture,
+                    "status": shot_status,
+                    "warnings": sorted(set(shot_warnings)),
+                    "errors": sorted(set(shot_errors)),
+                }
+            )
+
+        if any(shot.get("status") != "pass" for shot in shots):
+            failed_requirements.append("capture_failed")
+        if not any(
+            (shot.get("before") or {}).get("subject_screen_coverage", 0.0) >= float(request.get("subject_min_screen_coverage") or 0.015)
+            and (shot.get("after") or {}).get("subject_screen_coverage", 0.0) >= float(request.get("subject_min_screen_coverage") or 0.015)
+            and (shot.get("before") or {}).get("line_of_sight_clear")
+            and (shot.get("after") or {}).get("line_of_sight_clear")
+            for shot in shots
+        ):
+            failed_requirements.append("subject_not_reliably_visible")
+
+        return {
+            "status": "pass" if not failed_requirements else "fail",
+            "package_id": host_record.get("character_package_id") if host_record else request.get("package_id"),
+            "sample_id": host_record.get("sample_id") if host_record else request.get("sample_id"),
+            "host_id": spawned_host.get_path_name(),
+            "host_blueprint_asset": host_asset_path,
+            "level_path": level_path or get_current_level_path(),
+            "character_mesh_asset": character_mesh_asset,
+            "weapon_mesh_asset": weapon_mesh_asset,
+            "main_mesh_component": {
+                "component_name": main_mesh_component.get("component_name"),
+                "class_name": main_mesh_component.get("class_name"),
+            },
+            "weapon_mesh_component": {
+                "component_name": weapon_mesh_component.get("component_name"),
+                "class_name": weapon_mesh_component.get("class_name"),
+            },
+            "main_mesh_bounds": main_mesh_bounds,
+            "weapon_mesh_bounds": weapon_mesh_bounds,
+            "main_mesh_world_transform": main_mesh_world_transform,
+            "weapon_mesh_world_transform": weapon_mesh_world_transform,
+            "weapon_attachment": weapon_attachment,
+            "equipment_diagnostics": equipment_diagnostics,
+            "component_visibility": component_visibility,
+            "action_kind": action_result.get("action_kind"),
+            "requested_action_distance": action_result.get("requested_action_distance"),
+            "requested_action_yaw_delta": action_result.get("requested_action_yaw_delta"),
+            "requested_action_vertical_delta": action_result.get("requested_action_vertical_delta"),
+            "before_actor_transform": action_result.get("before_actor_transform"),
+            "after_actor_transform": action_result.get("after_actor_transform"),
+            "transform_delta": action_result.get("transform_delta"),
+            "shots": shots,
+            "failed_requirements": sorted(set(failed_requirements)),
+            "warnings": warnings,
+            "errors": [] if not failed_requirements else sorted(set(failed_requirements)),
+        }
+    finally:
+        try:
+            actor_subsystem.destroy_actor(spawned_host)
+        except Exception:
+            pass
 
 
 def inspect_host_visual(request: dict) -> dict:
@@ -3655,6 +4191,8 @@ def dispatch(request: dict) -> dict:
         return inspect_host(request)
     if command == "inspect-host-visual":
         return inspect_host_visual(request)
+    if command == "action-preview":
+        return action_preview(request)
     if command == "debug-physics-api":
         return debug_physics_api(request)
     if command == "load-level":

@@ -18,6 +18,7 @@ COMMANDS = {
     "capture-frame": {"module": "capture_frame", "category": "capture", "workflow_pack": "core", "destructive": False},
     "stage-capture": {"module": "stage_capture", "category": "capture", "workflow_pack": "pmx_pipeline", "destructive": False},
     "run-scene-sweep": {"module": "run_scene_sweep", "category": "capture", "workflow_pack": "pmx_pipeline", "destructive": False},
+    "action-preview": {"module": "action_preview", "category": "capture", "workflow_pack": "pmx_pipeline", "destructive": False},
     "delete-generated-assets": {"module": "delete_generated_assets", "category": "maintenance", "workflow_pack": "pmx_pipeline", "destructive": True},
     "delete-suite-registry": {"module": "delete_suite_registry", "category": "maintenance", "workflow_pack": "pmx_pipeline", "destructive": True},
     "rebuild-package": {"module": "rebuild_package", "category": "maintenance", "workflow_pack": "pmx_pipeline", "destructive": True}
