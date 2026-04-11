@@ -3,6 +3,26 @@
 from .common import *
 from .capture import *
 from .retarget import *
+
+
+def _apply_slot_binding_overrides(actor, request: dict) -> list[str]:
+    warnings = []
+    override_bindings = list(request.get("slot_binding_overrides") or [])
+    if not override_bindings:
+        return warnings
+    if not hasattr(unreal, "PMXEquipmentBlueprintLibrary"):
+        warnings.append("pmx_blueprint_library_unavailable")
+        return warnings
+    try:
+        unreal.PMXEquipmentBlueprintLibrary.apply_slot_bindings(
+            actor,
+            runtime_slot_binding_entries_from_request(override_bindings),
+        )
+    except Exception as exc:
+        warnings.append(f"apply_slot_binding_overrides_failed:{exc}")
+    return warnings
+
+
 def apply_action_preview_to_actor(actor, request: dict) -> dict:
     before_transform = actor_transform_payload(actor)
     action_kind = str(request.get("action_kind") or "root_translate_and_turn")
@@ -114,6 +134,7 @@ def animation_preview(request: dict) -> dict:
             spawned_host.apply_configured_loadout()
         except Exception as exc:
             warnings.append(f"apply_configured_loadout_failed:{exc}")
+        warnings.extend(_apply_slot_binding_overrides(spawned_host, request))
 
         time.sleep(max(float(request.get("settle_delay_seconds") or 0.2), 0.05))
         try:
@@ -401,6 +422,7 @@ def action_preview(request: dict) -> dict:
             spawned_host.apply_configured_loadout()
         except Exception as exc:
             warnings.append(f"apply_configured_loadout_failed:{exc}")
+        warnings.extend(_apply_slot_binding_overrides(spawned_host, request))
 
         time.sleep(max(float(request.get("settle_delay_seconds") or 0.2), 0.05))
         try:

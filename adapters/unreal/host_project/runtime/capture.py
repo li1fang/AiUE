@@ -777,16 +777,36 @@ def build_visual_proof_shots(actor, request: dict) -> list[dict]:
     return payload
 
 
+def explicit_shot_plans_from_request(request: dict) -> list[dict]:
+    payload = []
+    for index, entry in enumerate(list(request.get("shot_plans") or []), start=1):
+        shot_id = str(entry.get("shot_id") or entry.get("camera_id") or f"shot_{index:02d}")
+        camera_id = str(entry.get("camera_id") or shot_id)
+        payload.append(
+            {
+                "shot_id": shot_id,
+                "camera_id": camera_id,
+                "camera_source": str(entry.get("camera_source") or "explicit_pose"),
+                "camera_location": serialize_vector(vector_from_request(entry.get("camera_location"))),
+                "camera_rotation": serialize_rotator(rotator_from_request(entry.get("camera_rotation"))),
+                "target_location": dict(entry.get("target_location") or {}),
+            }
+        )
+    return payload
+
 
 def filtered_visual_shots(actor, request: dict) -> list[dict]:
     requested_order = [str(item) for item in (request.get("shot_order") or ["front", "side"]) if str(item)]
-    requested_set = set(requested_order)
-    available = {item.get("shot_id"): item for item in build_visual_proof_shots(actor, request)}
+    explicit_plans = explicit_shot_plans_from_request(request)
+    source_plans = explicit_plans or build_visual_proof_shots(actor, request)
+    available = {item.get("shot_id"): item for item in source_plans}
     payload = []
-    for shot_id in requested_order:
+    for shot_id in requested_order or [str(item.get("shot_id") or "") for item in source_plans]:
         shot = available.get(shot_id)
         if shot:
             payload.append(shot)
+    if not payload and explicit_plans:
+        return explicit_plans
     return payload
 
 
@@ -813,11 +833,19 @@ def capture_visual_shot(
     line_of_sight = {"clear": False, "reason": "metric_camera_spawn_failed"}
     subject_coverage = {"coverage_ratio": 0.0, "reason": "metric_camera_spawn_failed"}
     weapon_coverage = {"coverage_ratio": 0.0, "reason": "metric_camera_spawn_failed"}
+    tracked_slot_names = [slot_name_text(value) for value in list(request.get("tracked_slots") or []) if str(value)]
+    tracked_slot_coverages = {
+        slot_name: {"coverage_ratio": 0.0, "reason": "metric_camera_spawn_failed"}
+        for slot_name in tracked_slot_names
+    }
     if metric_camera:
         try:
             line_of_sight = line_of_sight_to_actor(metric_camera, target_actor)
             subject_coverage = screen_coverage_for_component(primary_mesh, metric_camera, width, height, fallback_actor=fallback_actor)
             weapon_coverage = screen_coverage_for_component(weapon_mesh, metric_camera, width, height)
+            for slot_name in tracked_slot_names:
+                tracked_component = actor_managed_component_for_slot(target_actor, slot_name, primary_component=primary_mesh)
+                tracked_slot_coverages[slot_name] = screen_coverage_for_component(tracked_component, metric_camera, width, height)
         finally:
             try:
                 actor_subsystem.destroy_actor(metric_camera)
@@ -837,6 +865,18 @@ def capture_visual_shot(
             "timeout_seconds": float(request.get("timeout_seconds") or 15.0),
             "file_stability_window_seconds": float(request.get("file_stability_window_seconds") or 0.75),
             "poll_interval_seconds": float(request.get("poll_interval_seconds") or 0.1),
+            "tracked_slots": tracked_slot_names,
+            "force_automation_capture": bool(request.get("force_automation_capture", False)),
+            "scene_capture_source": str(request.get("scene_capture_source") or ""),
+            "scene_capture_warmup_count": int(request.get("scene_capture_warmup_count") or 2),
+            "scene_capture_warmup_delay_seconds": float(request.get("scene_capture_warmup_delay_seconds") or 0.05),
+            "capture_profile": str(request.get("capture_profile") or ""),
+            "prime_niagara_before_capture": bool(request.get("prime_niagara_before_capture", True)),
+            "niagara_desired_age_seconds": float(request.get("niagara_desired_age_seconds") or 0.35),
+            "niagara_seek_delta_seconds": float(request.get("niagara_seek_delta_seconds") or (1.0 / 30.0)),
+            "niagara_advance_step_count": int(request.get("niagara_advance_step_count") or 8),
+            "niagara_advance_step_delta_seconds": float(request.get("niagara_advance_step_delta_seconds") or (1.0 / 60.0)),
+            "niagara_flush_world": bool(request.get("niagara_flush_world", True)),
         },
         output_path,
     )
@@ -861,6 +901,9 @@ def capture_visual_shot(
         "line_of_sight": line_of_sight,
         "subject_coverage": subject_coverage,
         "weapon_coverage": weapon_coverage,
+        "tracked_slot_coverages": tracked_slot_coverages,
+        "niagara_capture_prep": dict(capture_result.get("niagara_capture_prep") or {}),
+        "scene_capture_source": str(capture_result.get("scene_capture_source") or ""),
         "capture_backend": capture_result.get("capture_backend"),
         "status": shot_quality["status"],
         "warnings": shot_quality["warnings"],

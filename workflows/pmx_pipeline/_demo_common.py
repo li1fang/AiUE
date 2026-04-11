@@ -223,6 +223,7 @@ def run_animation_preview(
     spawn_location: dict,
     spawn_rotation: dict,
     result_name: str = "retargeted_animation_preview_result.json",
+    extra_params: dict | None = None,
 ) -> tuple[dict, str | None, Path]:
     animation_dir = output_root / f"{len(list(output_root.glob('*'))) + 1:03d}_{animation_label(animation_asset_path)}"
     animation_dir.mkdir(parents=True, exist_ok=True)
@@ -257,6 +258,7 @@ def run_animation_preview(
                 "retarget_source_mesh_asset_path": fixed_execution_profile["retarget_source_mesh_asset_path"],
                 "retarget_target_mesh_asset_path": fixed_execution_profile["retarget_target_mesh_asset_path"],
                 "pose_probe_bone_names": list(fixed_execution_profile["pose_probe_bone_names"]),
+                **dict(extra_params or {}),
             },
             output_path=str(result_path.resolve()),
             host_key=host_key,

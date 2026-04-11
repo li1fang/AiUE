@@ -13,7 +13,8 @@ The platform direction is no longer only about escaping `weapon-only` assumption
 
 - `T1`: metrics and tooling foundation
 - `T2`: Windows native workbench
-- `Q5`: dual-layer automated inspection
+- `E`: demo capability line
+- `Q5`: layered automated inspection
 - `A1`: action-candidate provider interface
 - `P5`: deferred compatibility cleanup after the stronger QA/tooling layers exist
 
@@ -23,33 +24,33 @@ The platform direction is no longer only about escaping `weapon-only` assumption
 
 Goals:
 
-- Introduce a generic slot binding model in the shared runtime.
-- Keep legacy weapon-only fields and APIs as compatibility shims.
-- Make both `skeletal_mesh` and `static_mesh` first-class item kinds.
-- Fix slot conflict handling as `Override Latest`.
-- Prove the generic path with a new `generic_slot_abstraction_p1` gate.
+- introduce a generic slot binding model in the shared runtime
+- keep legacy weapon-only fields and APIs as compatibility shims
+- make both `skeletal_mesh` and `static_mesh` first-class item kinds
+- fix slot conflict handling as `Override Latest`
+- prove the generic path with a new `generic_slot_abstraction_p1` gate
 
 Defaults:
 
-- `weapon` remains the default slot name.
-- Conflict key is `SlotName`.
-- Same `AttachSocketName` across different slots is allowed and recorded as evidence only.
+- `weapon` remains the default slot name
+- conflict key is `SlotName`
+- same `AttachSocketName` across different slots is allowed and recorded as evidence only
 
 ### P2: Clothing Vertical Slice
 
 Goals:
 
-- Add the first true second equipment axis: `clothing`.
-- Validate role + clothing + weapon composition on the demo host.
-- Reuse the generic slot runtime rather than adding clothing-only side paths.
+- add the first true second equipment axis: `clothing`
+- validate role + clothing + weapon composition on the demo host
+- reuse the generic slot runtime rather than adding clothing-only side paths
 
 ### P3: FX Vertical Slice
 
 Goals:
 
-- Add a minimal FX slot on the same generic slot platform.
-- Start with attach-to-socket FX only.
-- Validate multi-axis composition with character, equipment, and FX.
+- add a minimal FX slot on the same generic slot platform
+- start with attach-to-socket FX only
+- validate multi-axis composition with character, equipment, and FX
 
 Current implementation shape:
 
@@ -61,13 +62,13 @@ Current implementation shape:
 
 Goals:
 
-- Expand validation from single-axis proofs to multi-slot coexistence.
-- Add slot-aware QA for:
+- expand validation from single-axis proofs to multi-slot coexistence
+- add slot-aware QA for:
   - attach correctness
   - visibility
   - composition
   - runtime conflicts
-- Keep reference-image QA out of scope until the slot platform is stable.
+- keep reference-image QA out of scope until the slot platform is stable
 
 Current implementation shape:
 
@@ -80,16 +81,16 @@ Current implementation shape:
 
 Goals:
 
-- Retire legacy weapon-only data and runtime shims after `P2` and `P3` are stable.
-- Collapse the platform onto the generic slot abstraction as the only active path.
+- retire legacy weapon-only data and runtime shims after `P2` and `P3` are stable
+- collapse the platform onto the generic slot abstraction as the only active path
 
 ### T1: Metrics + Tooling Foundation
 
 Goals:
 
-- Strengthen the measurement layer before adding heavier QA logic.
-- Introduce reusable visual/inspection tooling rather than embedding all analysis inside gates.
-- Reduce the cost of understanding evidence across `V1`, `D*`, `P*`, `Q*`, and `R*`.
+- strengthen the measurement layer before adding heavier QA logic
+- introduce reusable visual/inspection tooling rather than embedding all analysis inside gates
+- reduce the cost of understanding evidence across `V1`, `D*`, `P*`, `Q*`, and `R*`
 
 Planned scope:
 
@@ -128,13 +129,47 @@ Current implementation shape:
 - supports `--dump-state-json` and `--exit-after-load` for automated validation
 - validated with `7` open cycles, `3` error injections, and one `5` minute short soak
 
+### E: Demo Capability Line
+
+Goals:
+
+- give `AiUEdemo` a formal capability roadmap instead of treating demo work as scattered gate side-effects
+- keep demo outputs evidence-driven before moving into interactivity
+- preserve the dual-host boundary:
+  - `kernel host` proves composition and minimum correctness
+  - `demo host` proves controlled presentation and showcase value
+
+Line shape:
+
+- `E1`: evidence-first showcase demo
+- `E2`: playable demo
+- `E3`: richer demo orchestration
+
+Execution rule:
+
+- `E1` comes before `E2`
+- `E2` starts only after:
+  - `E1` first complete pass
+  - `2` stable reruns
+  - reliable `T2` consumption of `E1` evidence
+
+Current implementation shape:
+
+- [latest_showcase_demo_e1_report.json](C:/AiUE/Saved/verification/latest_showcase_demo_e1_report.json)
+- current status is `pass`
+- demo evidence is based on:
+  - fixed hero shots
+  - before/after action frames
+  - current ready bundles on `AiUEdemo`
+- `E1` is intentionally not a playable UI milestone
+
 ### Q5: Dual-Layer Automated Inspection
 
 Goals:
 
-- Move platform QA beyond “visible enough” into “assembled correctly.”
-- Add deterministic inspection for AI-generated assets without requiring manual review.
-- Create the measurement basis for future slot-aware auto-fix.
+- move platform QA beyond "visible enough" into "assembled correctly"
+- add deterministic inspection for AI-generated assets without requiring manual review
+- create the measurement basis for future slot-aware auto-fix
 
 Layers:
 
@@ -145,6 +180,10 @@ Layers:
 - `Q5B Spatial Fit Inspection`
   - attach-distance / bounds / overlap / fit checks
   - progressive path toward deeper volumetric embedding inspection
+- `Q5B.x Richer Spatial Evidence`
+  - anchor-relative bounds and per-axis clearance evidence
+  - fit envelope and evidence-confidence normalization
+  - bridge layer between heuristic fit and local volumetric inspection
 - `Q5C Slot-Aware Auto-Fix`
   - deferred until `Q5A/Q5B` are numerically stable
   - limited, slot-aware offset solving rather than unconstrained transform pushing
@@ -159,9 +198,9 @@ Execution rule:
 
 Goals:
 
-- Define a clean interface for future motion-generation systems without binding the platform to one model or one vendor.
-- Keep learned motion generation external to the shared runtime.
-- Let AiUE consume, retarget, preview, and validate motion candidates produced elsewhere.
+- define a clean interface for future motion-generation systems without binding the platform to one model or one vendor
+- keep learned motion generation external to the shared runtime
+- let AiUE consume, retarget, preview, and validate motion candidates produced elsewhere
 
 Planned scope:
 
@@ -184,11 +223,11 @@ Execution rule:
 
 ## Current Decisions
 
-- `P1` supports `skeletal_mesh` and `static_mesh`.
-- Slot conflicts are `Override Latest`.
-- `G2` stays retired.
-- `P2` is higher priority than `P3`.
-- After `P4` and `Q4`, `P5` is deferred.
+- `P1` supports `skeletal_mesh` and `static_mesh`
+- slot conflicts are `Override Latest`
+- `G2` stays retired
+- `P2` is higher priority than `P3`
+- after `P4` and `Q4`, `P5` is deferred
 - `R1` is complete:
   - clothing no longer falls back to `owner_origin` for the two current ready bundles
   - `Q4` now requires clothing attach resolution to succeed without fallback tolerance
@@ -201,12 +240,32 @@ Execution rule:
   - current status is `pass`
   - the gate now uses same-session `baseline` vs `with-fx` pair capture on the same spawned host
   - the current passing profile is `SCS_FINAL_COLOR_HDR + warmup`
+- `Q5A` is complete:
+  - [latest_visible_conflict_inspection_q5a_report.json](C:/AiUE/Saved/verification/latest_visible_conflict_inspection_q5a_report.json)
+  - current status is `pass`
+- `Q5B` is complete:
+  - [latest_volumetric_fit_inspection_q5b_report.json](C:/AiUE/Saved/verification/latest_volumetric_fit_inspection_q5b_report.json)
+  - current status is `pass`
+- `Q5B.x` is complete:
+  - [latest_volumetric_fit_spatial_evidence_q5bx_report.json](C:/AiUE/Saved/verification/latest_volumetric_fit_spatial_evidence_q5bx_report.json)
+  - current status is `pass`
+- `Q5C-lite` is complete:
+  - [latest_volumetric_inspection_q5c_lite_report.json](C:/AiUE/Saved/verification/latest_volumetric_inspection_q5c_lite_report.json)
+  - current status is `pass`
+- `E1` is complete:
+  - [latest_showcase_demo_e1_report.json](C:/AiUE/Saved/verification/latest_showcase_demo_e1_report.json)
+  - current status is `pass`
 - `T1` is complete:
   - `tools/bootstrap_t1_tooling.ps1`
   - `tools/run_t1_evidence_pack.ps1`
   - `Saved/tooling/t1/latest/`
   - `docs/checkpoints/t1_metrics_tooling_foundation_checkpoint.md`
-- The next roadmap priorities are staged as:
-  1. `Q5 Dual-Layer Automated Inspection`
-  2. `A1 Action Candidate Provider Interface`
-  3. `P5 Deprecation & Cleanup` only after the newer layers have stabilized
+
+## Current Priority Order
+
+The near-term priority order is now:
+
+1. keep `E1` stable enough to unlock `E2`
+2. deepen `Q5` evidence from `Q5B.x` and `Q5C-lite`
+3. define `A1` as a clean external interface
+4. defer `P5` cleanup until the newer lines have truly stabilized
