@@ -9,7 +9,9 @@ def ensure_aiue_paths():
     repo_root = script_path.parents[2]
     core_root = repo_root / "core" / "python"
     adapter_root = repo_root / "adapters" / "unreal" / "python"
-    for entry in (core_root, adapter_root):
+    t1_root = repo_root / "tools" / "t1" / "python"
+    t2_root = repo_root / "tools" / "t2" / "python"
+    for entry in (core_root, adapter_root, t1_root, t2_root):
         text = str(entry)
         if text not in sys.path:
             sys.path.insert(0, text)

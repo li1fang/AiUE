@@ -435,6 +435,61 @@ What this twelfth slice still does **not** do:
 - it still does not compare replay events side by side
 - it is compact replay history, not full review-history analysis
 
+Current thirteenth slice:
+
+- [latest_playable_demo_e2_review_compare_report.json](C:/AiUE/Saved/verification/latest_playable_demo_e2_review_compare_report.json)
+- [playable_demo_e2_review_compare_state.json](C:/AiUE/Saved/demo/e2/latest/playable_demo_e2_review_compare_state.json)
+- `T2 --latest --package-id <package> --dump-state-json --exit-after-load` now exposes:
+  - `demo_review_compare_state`
+  - `demo_review_compare_focus`
+- the Windows native workbench `Demo Review` view now provides:
+  - a compact compare summary for the focused package
+
+What this thirteenth slice proves:
+
+- the current review-history seam is now strong enough to produce a bounded `action vs animation` compare object
+- `T2` can now recover, for the selected package:
+  - the latest action replay event
+  - the latest animation replay event
+  - compare readiness
+  - compare warning flags
+- the operator no longer has to manually inspect the full history blob just to answer whether a focused package has a recent action+animation pair ready for review
+
+What this thirteenth slice still does **not** do:
+
+- it still does not become a full history browser
+- it still does not provide a side-by-side image canvas or manual compare tooling
+- it is compact compare focus, not a generalized review-analysis console
+
+Current fourteenth slice:
+
+- [latest_playable_demo_e2_review_compare_browse_report.json](C:/AiUE/Saved/verification/latest_playable_demo_e2_review_compare_browse_report.json)
+- `T2 --latest --package-id <package> --review-compare-index 0|1 --dump-state-json --exit-after-load` now exposes:
+  - `demo_review_compare_focus.selected_pair_index`
+  - `demo_review_compare_focus.available_pair_count`
+  - `demo_review_compare_focus.selected_compare_pair`
+- the Windows native workbench `Demo Review` view now provides:
+  - `Newer Compare`
+  - `Older Compare`
+  - `Open Compared Action After`
+  - `Open Compared Animation After`
+
+What this fourteenth slice proves:
+
+- the compact compare seam is now browsable across a bounded pair window instead of being locked to the most recent pair only
+- `T2` can now recover, for the selected package and selected compare index:
+  - the requested compare pair
+  - the selected pair's action replay event
+  - the selected pair's animation replay event
+  - the after-artifact paths that matter for quick operator review
+- the operator can now move from summary to the right evidence pair with materially less friction while staying inside the existing evidence model
+
+What this fourteenth slice still does **not** do:
+
+- it still does not become a full replay-history browser
+- it still does not provide a side-by-side image canvas or free-form compare tooling
+- it is bounded compare browse, not a generalized review-analysis console
+
 Not in scope yet:
 
 - complex game loop
@@ -484,18 +539,18 @@ Current judgment after `E2A credibility` and `E2 session roundtrip`:
 
 Recommended next route:
 
-1. repo-level default: pivot to `Q5C-lite` if the next question is now quality depth rather than demo operator fluency
-2. demo-line continuation only if needed: `E2G` as a compact comparison or history-browse slice
+1. repo-level default after `E2H`: pivot to `Q5C-lite` if the next question is now quality depth rather than more demo operator fluency
+2. governance alternative: if `Dynamic Balance` raises hotspot pressure, target `tools/t2/python/aiue_t2/state.py` and adjacent review-controller seams before adding more demo browse depth
 3. keep the review output evidence-first so `T1/T2` stay the source of truth
-4. only pull governance forward if hotspot pressure escalates from `moderate` to `high`
+4. only continue the demo line if the next slice still stays bounded and machine-readable
 
-What `E2G` should answer if the demo line continues:
+What the next demo slice should answer if the demo line continues:
 
-- can the current compact history seam support a bounded compare-or-browse experience without turning into a full run-history browser
-- can `T2` help an operator compare recent replay events more fluently while staying within the current evidence model
+- can the current bounded compare browse seam support a slightly stronger operator review loop without turning into a full run-history browser
+- can `T2` add just enough operator fluency to stay useful while remaining evidence-first and testable
 - can the next playable slice stay bounded without turning into a free-form operator console
 
-What should stay out of scope until after `E2G`:
+What should stay out of scope until after `E2H`:
 
 - packaged desktop demo distribution
 - generalized UE command consoles inside `T2`

@@ -29,6 +29,10 @@ from aiue_t2.state import (
     load_workbench_state,
 )
 from aiue_t2.demo_control_state import load_demo_control_state, write_demo_control_run
+from aiue_t2.demo_review_compare_state import (
+    build_demo_review_compare_focus,
+    load_demo_review_compare_state,
+)
 from aiue_t2.demo_review_history_state import build_demo_review_history_focus, load_demo_review_history_state
 from aiue_t2.demo_review_state import build_demo_review_focus, build_demo_review_state
 from aiue_t2.demo_review_replay_state import load_demo_review_replay_state
@@ -92,6 +96,7 @@ class WorkbenchWindow(WorkbenchRenderMixin, WorkbenchDemoOpsMixin, QMainWindow):
         selected_package_id: str | None = None,
         selected_action_preset_id: str | None = None,
         selected_animation_preset_id: str | None = None,
+        selected_review_compare_index: int = 0,
     ) -> None:
         super().__init__()
         self.setWindowTitle("AiUE T2 Windows Native Workbench")
@@ -106,6 +111,7 @@ class WorkbenchWindow(WorkbenchRenderMixin, WorkbenchDemoOpsMixin, QMainWindow):
         self.requested_selected_package_id = selected_package_id
         self.requested_selected_action_preset_id = selected_action_preset_id
         self.requested_selected_animation_preset_id = selected_animation_preset_id
+        self.requested_selected_review_compare_index = max(0, int(selected_review_compare_index or 0))
         self._export_demo_request_fn = export_demo_request
         self._invoke_demo_request_fn = invoke_demo_request
         self._load_demo_request_selection_fn = load_demo_request_selection
@@ -153,6 +159,8 @@ class WorkbenchWindow(WorkbenchRenderMixin, WorkbenchDemoOpsMixin, QMainWindow):
         self.demo_review_replay_state: dict = {"status": "missing", "last_replays_by_package": {}, "package_replay_counts": {}}
         self.demo_review_history_state: dict = {"status": "missing", "recent_events": [], "package_history_counts": {}}
         self.demo_review_history_focus: dict = {"status": "missing", "selected_package_id": "", "event_count": 0}
+        self.demo_review_compare_state: dict = {"status": "missing", "package_compares": [], "counts": {}}
+        self.demo_review_compare_focus: dict = {"status": "missing", "selected_package_id": "", "compare_ready": False}
         self.demo_review_replay_control: dict = {"status": "idle", "operation": "", "request_kind": "", "errors": []}
         self.demo_round_control: dict = {"status": "idle", "operation": "", "scope": "", "errors": []}
         self.demo_request_control = DemoRequestControlState(
@@ -282,15 +290,24 @@ class WorkbenchWindow(WorkbenchRenderMixin, WorkbenchDemoOpsMixin, QMainWindow):
         self.open_hero_before_button = self.demo_review_panel.open_hero_before_button
         self.open_action_after_button = self.demo_review_panel.open_action_after_button
         self.open_animation_after_button = self.demo_review_panel.open_animation_after_button
+        self.open_compare_action_after_button = self.demo_review_panel.open_compare_action_after_button
+        self.open_compare_animation_after_button = self.demo_review_panel.open_compare_animation_after_button
+        self.newer_compare_button = self.demo_review_panel.newer_compare_button
+        self.older_compare_button = self.demo_review_panel.older_compare_button
         self.replay_action_button = self.demo_review_panel.replay_action_button
         self.replay_animation_button = self.demo_review_panel.replay_animation_button
         self.demo_review_replay_summary = self.demo_review_panel.demo_review_replay_summary
         self.demo_review_history_summary = self.demo_review_panel.demo_review_history_summary
+        self.demo_review_compare_summary = self.demo_review_panel.demo_review_compare_summary
         self.demo_review_panel.bind_callbacks(
             open_review_artifact=lambda: self.open_demo_review_artifact(),
             open_hero_before=lambda: self.open_demo_review_hero_before(),
             open_action_after=lambda: self.open_demo_review_action_after(),
             open_animation_after=lambda: self.open_demo_review_animation_after(),
+            open_compare_action_after=lambda: self.open_demo_review_compare_action_after(),
+            open_compare_animation_after=lambda: self.open_demo_review_compare_animation_after(),
+            newer_compare=lambda: self.step_demo_review_compare(-1),
+            older_compare=lambda: self.step_demo_review_compare(1),
             replay_action=lambda: self.replay_current_demo_review(request_kind="action_preview"),
             replay_animation=lambda: self.replay_current_demo_review(request_kind="animation_preview"),
         )
@@ -338,6 +355,15 @@ class WorkbenchWindow(WorkbenchRenderMixin, WorkbenchDemoOpsMixin, QMainWindow):
             self.demo_review_history_state,
             selected_package_id=self.view_state.selected_package_id,
         )
+        self.demo_review_compare_state = load_demo_review_compare_state(
+            self.app_state.demo_session.session_manifest_path or self.current_session_manifest_path,
+            demo_review_history_state=self.demo_review_history_state,
+        )
+        self.demo_review_compare_focus = build_demo_review_compare_focus(
+            self.demo_review_compare_state,
+            selected_package_id=self.view_state.selected_package_id,
+            selected_pair_index=self.view_state.selected_review_compare_index,
+        )
         self.demo_review_replay_control = {"status": "idle", "operation": "", "request_kind": "", "errors": []}
         self.demo_round_control = {"status": "idle", "operation": "", "scope": "", "errors": []}
         self.demo_request_control = DemoRequestControlState(
@@ -367,6 +393,7 @@ class WorkbenchWindow(WorkbenchRenderMixin, WorkbenchDemoOpsMixin, QMainWindow):
             self.view_state.selected_action_preset_id = self.requested_selected_action_preset_id
         if self.requested_selected_animation_preset_id and self.requested_selected_animation_preset_id in animation_preset_ids:
             self.view_state.selected_animation_preset_id = self.requested_selected_animation_preset_id
+        self.view_state.selected_review_compare_index = max(0, int(self.requested_selected_review_compare_index or 0))
 
     def choose_manifest(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
@@ -387,6 +414,8 @@ class WorkbenchWindow(WorkbenchRenderMixin, WorkbenchDemoOpsMixin, QMainWindow):
         payload["demo_review_replay_state"] = dict(self.demo_review_replay_state)
         payload["demo_review_history_state"] = dict(self.demo_review_history_state)
         payload["demo_review_history_focus"] = dict(self.demo_review_history_focus)
+        payload["demo_review_compare_state"] = dict(self.demo_review_compare_state)
+        payload["demo_review_compare_focus"] = dict(self.demo_review_compare_focus)
         payload["demo_review_replay_control"] = dict(self.demo_review_replay_control)
         payload["demo_round_control"] = dict(self.demo_round_control)
         payload["demo_request_control"] = self.demo_request_control.to_dump_dict()

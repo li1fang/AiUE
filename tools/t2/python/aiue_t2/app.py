@@ -23,6 +23,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--package-id", help="Override the selected E2 package id.")
     parser.add_argument("--action-preset-id", help="Override the selected E2 action preset id.")
     parser.add_argument("--animation-preset-id", help="Override the selected E2 animation preset id.")
+    parser.add_argument("--review-compare-index", type=int, default=0, help="Select which bounded compare pair to focus.")
     parser.add_argument("--demo-request-export", action="store_true", help="Export the currently selected E2 demo request.")
     parser.add_argument("--demo-request-dry-run", action="store_true", help="Dry-run the currently selected E2 demo request.")
     parser.add_argument("--demo-request-invoke", action="store_true", help="Invoke the currently selected E2 demo request.")
@@ -56,6 +57,7 @@ def main(argv: list[str] | None = None) -> int:
         selected_package_id=args.package_id,
         selected_action_preset_id=args.action_preset_id,
         selected_animation_preset_id=args.animation_preset_id,
+        selected_review_compare_index=args.review_compare_index,
     )
     window.show()
     app.processEvents()

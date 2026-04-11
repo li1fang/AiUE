@@ -226,6 +226,7 @@ def run_workbench_process(
     package_id: str | None = None,
     action_preset_id: str | None = None,
     animation_preset_id: str | None = None,
+    review_compare_index: int | None = None,
     demo_request_export: bool = False,
     demo_request_dry_run: bool = False,
     demo_request_invoke: bool = False,
@@ -257,6 +258,8 @@ def run_workbench_process(
         command += ["-ActionPresetId", str(action_preset_id)]
     if animation_preset_id is not None:
         command += ["-AnimationPresetId", str(animation_preset_id)]
+    if review_compare_index is not None:
+        command += ["-ReviewCompareIndex", str(review_compare_index)]
     if demo_request_export:
         command += ["-DemoRequestExport"]
     if demo_request_dry_run:

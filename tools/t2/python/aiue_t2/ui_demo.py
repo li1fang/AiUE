@@ -404,6 +404,18 @@ class DemoReviewPanel(QWidget):
         self.replay_animation_button = QPushButton("Replay Animation")
         self.replay_animation_button.setObjectName("replayAnimationButton")
 
+        self.open_compare_action_after_button = QPushButton("Open Compared Action After")
+        self.open_compare_action_after_button.setObjectName("openComparedActionAfterButton")
+
+        self.open_compare_animation_after_button = QPushButton("Open Compared Animation After")
+        self.open_compare_animation_after_button.setObjectName("openComparedAnimationAfterButton")
+
+        self.newer_compare_button = QPushButton("Newer Compare")
+        self.newer_compare_button.setObjectName("newerCompareButton")
+
+        self.older_compare_button = QPushButton("Older Compare")
+        self.older_compare_button.setObjectName("olderCompareButton")
+
         button_row = QHBoxLayout()
         button_row.addWidget(self.open_review_artifact_button)
         button_row.addWidget(self.open_hero_before_button)
@@ -411,6 +423,12 @@ class DemoReviewPanel(QWidget):
         button_row.addWidget(self.open_animation_after_button)
         button_row.addWidget(self.replay_action_button)
         button_row.addWidget(self.replay_animation_button)
+
+        compare_button_row = QHBoxLayout()
+        compare_button_row.addWidget(self.open_compare_action_after_button)
+        compare_button_row.addWidget(self.open_compare_animation_after_button)
+        compare_button_row.addWidget(self.newer_compare_button)
+        compare_button_row.addWidget(self.older_compare_button)
 
         self.demo_review_replay_summary = QLabel("No review replay yet")
         self.demo_review_replay_summary.setObjectName("demoReviewReplaySummaryLabel")
@@ -422,12 +440,19 @@ class DemoReviewPanel(QWidget):
         self.demo_review_history_summary.setProperty("role", "muted")
         self.demo_review_history_summary.setWordWrap(True)
 
+        self.demo_review_compare_summary = QLabel("No review compare yet")
+        self.demo_review_compare_summary.setObjectName("demoReviewCompareSummaryLabel")
+        self.demo_review_compare_summary.setProperty("role", "muted")
+        self.demo_review_compare_summary.setWordWrap(True)
+
         layout = QVBoxLayout(self)
         layout.addWidget(self.demo_review_summary)
         layout.addWidget(self.demo_review_package_summary)
         layout.addLayout(button_row)
+        layout.addLayout(compare_button_row)
         layout.addWidget(self.demo_review_replay_summary)
         layout.addWidget(self.demo_review_history_summary)
+        layout.addWidget(self.demo_review_compare_summary)
         layout.addWidget(self.demo_review_text)
 
     def bind_callbacks(
@@ -437,6 +462,10 @@ class DemoReviewPanel(QWidget):
         open_hero_before,
         open_action_after,
         open_animation_after,
+        open_compare_action_after,
+        open_compare_animation_after,
+        newer_compare,
+        older_compare,
         replay_action,
         replay_animation,
     ) -> None:
@@ -444,6 +473,10 @@ class DemoReviewPanel(QWidget):
         self.open_hero_before_button.clicked.connect(open_hero_before)
         self.open_action_after_button.clicked.connect(open_action_after)
         self.open_animation_after_button.clicked.connect(open_animation_after)
+        self.open_compare_action_after_button.clicked.connect(open_compare_action_after)
+        self.open_compare_animation_after_button.clicked.connect(open_compare_animation_after)
+        self.newer_compare_button.clicked.connect(newer_compare)
+        self.older_compare_button.clicked.connect(older_compare)
         self.replay_action_button.clicked.connect(replay_action)
         self.replay_animation_button.clicked.connect(replay_animation)
 
@@ -455,6 +488,8 @@ class DemoReviewPanel(QWidget):
         demo_review_replay_control: dict,
         demo_review_history_state: dict,
         demo_review_history_focus: dict,
+        demo_review_compare_state: dict,
+        demo_review_compare_focus: dict,
         *,
         workspace_path: str,
         selected_package_id: str | None,
@@ -488,6 +523,8 @@ class DemoReviewPanel(QWidget):
                         "review_replay_control": demo_review_replay_control,
                         "review_history_state": demo_review_history_state,
                         "review_history_focus": demo_review_history_focus,
+                        "review_compare_state": demo_review_compare_state,
+                        "review_compare_focus": demo_review_compare_focus,
                         "errors": demo_review_state.get("errors"),
                     },
                     ensure_ascii=False,
@@ -498,10 +535,15 @@ class DemoReviewPanel(QWidget):
             self.open_hero_before_button.setEnabled(False)
             self.open_action_after_button.setEnabled(False)
             self.open_animation_after_button.setEnabled(False)
+            self.open_compare_action_after_button.setEnabled(False)
+            self.open_compare_animation_after_button.setEnabled(False)
+            self.newer_compare_button.setEnabled(False)
+            self.older_compare_button.setEnabled(False)
             self.replay_action_button.setEnabled(False)
             self.replay_animation_button.setEnabled(False)
             self.demo_review_replay_summary.setText("Review Replay MISSING | Package none | Kinds none")
             self.demo_review_history_summary.setText("Review History MISSING | Package none | Events 0")
+            self.demo_review_compare_summary.setText("Review Compare MISSING | Package none | Ready no")
             return
 
         package_summary_parts = [
@@ -530,6 +572,16 @@ class DemoReviewPanel(QWidget):
             f"Kinds {', '.join(list(demo_review_history_focus.get('replay_kinds') or [])) or 'none'}",
         ]
         self.demo_review_history_summary.setText(" | ".join(history_parts))
+        compare_parts = [
+            f"Review Compare {str(demo_review_compare_focus.get('status') or 'missing').upper()}",
+            f"Package {str(selected_review.get('package_id') or 'none')}",
+            f"Pair {int(demo_review_compare_focus.get('selected_pair_index') or 0) + 1}/{int(demo_review_compare_focus.get('available_pair_count') or 0)}",
+            f"Ready {'yes' if bool(demo_review_compare_focus.get('compare_ready')) else 'no'}",
+            f"Kinds {', '.join(list(demo_review_compare_focus.get('replay_kinds') or [])) or 'none'}",
+        ]
+        if demo_review_compare_focus.get("latest_pair_generated_at_utc"):
+            compare_parts.append(f"Pair {demo_review_compare_focus.get('latest_pair_generated_at_utc')}")
+        self.demo_review_compare_summary.setText(" | ".join(compare_parts))
         self.demo_review_text.setPlainText(
             json.dumps(
                 {
@@ -541,6 +593,8 @@ class DemoReviewPanel(QWidget):
                     "review_replay_control": demo_review_replay_control,
                     "review_history_state": demo_review_history_state,
                     "review_history_focus": demo_review_history_focus,
+                    "review_compare_state": demo_review_compare_state,
+                    "review_compare_focus": demo_review_compare_focus,
                     "last_replays_for_selected_package": current_replays,
                     "selected_package_review": selected_review,
                     "errors": demo_review_state.get("errors"),
@@ -553,6 +607,14 @@ class DemoReviewPanel(QWidget):
         self.open_hero_before_button.setEnabled(bool(demo_review_focus.get("hero_before_image_path")))
         self.open_action_after_button.setEnabled(bool(demo_review_focus.get("action_primary_after_image_path")))
         self.open_animation_after_button.setEnabled(bool(demo_review_focus.get("animation_primary_after_image_path")))
+        compare_action_after = str(dict(demo_review_compare_focus.get("latest_action_event") or {}).get("key_image_paths", {}).get("primary_after") or "")
+        compare_animation_after = str(dict(demo_review_compare_focus.get("latest_animation_event") or {}).get("key_image_paths", {}).get("primary_after") or "")
+        compare_index = int(demo_review_compare_focus.get("selected_pair_index") or 0)
+        available_pair_count = int(demo_review_compare_focus.get("available_pair_count") or 0)
+        self.open_compare_action_after_button.setEnabled(bool(compare_action_after))
+        self.open_compare_animation_after_button.setEnabled(bool(compare_animation_after))
+        self.newer_compare_button.setEnabled(compare_index > 0)
+        self.older_compare_button.setEnabled(compare_index + 1 < available_pair_count)
         workspace_ready = bool(workspace_path)
         self.replay_action_button.setEnabled(bool(demo_review_focus.get("status") == "pass" and workspace_ready))
         self.replay_animation_button.setEnabled(bool(demo_review_focus.get("status") == "pass" and workspace_ready))

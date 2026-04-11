@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from aiue_t2.demo_review_compare_state import build_demo_review_compare_focus, write_demo_review_compare_state
 from aiue_t2.demo_review_history_state import write_demo_review_history_event
 from aiue_t2.demo_review_replay_state import write_demo_review_replay_run
 from aiue_t2.demo_round_state import write_demo_round_state
@@ -26,6 +27,27 @@ class WorkbenchDemoOpsMixin:
 
     def open_demo_review_animation_after(self) -> None:
         self._open_in_explorer(str(self.demo_review_focus.get("animation_primary_after_image_path") or ""))
+
+    def open_demo_review_compare_action_after(self) -> None:
+        action_event = dict(self.demo_review_compare_focus.get("latest_action_event") or {})
+        key_image_paths = dict(action_event.get("key_image_paths") or {})
+        self._open_in_explorer(str(key_image_paths.get("primary_after") or ""))
+
+    def open_demo_review_compare_animation_after(self) -> None:
+        animation_event = dict(self.demo_review_compare_focus.get("latest_animation_event") or {})
+        key_image_paths = dict(animation_event.get("key_image_paths") or {})
+        self._open_in_explorer(str(key_image_paths.get("primary_after") or ""))
+
+    def step_demo_review_compare(self, step: int) -> None:
+        current_index = int(self.view_state.selected_review_compare_index or 0)
+        available_pair_count = int(self.demo_review_compare_focus.get("available_pair_count") or 0)
+        if available_pair_count <= 0:
+            return
+        next_index = max(0, min(current_index + int(step), available_pair_count - 1))
+        if next_index == current_index:
+            return
+        self.view_state.selected_review_compare_index = next_index
+        self._render_demo_review()
 
     def replay_current_demo_review(
         self,
@@ -103,6 +125,14 @@ class WorkbenchDemoOpsMixin:
                 selected_package_id=selection.selected_package_id,
                 request_kind=selection.request_kind,
                 replay_run=dict(package_replays.get(selection.request_kind) or {}),
+            )
+            self.demo_review_compare_state = write_demo_review_compare_state(
+                session_manifest_path=self.app_state.demo_session.session_manifest_path or self.current_session_manifest_path,
+                demo_review_history_state=self.demo_review_history_state,
+            )
+            self.demo_review_compare_focus = build_demo_review_compare_focus(
+                self.demo_review_compare_state,
+                selected_package_id=self.view_state.selected_package_id,
             )
             self._refresh_demo_review_state(write=False)
             result_status = str(invocation_result.get("status") or invocation_payload.get("status") or "")

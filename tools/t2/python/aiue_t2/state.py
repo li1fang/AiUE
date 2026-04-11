@@ -261,6 +261,7 @@ class AppState:
         selected_package = view_state.selected_package_id if view_state else self.default_package_id
         selected_action_preset = view_state.selected_action_preset_id if view_state else self.default_action_preset_id
         selected_animation_preset = view_state.selected_animation_preset_id if view_state else self.default_animation_preset_id
+        selected_review_compare_index = view_state.selected_review_compare_index if view_state else 0
         resolved_demo_request = build_demo_request(
             demo_session=self.demo_session,
             selected_package_id=selected_package,
@@ -283,6 +284,7 @@ class AppState:
             "selected_default_package": selected_package,
             "selected_default_action_preset": selected_action_preset,
             "selected_default_animation_preset": selected_animation_preset,
+            "selected_default_review_compare_index": int(selected_review_compare_index),
             "slot_debugger": {
                 "package_count": int(self.slot_debugger.get("package_count") or 0),
                 "package_ids": [str(item.get("package_id") or "") for item in slot_packages],
@@ -306,6 +308,7 @@ class ViewState:
     selected_package_id: str | None = None
     selected_action_preset_id: str | None = None
     selected_animation_preset_id: str | None = None
+    selected_review_compare_index: int = 0
 
 
 def build_default_view_state(app_state: AppState) -> ViewState:
@@ -315,6 +318,7 @@ def build_default_view_state(app_state: AppState) -> ViewState:
         selected_package_id=app_state.default_package_id,
         selected_action_preset_id=app_state.default_action_preset_id,
         selected_animation_preset_id=app_state.default_animation_preset_id,
+        selected_review_compare_index=0,
     )
 
 

@@ -7,6 +7,7 @@ param(
     [string]$PackageId = "",
     [string]$ActionPresetId = "",
     [string]$AnimationPresetId = "",
+    [int]$ReviewCompareIndex = 0,
     [switch]$DemoRequestExport,
     [switch]$DemoRequestDryRun,
     [switch]$DemoRequestInvoke,
@@ -52,6 +53,9 @@ if ($ActionPresetId) {
 }
 if ($AnimationPresetId) {
     $args += @("--animation-preset-id", $AnimationPresetId)
+}
+if ($ReviewCompareIndex -ge 0) {
+    $args += @("--review-compare-index", [string]$ReviewCompareIndex)
 }
 if ($DemoRequestExport) {
     $args += "--demo-request-export"

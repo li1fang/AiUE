@@ -7,6 +7,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QTreeWidgetItem
 
+from aiue_t2.demo_review_compare_state import build_demo_review_compare_focus
 from aiue_t2.demo_review_history_state import build_demo_review_history_focus
 from aiue_t2.demo_review_state import build_demo_review_focus, build_demo_review_state, write_demo_review_state
 from aiue_t2.state import CATEGORY_LABELS, CATEGORY_ORDER, DemoPackageRecord, PreviewImageRecord, ReportRecord
@@ -156,6 +157,11 @@ class WorkbenchRenderMixin:
             self.demo_review_history_state,
             selected_package_id=self.view_state.selected_package_id,
         )
+        self.demo_review_compare_focus = build_demo_review_compare_focus(
+            self.demo_review_compare_state,
+            selected_package_id=self.view_state.selected_package_id,
+            selected_pair_index=self.view_state.selected_review_compare_index,
+        )
         self.demo_review_panel.render_review(
             dict(self.demo_review_state),
             dict(self.demo_review_focus),
@@ -163,6 +169,8 @@ class WorkbenchRenderMixin:
             dict(self.demo_review_replay_control),
             dict(self.demo_review_history_state),
             dict(self.demo_review_history_focus),
+            dict(self.demo_review_compare_state),
+            dict(self.demo_review_compare_focus),
             workspace_path=str(self.current_workspace_config_path or "")
             if self.current_workspace_config_path and Path(self.current_workspace_config_path).exists()
             else "",
@@ -216,9 +224,13 @@ class WorkbenchRenderMixin:
         item = self.demo_session_package_list.currentItem()
         if item is None:
             return
-        self.view_state.selected_package_id = str(item.data(Qt.UserRole) or "")
+        next_package_id = str(item.data(Qt.UserRole) or "")
+        package_changed = next_package_id != str(self.view_state.selected_package_id or "")
+        self.view_state.selected_package_id = next_package_id
         self.view_state.selected_action_preset_id = None
         self.view_state.selected_animation_preset_id = None
+        if package_changed:
+            self.view_state.selected_review_compare_index = 0
         self._render_demo_session_package_details()
 
     def _on_demo_action_preset_changed(self) -> None:

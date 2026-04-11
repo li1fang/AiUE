@@ -38,6 +38,9 @@ def test_workbench_window_renders_fixture_pack(qtbot, tmp_path: Path):
     assert window.current_dump_payload()["demo_review_replay_state"]["status"] == "missing"
     assert window.current_dump_payload()["demo_review_history_state"]["status"] == "missing"
     assert window.current_dump_payload()["demo_review_history_focus"]["status"] == "missing"
+    assert window.current_dump_payload()["demo_review_compare_state"]["status"] == "missing"
+    assert window.current_dump_payload()["demo_review_compare_focus"]["status"] == "missing"
+    assert window.current_dump_payload()["selected_default_review_compare_index"] == 0
     assert "Review MISSING" in window.demo_review_summary.text()
     assert window.current_error_codes() == []
 
@@ -148,6 +151,7 @@ def test_workbench_window_demo_request_controls(qtbot, tmp_path: Path, monkeypat
     assert payload["demo_review_focus"]["selected_package_id"] == "pkg_alpha"
     assert payload["demo_review_replay_state"]["status"] == "missing"
     assert payload["demo_review_history_state"]["status"] == "missing"
+    assert payload["demo_review_compare_state"]["status"] == "missing"
     assert payload["demo_round_state"]["counts"]["package_count"] == 1
     assert payload["demo_round_state"]["counts"]["action_motion_verified"] == 1
     assert payload["demo_round_state"]["counts"]["animation_pose_verified"] == 1
@@ -295,6 +299,7 @@ def test_workbench_window_demo_review_replay_controls(qtbot, tmp_path: Path, mon
             },
         }
 
+    opened_paths: list[str] = []
     monkeypatch.setattr("aiue_t2.ui.invoke_demo_request", fake_invoke)
     window = WorkbenchWindow(
         manifest_path=pack["manifest_path"],
@@ -302,6 +307,7 @@ def test_workbench_window_demo_review_replay_controls(qtbot, tmp_path: Path, mon
         workspace_config_path=workspace_config_path,
     )
     qtbot.addWidget(window)
+    monkeypatch.setattr(window, "_open_in_explorer", lambda path: opened_paths.append(str(path)))
     window.show()
     qtbot.waitUntil(lambda: window.demo_session_package_list.count() == 1)
 
@@ -324,5 +330,32 @@ def test_workbench_window_demo_review_replay_controls(qtbot, tmp_path: Path, mon
     assert payload["demo_review_history_focus"]["status"] == "pass"
     assert payload["demo_review_history_focus"]["event_count"] == 2
     assert payload["demo_review_history_focus"]["replay_kinds"] == ["action_preview", "animation_preview"]
+    assert payload["demo_review_compare_state"]["status"] == "pass"
+    assert payload["demo_review_compare_focus"]["status"] == "pass"
+    assert payload["demo_review_compare_focus"]["compare_ready"] is True
+    assert payload["demo_review_compare_focus"]["latest_action_event"]["request_kind"] == "action_preview"
+    assert payload["demo_review_compare_focus"]["latest_animation_event"]["request_kind"] == "animation_preview"
     assert "Review History PASS" in window.demo_review_history_summary.text()
+    assert "Review Compare PASS" in window.demo_review_compare_summary.text()
     assert "Review Replay PASS" in window.demo_review_replay_summary.text()
+
+    qtbot.mouseClick(window.replay_action_button, Qt.LeftButton)
+    qtbot.mouseClick(window.replay_animation_button, Qt.LeftButton)
+    payload = window.current_dump_payload()
+    assert payload["demo_review_compare_focus"]["available_pair_count"] == 2
+    assert payload["demo_review_compare_focus"]["selected_pair_index"] == 0
+    assert "Pair 1/2" in window.demo_review_compare_summary.text()
+
+    qtbot.mouseClick(window.older_compare_button, Qt.LeftButton)
+    payload = window.current_dump_payload()
+    assert payload["demo_review_compare_focus"]["selected_pair_index"] == 1
+    assert "Pair 2/2" in window.demo_review_compare_summary.text()
+
+    qtbot.mouseClick(window.open_compare_action_after_button, Qt.LeftButton)
+    qtbot.mouseClick(window.open_compare_animation_after_button, Qt.LeftButton)
+    assert len(opened_paths) == 2
+    assert all(path.endswith(".png") for path in opened_paths)
+
+    qtbot.mouseClick(window.newer_compare_button, Qt.LeftButton)
+    payload = window.current_dump_payload()
+    assert payload["demo_review_compare_focus"]["selected_pair_index"] == 0
