@@ -6,10 +6,11 @@ from pathlib import Path
 from typing import Any
 
 
-CATEGORY_ORDER = ["active_line", "platform_line", "historical_other"]
+CATEGORY_ORDER = ["active_line", "platform_line", "governance_line", "historical_other"]
 CATEGORY_LABELS = {
     "active_line": "Active Line",
     "platform_line": "Platform Line",
+    "governance_line": "Governance Line",
     "historical_other": "Historical / Other",
 }
 DEFAULT_E2_SESSION_NAME = "playable_demo_e2_session.json"
@@ -207,6 +208,32 @@ class DemoRequestRecord:
 
 
 @dataclass
+class GovernanceBalanceRecord:
+    status: str
+    recommended_next_round_kind: str | None = None
+    discussion_reason: str | None = None
+    stability_pressure: str = "unknown"
+    governance_pressure: str = "unknown"
+    progress_pressure: str = "unknown"
+    hotspot_paths: list[str] = field(default_factory=list)
+    report_gate_id: str = ""
+    report_source_path: str = ""
+
+    def to_dump_dict(self) -> dict[str, Any]:
+        return {
+            "status": self.status,
+            "recommended_next_round_kind": self.recommended_next_round_kind,
+            "discussion_signal": {"reason": self.discussion_reason},
+            "stability_pressure": self.stability_pressure,
+            "governance_pressure": self.governance_pressure,
+            "progress_pressure": self.progress_pressure,
+            "hotspot_paths": list(self.hotspot_paths),
+            "report_gate_id": self.report_gate_id,
+            "report_source_path": self.report_source_path,
+        }
+
+
+@dataclass
 class AppState:
     status: str
     manifest_path: str
@@ -218,6 +245,7 @@ class AppState:
     preview_images: list[PreviewImageRecord]
     r3_metrics: list[dict[str, Any]]
     slot_debugger: dict[str, Any]
+    governance_balance: GovernanceBalanceRecord
     demo_session: DemoSessionRecord
     demo_request: DemoRequestRecord
     errors: list[ErrorRecord]
@@ -259,6 +287,7 @@ class AppState:
                 "package_count": int(self.slot_debugger.get("package_count") or 0),
                 "package_ids": [str(item.get("package_id") or "") for item in slot_packages],
             },
+            "governance_balance": self.governance_balance.to_dump_dict(),
             "demo_session": self.demo_session.to_dump_dict(
                 selected_package_id=selected_package,
                 selected_action_preset_id=selected_action_preset,
@@ -312,6 +341,7 @@ def _error_app_state(*, manifest_path: Path, code: str, message: str) -> AppStat
             "reports": 0,
             "active_line_reports": 0,
             "platform_line_reports": 0,
+            "governance_line_reports": 0,
             "historical_other_reports": 0,
             "passing_reports": 0,
         },
@@ -320,6 +350,7 @@ def _error_app_state(*, manifest_path: Path, code: str, message: str) -> AppStat
         preview_images=[],
         r3_metrics=[],
         slot_debugger={"package_count": 0, "packages": []},
+        governance_balance=GovernanceBalanceRecord(status="missing"),
         demo_session=DemoSessionRecord(
             status="missing",
             session_manifest_path="",
@@ -355,6 +386,7 @@ def _coerce_summary_counts(payload: dict[str, Any]) -> dict[str, int]:
         "reports": int(counts.get("reports") or 0),
         "active_line_reports": int(counts.get("active_line_reports") or 0),
         "platform_line_reports": int(counts.get("platform_line_reports") or 0),
+        "governance_line_reports": int(counts.get("governance_line_reports") or 0),
         "historical_other_reports": int(counts.get("historical_other_reports") or 0),
         "passing_reports": int(counts.get("passing_reports") or 0),
     }
@@ -469,6 +501,29 @@ def _extract_r3_metrics(reports_by_gate_id: dict[str, ReportRecord]) -> list[dic
                 }
             )
     return metrics_rows
+
+
+def _extract_governance_balance(reports_by_gate_id: dict[str, ReportRecord]) -> GovernanceBalanceRecord:
+    record = reports_by_gate_id.get("dynamic_balance_governance_progress")
+    if not record or not record.report_payload:
+        return GovernanceBalanceRecord(status="missing")
+    report_payload = dict(record.report_payload or {})
+    pressure_summary = dict(report_payload.get("pressure_summary") or {})
+    recommendation = dict(report_payload.get("recommendation") or {})
+    discussion_signal = dict(report_payload.get("discussion_signal") or {})
+    repo_state = dict(report_payload.get("repo_state") or {})
+    hotspots = [str(item.get("relative_path") or "") for item in list(repo_state.get("hotspots") or []) if str(item.get("relative_path") or "")]
+    return GovernanceBalanceRecord(
+        status=str(report_payload.get("status") or "unknown"),
+        recommended_next_round_kind=str(recommendation.get("next_round_kind") or "") or None,
+        discussion_reason=str(discussion_signal.get("reason") or "") or None,
+        stability_pressure=str((pressure_summary.get("stability_pressure") or {}).get("level") or "unknown"),
+        governance_pressure=str((pressure_summary.get("governance_pressure") or {}).get("level") or "unknown"),
+        progress_pressure=str((pressure_summary.get("progress_pressure") or {}).get("level") or "unknown"),
+        hotspot_paths=hotspots,
+        report_gate_id=record.gate_id,
+        report_source_path=record.report_source_path,
+    )
 
 
 def _default_report_gate_id(report_categories: dict[str, list[ReportRecord]]) -> str | None:
@@ -878,6 +933,7 @@ def load_workbench_state(
     default_report_gate_id = _default_report_gate_id(report_categories)
     default_image_key = preview_images[0].key if preview_images else None
     slot_packages = list(slot_debugger.get("packages") or [])
+    governance_balance = _extract_governance_balance(reports_by_gate_id)
     default_package_id = demo_session.default_package_id or (str(slot_packages[0].get("package_id") or "") if slot_packages else None)
     default_action_preset_id = _default_demo_preset_id(
         demo_session,
@@ -906,6 +962,7 @@ def load_workbench_state(
         preview_images=preview_images,
         r3_metrics=_extract_r3_metrics(reports_by_gate_id),
         slot_debugger=slot_debugger,
+        governance_balance=governance_balance,
         demo_session=demo_session,
         demo_request=demo_request,
         errors=errors,

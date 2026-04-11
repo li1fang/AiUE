@@ -124,7 +124,7 @@ def _collect_preview_artifacts(report_index: dict) -> list[dict]:
 
 def _copy_reports(report_index: dict, reports_dir: Path) -> list[dict]:
     copied = []
-    for category in ("active_line", "platform_line", "historical_other"):
+    for category in ("active_line", "platform_line", "governance_line", "historical_other"):
         for entry in list((report_index.get("categories") or {}).get(category) or []):
             report_path = str(entry.get("report_path") or "")
             if not report_path:
@@ -182,6 +182,26 @@ def _render_r3_metrics(report_index: dict) -> str:
     return "<table><thead><tr><th>Package</th><th>Shot</th><th>Status</th><th>Crop Hist L1</th><th>Crop Mean Delta</th><th>Full Hist L1</th><th>Full Mean Delta</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
 
 
+def _render_balance_card(report_index: dict) -> str:
+    balance_report = dict((dict(report_index.get("reports_by_gate_id") or {}).get("dynamic_balance_governance_progress") or {}).get("report") or {})
+    if not balance_report:
+        return "<p class=\"muted\">No dynamic balance report was available.</p>"
+    pressure_summary = dict(balance_report.get("pressure_summary") or {})
+    recommendation = dict(balance_report.get("recommendation") or {})
+    discussion_signal = dict(balance_report.get("discussion_signal") or {})
+    return (
+        "<article class=\"card\">"
+        f"<h3>Dynamic Balance</h3>"
+        f"<p><strong>Status:</strong> {html.escape(str(balance_report.get('status') or 'unknown'))}</p>"
+        f"<p><strong>Recommended Next Round:</strong> {html.escape(str(recommendation.get('next_round_kind') or 'unknown'))}</p>"
+        f"<p><strong>Stability Pressure:</strong> {html.escape(str((pressure_summary.get('stability_pressure') or {}).get('level') or 'unknown'))}</p>"
+        f"<p><strong>Governance Pressure:</strong> {html.escape(str((pressure_summary.get('governance_pressure') or {}).get('level') or 'unknown'))}</p>"
+        f"<p><strong>Progress Pressure:</strong> {html.escape(str((pressure_summary.get('progress_pressure') or {}).get('level') or 'unknown'))}</p>"
+        f"<p class=\"muted\">Discussion reason: {html.escape(str(discussion_signal.get('reason') or 'none'))}</p>"
+        "</article>"
+    )
+
+
 def _render_slot_debugger(slot_debugger: dict) -> str:
     blocks = []
     for package in list(slot_debugger.get("packages") or []):
@@ -212,9 +232,11 @@ def _render_html(manifest: dict) -> str:
 <body><main>
 <h1>AiUE T1 Evidence Pack</h1>
 <p class="muted">Generated at {html.escape(str(manifest.get('generated_at_utc') or ''))}</p>
-<section class="section"><h2>Summary</h2><div class="grid cards"><article class="card"><h3>Reports</h3><p>{int(counts.get('reports') or 0)}</p></article><article class="card"><h3>Active Line</h3><p>{int(counts.get('active_line_reports') or 0)}</p></article><article class="card"><h3>Platform Line</h3><p>{int(counts.get('platform_line_reports') or 0)}</p></article><article class="card"><h3>Passing Reports</h3><p>{int(counts.get('passing_reports') or 0)}</p></article></div></section>
+<section class="section"><h2>Summary</h2><div class="grid cards"><article class="card"><h3>Reports</h3><p>{int(counts.get('reports') or 0)}</p></article><article class="card"><h3>Active Line</h3><p>{int(counts.get('active_line_reports') or 0)}</p></article><article class="card"><h3>Platform Line</h3><p>{int(counts.get('platform_line_reports') or 0)}</p></article><article class="card"><h3>Governance Line</h3><p>{int(counts.get('governance_line_reports') or 0)}</p></article><article class="card"><h3>Passing Reports</h3><p>{int(counts.get('passing_reports') or 0)}</p></article></div></section>
+<section class="section"><h2>Balance</h2>{_render_balance_card(report_index)}</section>
 <section class="section"><h2>Active Line Reports</h2><div class="grid cards">{_render_report_cards(list(categories.get('active_line') or []))}</div></section>
 <section class="section"><h2>Platform Line Reports</h2><div class="grid cards">{_render_report_cards(list(categories.get('platform_line') or []))}</div></section>
+<section class="section"><h2>Governance Line Reports</h2><div class="grid cards">{_render_report_cards(list(categories.get('governance_line') or []))}</div></section>
 <section class="section"><h2>Historical / Other Reports</h2><div class="grid cards">{_render_report_cards(list(categories.get('historical_other') or []))}</div></section>
 <section class="section"><h2>Key Screenshot Previews</h2><div class="artifact-grid">{_render_preview_cards(preview_artifacts)}</div></section>
 <section class="section"><h2>Before / After Metrics</h2>{_render_r3_metrics(report_index)}</section>

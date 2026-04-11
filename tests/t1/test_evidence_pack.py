@@ -36,4 +36,5 @@ def test_build_evidence_pack_generates_static_bundle(tmp_path: Path):
     assert (output_root / "manifest.json").exists()
     assert (latest_root / "index.html").exists()
     assert manifest["slot_debugger"]["package_count"] == 1
+    assert manifest["report_index"]["counts"]["governance_line_reports"] == 1
     assert len(manifest["artifacts"]["preview_images"]) >= 4

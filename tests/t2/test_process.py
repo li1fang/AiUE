@@ -17,14 +17,16 @@ def test_workbench_cli_seven_open_cycles(tmp_path: Path):
         completed, payload = run_workbench_process(manifest_path=pack["manifest_path"])
         assert completed.returncode == 0, completed.stderr
         assert payload["status"] == "pass"
-        assert payload["summary_counts"]["reports"] == 7
+        assert payload["summary_counts"]["reports"] == 8
         assert payload["summary_counts"]["active_line_reports"] == 4
         assert payload["summary_counts"]["platform_line_reports"] == 3
+        assert payload["summary_counts"]["governance_line_reports"] == 1
         assert payload["slot_debugger"]["package_count"] == 1
+        assert payload["governance_balance"]["status"] == "attention"
         assert payload["demo_session"]["status"] == "pass"
         assert payload["demo_session"]["package_ids"] == ["pkg_alpha"]
         assert sorted(payload["demo_request"]["request_kinds"]) == ["action_preview", "animation_preview"]
-        assert set(payload["report_categories"]) == {"active_line", "platform_line", "historical_other"}
+        assert set(payload["report_categories"]) == {"active_line", "platform_line", "governance_line", "historical_other"}
 
 
 def test_workbench_cli_error_injections(tmp_path: Path):
@@ -51,10 +53,12 @@ def test_workbench_cli_reads_latest_manifest_smoke():
     completed, payload = run_workbench_process(latest=True)
     assert completed.returncode == 0, completed.stderr
     assert payload["status"] == "pass"
-    assert set(payload["report_categories"]) == {"active_line", "platform_line", "historical_other"}
+    assert set(payload["report_categories"]) == {"active_line", "platform_line", "governance_line", "historical_other"}
     assert payload["summary_counts"]["active_line_reports"] >= 1
     assert payload["summary_counts"]["platform_line_reports"] >= 1
+    assert payload["summary_counts"]["governance_line_reports"] >= 0
     assert payload["slot_debugger"]["package_count"] >= 1
+    assert payload["governance_balance"]["status"] in {"pass", "attention", "missing"}
     assert payload["demo_session"]["status"] in {"pass", "missing"}
     assert payload["demo_request"]["status"] in {"pass", "missing", "error"}
 
@@ -73,3 +77,12 @@ def test_workbench_cli_demo_request_export_fixture(tmp_path: Path):
     assert payload["demo_request_control"]["operation"] == "export"
     assert payload["demo_request_control"]["request_kind"] == "animation_preview"
     assert Path(payload["demo_request_control"]["request_json_path"]).exists()
+
+
+def test_workbench_cli_handles_missing_governance_report(tmp_path: Path):
+    pack = build_fixture_pack(tmp_path, include_governance=False)
+    completed, payload = run_workbench_process(manifest_path=pack["manifest_path"])
+    assert completed.returncode == 0, completed.stderr
+    assert payload["status"] == "pass"
+    assert payload["summary_counts"]["governance_line_reports"] == 0
+    assert payload["governance_balance"]["status"] == "missing"

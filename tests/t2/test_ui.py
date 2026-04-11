@@ -13,12 +13,15 @@ def test_workbench_window_renders_fixture_pack(qtbot, tmp_path: Path):
     window = WorkbenchWindow(manifest_path=pack["manifest_path"])
     qtbot.addWidget(window)
     window.show()
-    qtbot.waitUntil(lambda: window.current_dump_payload()["summary_counts"]["reports"] == 7)
-    assert window.summary_cards["reports"].value_label.text() == "7"
-    assert window.report_tree.topLevelItemCount() == 3
+    qtbot.waitUntil(lambda: window.current_dump_payload()["summary_counts"]["reports"] == 8)
+    assert window.summary_cards["reports"].value_label.text() == "8"
+    assert window.summary_cards["governance"].value_label.text() == "1"
+    assert window.report_tree.topLevelItemCount() == 4
     assert window.metrics_table.rowCount() >= 1
     assert window.slot_table.rowCount() >= 3
     assert "visual_proof_v1" in window.details_text.toPlainText()
+    assert "dynamic_balance_governance_progress" in window.current_dump_payload()["report_categories"]["governance_line"]
+    assert window.current_dump_payload()["governance_balance"]["status"] == "attention"
     assert window.demo_session_package_list.count() == 1
     assert window.demo_action_preset_list.count() == 1
     assert window.demo_animation_preset_list.count() == 1

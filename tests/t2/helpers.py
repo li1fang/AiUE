@@ -17,10 +17,12 @@ DEMO_REQUEST_SCRIPT = REPO_ROOT / "tools" / "run_e2_demo_request.ps1"
 DEFAULT_E2_SESSION_NAME = "playable_demo_e2_session.json"
 
 
-def materialize_report_fixtures(target_root: Path) -> Path:
+def materialize_report_fixtures(target_root: Path, *, include_governance: bool = True) -> Path:
     target_root.mkdir(parents=True, exist_ok=True)
     placeholder_root = str(FIXTURE_ROOT).replace("\\", "/")
     for report_path in REPORT_FIXTURES.glob("*.json"):
+        if not include_governance and report_path.name == "latest_dynamic_balance_governance_progress_report.json":
+            continue
         payload = load_json(report_path)
         serialized = json.dumps(payload)
         serialized = serialized.replace("__FIXTURE_ROOT__", placeholder_root)
@@ -28,8 +30,8 @@ def materialize_report_fixtures(target_root: Path) -> Path:
     return target_root
 
 
-def build_fixture_pack(tmp_path: Path) -> dict:
-    verification_root = materialize_report_fixtures(tmp_path / "verification")
+def build_fixture_pack(tmp_path: Path, *, include_governance: bool = True) -> dict:
+    verification_root = materialize_report_fixtures(tmp_path / "verification", include_governance=include_governance)
     output_root = tmp_path / "tooling" / "pack"
     latest_root = tmp_path / "tooling" / "latest"
     manifest = build_evidence_pack(

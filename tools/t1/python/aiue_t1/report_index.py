@@ -28,12 +28,18 @@ PLATFORM_LINE_GATE_IDS = [
     "live_fx_visual_quality_r3",
 ]
 
+GOVERNANCE_LINE_GATE_IDS = [
+    "dynamic_balance_governance_progress",
+]
+
 
 def classify_gate(gate_id: str) -> tuple[str, int]:
     if gate_id in ACTIVE_LINE_GATE_IDS:
         return "active_line", ACTIVE_LINE_GATE_IDS.index(gate_id)
     if gate_id in PLATFORM_LINE_GATE_IDS:
         return "platform_line", PLATFORM_LINE_GATE_IDS.index(gate_id)
+    if gate_id in GOVERNANCE_LINE_GATE_IDS:
+        return "governance_line", GOVERNANCE_LINE_GATE_IDS.index(gate_id)
     return "historical_other", 999
 
 
@@ -85,6 +91,7 @@ def build_report_index(verification_root: str | Path) -> dict:
     by_category = {
         "active_line": [item for item in reports if item["category"] == "active_line"],
         "platform_line": [item for item in reports if item["category"] == "platform_line"],
+        "governance_line": [item for item in reports if item["category"] == "governance_line"],
         "historical_other": [item for item in reports if item["category"] == "historical_other"],
     }
     return {
@@ -93,6 +100,7 @@ def build_report_index(verification_root: str | Path) -> dict:
             "reports": len(reports),
             "active_line_reports": len(by_category["active_line"]),
             "platform_line_reports": len(by_category["platform_line"]),
+            "governance_line_reports": len(by_category["governance_line"]),
             "historical_other_reports": len(by_category["historical_other"]),
             "passing_reports": sum(1 for item in reports if item["status"] == "pass"),
         },

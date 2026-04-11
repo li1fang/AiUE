@@ -1,0 +1,128 @@
+{
+  "gate_id": "dynamic_balance_governance_progress",
+  "status": "attention",
+  "generated_at_utc": "2026-04-11T00:00:00+00:00",
+  "workflow_pack": "tooling",
+  "compatibility": {
+    "schema_family": "aiue_dynamic_balance_report"
+  },
+  "repo_state": {
+    "branch": "codex/test-balance",
+    "head_commit": "abc123",
+    "head_subject": "feat(tooling): add balance fixture",
+    "status_short": "## codex/test-balance",
+    "dirty": false,
+    "hotspots": [
+      {
+        "path": "C:/AiUE/adapters/unreal/host_project/runtime/common.py",
+        "relative_path": "adapters/unreal/host_project/runtime/common.py",
+        "line_count": 2001,
+        "severity": "critical"
+      },
+      {
+        "path": "C:/AiUE/tools/t2/python/aiue_t2/ui.py",
+        "relative_path": "tools/t2/python/aiue_t2/ui.py",
+        "line_count": 1001,
+        "severity": "large"
+      }
+    ]
+  },
+  "round_definition": {
+    "kind": "checkpoint_round",
+    "description": "single git commit that touches docs/checkpoints/*.md"
+  },
+  "policy": {
+    "enforcement_level": "soft_signal",
+    "round_definition": "checkpoint_round"
+  },
+  "recent_rounds": [
+    {
+      "round_index": 1,
+      "commit_hash": "abc123",
+      "subject": "refactor(tooling): split balance state",
+      "round_kind": "governance",
+      "checkpoint_paths": [
+        "docs/checkpoints/runtime_governance_checkpoint_20260411.md"
+      ],
+      "changed_paths": [
+        "tools/t2/python/aiue_t2/ui.py"
+      ],
+      "touched_hotspot_paths": [
+        "tools/t2/python/aiue_t2/ui.py"
+      ]
+    },
+    {
+      "round_index": 2,
+      "commit_hash": "def456",
+      "subject": "feat(demo): add new slice",
+      "round_kind": "progress",
+      "checkpoint_paths": [
+        "docs/checkpoints/e2_native_control_surface_checkpoint.md"
+      ],
+      "changed_paths": [
+        "tools/t2/python/aiue_t2/ui.py"
+      ],
+      "touched_hotspot_paths": [
+        "tools/t2/python/aiue_t2/ui.py"
+      ]
+    }
+  ],
+  "line_health": {
+    "active_line": {
+      "healthy": true,
+      "missing_gate_ids": [],
+      "non_pass_gate_ids": []
+    },
+    "platform_line": {
+      "healthy": true,
+      "missing_gate_ids": [],
+      "non_pass_gate_ids": []
+    },
+    "all_required_latest_green": true
+  },
+  "ledgers": {
+    "counts": {
+      "progress": 1,
+      "governance": 1,
+      "mixed": 0,
+      "unknown": 0
+    },
+    "recent_round_kinds": [
+      "governance",
+      "progress"
+    ],
+    "governance_only_head_streak": 1
+  },
+  "pressure_summary": {
+    "stability_pressure": {
+      "level": "low",
+      "reasons": []
+    },
+    "governance_pressure": {
+      "level": "moderate",
+      "reasons": [
+        "large_or_critical_hotspots_present"
+      ],
+      "hotspot_paths": [
+        "adapters/unreal/host_project/runtime/common.py",
+        "tools/t2/python/aiue_t2/ui.py"
+      ]
+    },
+    "progress_pressure": {
+      "level": "low",
+      "reasons": []
+    }
+  },
+  "recommendation": {
+    "next_round_kind": "flexible",
+    "reason": "balanced_enough_to_choose_flexibly"
+  },
+  "discussion_signal": {
+    "should_discuss": true,
+    "reason": "initial_dynamic_balance_baseline"
+  },
+  "artifacts": {
+    "report_path": "C:/AiUE/Saved/verification/latest_dynamic_balance_governance_progress_report.json",
+    "latest_report_path": "C:/AiUE/Saved/verification/latest_dynamic_balance_governance_progress_report.json"
+  }
+}

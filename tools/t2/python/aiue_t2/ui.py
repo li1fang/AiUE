@@ -37,6 +37,7 @@ from aiue_t2.state import (
     DemoPresetRecord,
     DemoRequestRecord,
     DemoSessionRecord,
+    GovernanceBalanceRecord,
     PreviewImageRecord,
     ReportRecord,
     ViewState,
@@ -170,6 +171,7 @@ class WorkbenchWindow(QMainWindow):
             preview_images=[],
             r3_metrics=[],
             slot_debugger={"package_count": 0, "packages": []},
+            governance_balance=GovernanceBalanceRecord(status="missing"),
             demo_session=DemoSessionRecord(
                 status="missing",
                 session_manifest_path="",
@@ -243,6 +245,7 @@ class WorkbenchWindow(QMainWindow):
             "reports": SummaryCard(title="Reports", object_name="summaryReportsCard"),
             "active": SummaryCard(title="Active Line", object_name="summaryActiveCard"),
             "platform": SummaryCard(title="Platform Line", object_name="summaryPlatformCard"),
+            "governance": SummaryCard(title="Governance Line", object_name="summaryGovernanceCard"),
             "passing": SummaryCard(title="Passing", object_name="summaryPassingCard"),
         }
         for card in self.summary_cards.values():
@@ -668,6 +671,7 @@ class WorkbenchWindow(QMainWindow):
         self.summary_cards["reports"].set_value(int(counts.get("reports") or 0))
         self.summary_cards["active"].set_value(int(counts.get("active_line_reports") or 0))
         self.summary_cards["platform"].set_value(int(counts.get("platform_line_reports") or 0))
+        self.summary_cards["governance"].set_value(int(counts.get("governance_line_reports") or 0))
         self.summary_cards["passing"].set_value(int(counts.get("passing_reports") or 0))
         self._render_report_tree()
         self._render_details()
