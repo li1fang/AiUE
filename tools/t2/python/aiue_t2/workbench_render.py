@@ -83,11 +83,20 @@ class WorkbenchRenderMixin:
             f"{key}:{int(value)}"
             for key, value in sorted(diagnostic_counts.items())
         ) or "none"
+        focus_package_id = str(q5c_summary.get("focus_package_id") or "")
+        focus_metric = str(q5c_summary.get("focus_metric") or "")
+        focus_margin = float(q5c_summary.get("focus_margin_to_failure") or 0.0)
+        focus_text = (
+            f" | focus {focus_metric}={focus_margin:.4f} @ {focus_package_id}"
+            if focus_package_id and focus_metric
+            else ""
+        )
         self.q5c_quality_summary.setText(
             "Q5C-lite "
             f"{str(q5c_summary.get('status') or 'unknown').upper()} | "
             f"packages {int(q5c_summary.get('passing_package_count') or 0)}/{int(q5c_summary.get('package_count') or 0)} | "
             f"classes {classes_text}"
+            f"{focus_text}"
         )
         self.q5c_quality_summary.setVisible(True)
 

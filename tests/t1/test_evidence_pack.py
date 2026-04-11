@@ -65,4 +65,6 @@ def test_build_evidence_pack_generates_static_bundle(tmp_path: Path):
     assert q5c_summary["status"] == "pass"
     assert q5c_summary["package_count"] >= 1
     assert q5c_summary["diagnostic_class_counts"]
+    assert q5c_summary["focus_package_id"]
+    assert q5c_summary["focus_metric"]
     assert any(str(item.get("artifact_image_relative_path") or "").startswith("images/q5c_") for item in list(q5c_summary.get("packages") or []))

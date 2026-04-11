@@ -148,6 +148,9 @@ def test_workbench_cli_reads_q5c_quality_summary(tmp_path: Path):
     assert payload["status"] == "pass"
     assert payload["quality_summaries"]["q5c_lite"]["status"] == "pass"
     assert payload["quality_summaries"]["q5c_lite"]["diagnostic_class_counts"]["pass_stable"] == 1
+    assert payload["quality_summaries"]["q5c_lite"]["focus_package_id"] == "pkg_alpha"
+    assert payload["quality_summaries"]["q5c_lite"]["focus_metric"] == "penetration_ratio_margin_to_failure"
+    assert payload["quality_summaries"]["q5c_lite"]["focus_margin_to_failure"] == 0.02
     assert payload["quality_summaries"]["q5c_lite"]["packages"][0]["package_id"] == "pkg_alpha"
 
 

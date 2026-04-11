@@ -157,12 +157,33 @@ def _build_q5c_quality_summary(report_index: dict, copied_images: list[dict]) ->
     }
     package_summaries = []
     diagnostic_class_counts: dict[str, int] = {}
+    focus_package_id = ""
+    focus_metric = ""
+    focus_margin_to_failure = 0.0
+    focus_diagnostic_class = ""
+    focus_initialized = False
     for package in list(q5c_report.get("per_package_results") or []):
         package_id = str(package.get("package_id") or "")
         diagnostic_class = str(package.get("fit_diagnostic_class") or "unknown")
         diagnostic_class_counts[diagnostic_class] = diagnostic_class_counts.get(diagnostic_class, 0) + 1
         preview_key = f"q5c_{package_id}_debug"
         preview_record = dict(preview_by_key.get(preview_key) or {})
+        threshold_deltas = dict(package.get("threshold_deltas") or {})
+        margin_to_failure_by_metric = {
+            "embedding_ratio_margin_to_failure": float(threshold_deltas.get("embedding_ratio_delta_to_min") or 0.0),
+            "floating_ratio_margin_to_failure": -float(threshold_deltas.get("floating_ratio_delta_to_max") or 0.0),
+            "penetration_ratio_margin_to_failure": -float(threshold_deltas.get("penetration_ratio_delta_to_max") or 0.0),
+        }
+        closest_margin_metric, closest_margin_value = min(
+            margin_to_failure_by_metric.items(),
+            key=lambda item: float(item[1]),
+        )
+        if (not focus_initialized) or float(closest_margin_value) < float(focus_margin_to_failure):
+            focus_package_id = package_id
+            focus_metric = closest_margin_metric
+            focus_margin_to_failure = float(closest_margin_value)
+            focus_diagnostic_class = diagnostic_class
+            focus_initialized = True
         package_summaries.append(
             {
                 "package_id": package_id,
@@ -172,7 +193,10 @@ def _build_q5c_quality_summary(report_index: dict, copied_images: list[dict]) ->
                 "floating_ratio": float(package.get("floating_ratio") or 0.0),
                 "penetration_ratio": float(package.get("penetration_ratio") or 0.0),
                 "diagnostic_signals": dict(package.get("diagnostic_signals") or {}),
-                "threshold_deltas": dict(package.get("threshold_deltas") or {}),
+                "threshold_deltas": threshold_deltas,
+                "margin_to_failure_by_metric": margin_to_failure_by_metric,
+                "closest_margin_metric": closest_margin_metric,
+                "closest_margin_value": float(closest_margin_value),
                 "failed_requirement_ids": [
                     str(item.get("id") or "")
                     for item in list(package.get("failed_requirements") or [])
@@ -190,6 +214,10 @@ def _build_q5c_quality_summary(report_index: dict, copied_images: list[dict]) ->
         "package_count": len(package_summaries),
         "passing_package_count": sum(1 for item in package_summaries if item.get("status") == "pass"),
         "diagnostic_class_counts": diagnostic_class_counts,
+        "focus_package_id": focus_package_id,
+        "focus_metric": focus_metric,
+        "focus_margin_to_failure": float(focus_margin_to_failure) if focus_initialized else 0.0,
+        "focus_fit_diagnostic_class": focus_diagnostic_class,
         "packages": package_summaries,
     }
 
@@ -299,22 +327,33 @@ def _render_q5c_quality_summary(quality_summaries: dict) -> str:
     diagnostic_counts = dict(q5c_summary.get("diagnostic_class_counts") or {})
     package_rows = []
     for package in list(q5c_summary.get("packages") or []):
+        closest_metric = str(package.get("closest_margin_metric") or "")
+        closest_margin_value = float(package.get("closest_margin_value") or 0.0)
         package_rows.append(
-            f"<tr><td><code>{html.escape(str(package.get('package_id') or ''))}</code></td><td>{html.escape(str(package.get('status') or ''))}</td><td><code>{html.escape(str(package.get('fit_diagnostic_class') or ''))}</code></td><td>{float(package.get('embedding_ratio') or 0.0):.4f}</td><td>{float(package.get('floating_ratio') or 0.0):.4f}</td><td>{float(package.get('penetration_ratio') or 0.0):.4f}</td><td>{html.escape(', '.join(str(item) for item in list(package.get('failed_requirement_ids') or [])) or '-')}</td></tr>"
+            f"<tr><td><code>{html.escape(str(package.get('package_id') or ''))}</code></td><td>{html.escape(str(package.get('status') or ''))}</td><td><code>{html.escape(str(package.get('fit_diagnostic_class') or ''))}</code></td><td>{float(package.get('embedding_ratio') or 0.0):.4f}</td><td>{float(package.get('floating_ratio') or 0.0):.4f}</td><td>{float(package.get('penetration_ratio') or 0.0):.4f}</td><td>{html.escape(closest_metric)} = {closest_margin_value:.4f}</td><td>{html.escape(', '.join(str(item) for item in list(package.get('failed_requirement_ids') or [])) or '-')}</td></tr>"
         )
     summary_text = ", ".join(
         f"{html.escape(str(key))}: {int(value)}"
         for key, value in sorted(diagnostic_counts.items())
     ) or "none"
+    focus_package_id = str(q5c_summary.get("focus_package_id") or "")
+    focus_metric = str(q5c_summary.get("focus_metric") or "")
+    focus_margin = float(q5c_summary.get("focus_margin_to_failure") or 0.0)
+    focus_text = (
+        f"{html.escape(focus_package_id)} | {html.escape(focus_metric)} | {focus_margin:.4f}"
+        if focus_package_id and focus_metric
+        else "none"
+    )
     return (
         "<article class=\"card\">"
         f"<h3>Q5C-lite</h3>"
         f"<p><strong>Status:</strong> {html.escape(str(q5c_summary.get('status') or 'unknown'))}</p>"
         f"<p><strong>Packages:</strong> {int(q5c_summary.get('passing_package_count') or 0)} / {int(q5c_summary.get('package_count') or 0)} passing</p>"
         f"<p><strong>Diagnostic Classes:</strong> {summary_text}</p>"
+        f"<p><strong>Closest Margin:</strong> {focus_text}</p>"
         "</article>"
         + (
-            "<table><thead><tr><th>Package</th><th>Status</th><th>Diagnostic</th><th>Embedding</th><th>Floating</th><th>Penetration</th><th>Failed Requirements</th></tr></thead><tbody>"
+            "<table><thead><tr><th>Package</th><th>Status</th><th>Diagnostic</th><th>Embedding</th><th>Floating</th><th>Penetration</th><th>Closest Margin</th><th>Failed Requirements</th></tr></thead><tbody>"
             + "".join(package_rows)
             + "</tbody></table>"
             if package_rows
