@@ -25,6 +25,7 @@ def test_load_workbench_state_reads_fixture_pack(tmp_path: Path):
     assert state.demo_request.status == "pass"
     assert sorted(state.demo_request.requests) == ["action_preview", "animation_preview"]
     assert len(state.preview_images) >= 4
+    assert state.quality_summaries["q5c_lite"]["status"] == "missing"
 
 
 def test_dump_payload_exposes_expected_native_state(tmp_path: Path):
@@ -44,6 +45,7 @@ def test_dump_payload_exposes_expected_native_state(tmp_path: Path):
     assert payload["slot_debugger"]["package_ids"] == ["pkg_alpha"]
     assert payload["governance_balance"]["status"] == "attention"
     assert payload["governance_balance"]["recommended_next_round_kind"] == "flexible"
+    assert payload["quality_summaries"]["q5c_lite"]["status"] == "missing"
     assert "tools/t2/python/aiue_t2/ui.py" in payload["governance_balance"]["hotspot_paths"]
     assert payload["demo_session"]["status"] == "pass"
     assert payload["demo_session"]["package_ids"] == ["pkg_alpha"]
@@ -73,3 +75,13 @@ def test_load_workbench_state_handles_missing_governance_report(tmp_path: Path):
     assert state.status == "pass"
     assert state.summary_counts["governance_line_reports"] == 0
     assert state.governance_balance.status == "missing"
+
+
+def test_load_workbench_state_reads_q5c_quality_summary(tmp_path: Path):
+    pack = build_fixture_pack(tmp_path, include_q5c=True)
+    state = load_workbench_state(pack["manifest_path"])
+    q5c_summary = state.quality_summaries["q5c_lite"]
+    assert q5c_summary["status"] == "pass"
+    assert q5c_summary["package_count"] == 1
+    assert q5c_summary["diagnostic_class_counts"]["pass_stable"] == 1
+    assert q5c_summary["packages"][0]["artifact_image_path"].endswith("q5c_pkg_alpha_debug.ppm")

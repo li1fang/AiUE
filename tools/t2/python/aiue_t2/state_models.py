@@ -218,6 +218,7 @@ class AppState:
     reports_by_gate_id: dict[str, ReportRecord]
     preview_images: list[PreviewImageRecord]
     r3_metrics: list[dict[str, Any]]
+    quality_summaries: dict[str, Any]
     slot_debugger: dict[str, Any]
     governance_balance: GovernanceBalanceRecord
     demo_session: DemoSessionRecord
@@ -273,6 +274,7 @@ class AppState:
             ),
             "demo_request": resolved_demo_request.to_dump_dict(),
             "preview_images": [record.to_dump_dict() for record in self.preview_images],
+            "quality_summaries": dict(self.quality_summaries),
             "errors": [error.to_dict() for error in self.errors],
         }
 

@@ -126,6 +126,7 @@ class WorkbenchWindow(WorkbenchRenderMixin, WorkbenchDemoOpsMixin, QMainWindow):
             reports_by_gate_id={},
             preview_images=[],
             r3_metrics=[],
+            quality_summaries={"q5c_lite": {"status": "missing", "packages": [], "diagnostic_class_counts": {}}},
             slot_debugger={"package_count": 0, "packages": []},
             governance_balance=GovernanceBalanceRecord(status="missing"),
             demo_session=DemoSessionRecord(
@@ -217,6 +218,14 @@ class WorkbenchWindow(WorkbenchRenderMixin, WorkbenchDemoOpsMixin, QMainWindow):
         for card in self.summary_cards.values():
             summary_layout.addWidget(card)
         root_layout.addLayout(summary_layout)
+
+        self.q5c_quality_summary = QLabel("")
+        self.q5c_quality_summary.setObjectName("q5cQualitySummary")
+        self.q5c_quality_summary.setWordWrap(True)
+        self.q5c_quality_summary.setProperty("role", "muted")
+        self.q5c_quality_summary.setStyleSheet("padding: 6px 2px 10px 2px;")
+        self.q5c_quality_summary.setVisible(False)
+        root_layout.addWidget(self.q5c_quality_summary)
 
         content_splitter = QSplitter()
 

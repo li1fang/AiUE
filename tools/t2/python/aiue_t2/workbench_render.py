@@ -53,6 +53,7 @@ class WorkbenchRenderMixin:
         self.summary_cards["platform"].set_value(int(counts.get("platform_line_reports") or 0))
         self.summary_cards["governance"].set_value(int(counts.get("governance_line_reports") or 0))
         self.summary_cards["passing"].set_value(int(counts.get("passing_reports") or 0))
+        self._render_quality_summaries()
         self._render_report_tree()
         self._render_details()
         self._render_preview_images()
@@ -70,6 +71,25 @@ class WorkbenchRenderMixin:
         lines = [f"[{error.code}] {error.message}" for error in self.app_state.errors]
         self.error_banner.setText("\n".join(lines))
         self.error_banner.setVisible(True)
+
+    def _render_quality_summaries(self) -> None:
+        q5c_summary = dict((self.app_state.quality_summaries or {}).get("q5c_lite") or {})
+        if not q5c_summary or str(q5c_summary.get("status") or "missing") == "missing":
+            self.q5c_quality_summary.setVisible(False)
+            self.q5c_quality_summary.setText("")
+            return
+        diagnostic_counts = dict(q5c_summary.get("diagnostic_class_counts") or {})
+        classes_text = ", ".join(
+            f"{key}:{int(value)}"
+            for key, value in sorted(diagnostic_counts.items())
+        ) or "none"
+        self.q5c_quality_summary.setText(
+            "Q5C-lite "
+            f"{str(q5c_summary.get('status') or 'unknown').upper()} | "
+            f"packages {int(q5c_summary.get('passing_package_count') or 0)}/{int(q5c_summary.get('package_count') or 0)} | "
+            f"classes {classes_text}"
+        )
+        self.q5c_quality_summary.setVisible(True)
 
     def _render_report_tree(self) -> None:
         self.report_tree.clear()

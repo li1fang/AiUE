@@ -31,8 +31,61 @@ def materialize_report_fixtures(target_root: Path, *, include_governance: bool =
     return target_root
 
 
-def build_fixture_pack(tmp_path: Path, *, include_governance: bool = True) -> dict:
+def write_fixture_q5c_report(verification_root: Path) -> Path:
+    verification_root.mkdir(parents=True, exist_ok=True)
+    image_path = str((FIXTURE_ROOT / "images" / "front.ppm").resolve())
+    q5c_report_path = verification_root / "latest_volumetric_inspection_q5c_lite_report.json"
+    write_json(
+        q5c_report_path,
+        {
+            "gate_id": "volumetric_inspection_q5c_lite",
+            "status": "pass",
+            "generated_at_utc": "2026-04-12T01:00:00+00:00",
+            "counts": {
+                "required_package_count": 1,
+                "resolved_package_count": 1,
+                "packages": 1,
+                "passing_packages": 1,
+                "packages_without_penetration_clusters": 1,
+                "packages_with_borderline_fit": 0,
+                "packages_with_floating_failures": 0,
+                "packages_with_penetration_failures": 0,
+                "packages_with_mixed_failures": 0,
+            },
+            "per_package_results": [
+                {
+                    "package_id": "pkg_alpha",
+                    "status": "pass",
+                    "fit_diagnostic_class": "pass_stable",
+                    "embedding_ratio": 0.48,
+                    "floating_ratio": 0.02,
+                    "penetration_ratio": 0.0,
+                    "diagnostic_signals": {
+                        "embedding_ratio_below_threshold": False,
+                        "floating_ratio_exceeded": False,
+                        "penetration_ratio_exceeded": False,
+                        "borderline_fit": False,
+                    },
+                    "threshold_deltas": {
+                        "embedding_ratio_delta_to_min": 0.18,
+                        "floating_ratio_delta_to_max": -0.18,
+                        "penetration_ratio_delta_to_max": -0.02,
+                    },
+                    "failed_requirements": [],
+                    "artifacts": {
+                        "q5c_debug_image_path": image_path,
+                    },
+                }
+            ],
+        },
+    )
+    return q5c_report_path
+
+
+def build_fixture_pack(tmp_path: Path, *, include_governance: bool = True, include_q5c: bool = False) -> dict:
     verification_root = materialize_report_fixtures(tmp_path / "verification", include_governance=include_governance)
+    if include_q5c:
+        write_fixture_q5c_report(verification_root)
     output_root = tmp_path / "tooling" / "pack"
     latest_root = tmp_path / "tooling" / "latest"
     manifest = build_evidence_pack(

@@ -43,6 +43,18 @@ def test_workbench_window_renders_fixture_pack(qtbot, tmp_path: Path):
     assert window.current_dump_payload()["selected_default_review_compare_index"] == 0
     assert "Review MISSING" in window.demo_review_summary.text()
     assert window.current_error_codes() == []
+    assert window.q5c_quality_summary.isVisible() is False
+
+
+def test_workbench_window_shows_q5c_quality_summary(qtbot, tmp_path: Path):
+    pack = build_fixture_pack(tmp_path, include_q5c=True)
+    window = WorkbenchWindow(manifest_path=pack["manifest_path"])
+    qtbot.addWidget(window)
+    window.show()
+    qtbot.waitUntil(lambda: window.current_dump_payload()["quality_summaries"]["q5c_lite"]["status"] == "pass")
+    assert window.q5c_quality_summary.isVisible() is True
+    assert "Q5C-lite PASS" in window.q5c_quality_summary.text()
+    assert "pass_stable:1" in window.q5c_quality_summary.text()
 
 
 def test_workbench_window_demo_request_controls(qtbot, tmp_path: Path, monkeypatch):

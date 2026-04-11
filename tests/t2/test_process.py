@@ -57,6 +57,7 @@ def test_workbench_cli_seven_open_cycles(tmp_path: Path):
         assert payload["summary_counts"]["governance_line_reports"] == 1
         assert payload["slot_debugger"]["package_count"] == 1
         assert payload["governance_balance"]["status"] == "attention"
+        assert payload["quality_summaries"]["q5c_lite"]["status"] == "missing"
         assert payload["demo_session"]["status"] == "pass"
         assert payload["demo_session"]["package_ids"] == ["pkg_alpha"]
         assert payload["demo_control_state"]["status"] == "missing"
@@ -138,6 +139,16 @@ def test_workbench_cli_handles_missing_governance_report(tmp_path: Path):
     assert payload["status"] == "pass"
     assert payload["summary_counts"]["governance_line_reports"] == 0
     assert payload["governance_balance"]["status"] == "missing"
+
+
+def test_workbench_cli_reads_q5c_quality_summary(tmp_path: Path):
+    pack = build_fixture_pack(tmp_path, include_q5c=True)
+    completed, payload = run_workbench_process(manifest_path=pack["manifest_path"])
+    assert completed.returncode == 0, completed.stderr
+    assert payload["status"] == "pass"
+    assert payload["quality_summaries"]["q5c_lite"]["status"] == "pass"
+    assert payload["quality_summaries"]["q5c_lite"]["diagnostic_class_counts"]["pass_stable"] == 1
+    assert payload["quality_summaries"]["q5c_lite"]["packages"][0]["package_id"] == "pkg_alpha"
 
 
 def test_workbench_cli_review_compare_index_fixture(tmp_path: Path):

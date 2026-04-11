@@ -81,6 +81,7 @@ def _error_app_state(*, manifest_path: Path, code: str, message: str) -> AppStat
         reports_by_gate_id={},
         preview_images=[],
         r3_metrics=[],
+        quality_summaries={"q5c_lite": {"status": "missing", "packages": [], "diagnostic_class_counts": {}}},
         slot_debugger={"package_count": 0, "packages": []},
         governance_balance=GovernanceBalanceRecord(status="missing"),
         demo_session=DemoSessionRecord(
@@ -233,6 +234,30 @@ def _extract_r3_metrics(reports_by_gate_id: dict[str, ReportRecord]) -> list[dic
                 }
             )
     return metrics_rows
+
+
+def _load_quality_summaries(
+    *,
+    manifest: dict[str, Any],
+    pack_root: Path,
+) -> dict[str, Any]:
+    payload = dict(manifest.get("quality_summaries") or {})
+    q5c_summary = dict(payload.get("q5c_lite") or {})
+    if not q5c_summary:
+        return {"q5c_lite": {"status": "missing", "packages": [], "diagnostic_class_counts": {}}}
+
+    normalized_packages = []
+    for package in list(q5c_summary.get("packages") or []):
+        normalized_package = dict(package)
+        artifact_rel = str(package.get("artifact_image_relative_path") or "")
+        normalized_package["artifact_image_path"] = str(_artifact_path(pack_root, artifact_rel)) if artifact_rel else ""
+        normalized_packages.append(normalized_package)
+    return {
+        "q5c_lite": {
+            **q5c_summary,
+            "packages": normalized_packages,
+        }
+    }
 
 
 def _extract_governance_balance(reports_by_gate_id: dict[str, ReportRecord]) -> GovernanceBalanceRecord:
@@ -655,6 +680,10 @@ def load_workbench_state(
         pack_root=pack_root,
         errors=errors,
     )
+    quality_summaries = _load_quality_summaries(
+        manifest=manifest,
+        pack_root=pack_root,
+    )
     slot_debugger = dict(manifest.get("slot_debugger") or {})
     demo_session = _load_demo_session(
         manifest_path=resolved_manifest_path,
@@ -693,6 +722,7 @@ def load_workbench_state(
         reports_by_gate_id=reports_by_gate_id,
         preview_images=preview_images,
         r3_metrics=_extract_r3_metrics(reports_by_gate_id),
+        quality_summaries=quality_summaries,
         slot_debugger=slot_debugger,
         governance_balance=governance_balance,
         demo_session=demo_session,
@@ -704,4 +734,3 @@ def load_workbench_state(
         default_action_preset_id=default_action_preset_id,
         default_animation_preset_id=default_animation_preset_id,
     )
-

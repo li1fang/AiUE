@@ -135,6 +135,65 @@ def _collect_preview_artifacts(report_index: dict) -> list[dict]:
     return artifacts
 
 
+def _build_q5c_quality_summary(report_index: dict, copied_images: list[dict]) -> dict:
+    reports_by_gate_id = dict(report_index.get("reports_by_gate_id") or {})
+    q5c_entry = dict(reports_by_gate_id.get("volumetric_inspection_q5c_lite") or {})
+    q5c_report = dict(q5c_entry.get("report") or {})
+    if not q5c_report:
+        return {
+            "status": "missing",
+            "gate_id": "volumetric_inspection_q5c_lite",
+            "report_source_path": "",
+            "package_count": 0,
+            "passing_package_count": 0,
+            "diagnostic_class_counts": {},
+            "packages": [],
+        }
+
+    preview_by_key = {
+        str(item.get("key") or ""): dict(item)
+        for item in copied_images
+        if str(item.get("key") or "")
+    }
+    package_summaries = []
+    diagnostic_class_counts: dict[str, int] = {}
+    for package in list(q5c_report.get("per_package_results") or []):
+        package_id = str(package.get("package_id") or "")
+        diagnostic_class = str(package.get("fit_diagnostic_class") or "unknown")
+        diagnostic_class_counts[diagnostic_class] = diagnostic_class_counts.get(diagnostic_class, 0) + 1
+        preview_key = f"q5c_{package_id}_debug"
+        preview_record = dict(preview_by_key.get(preview_key) or {})
+        package_summaries.append(
+            {
+                "package_id": package_id,
+                "status": str(package.get("status") or ""),
+                "fit_diagnostic_class": diagnostic_class,
+                "embedding_ratio": float(package.get("embedding_ratio") or 0.0),
+                "floating_ratio": float(package.get("floating_ratio") or 0.0),
+                "penetration_ratio": float(package.get("penetration_ratio") or 0.0),
+                "diagnostic_signals": dict(package.get("diagnostic_signals") or {}),
+                "threshold_deltas": dict(package.get("threshold_deltas") or {}),
+                "failed_requirement_ids": [
+                    str(item.get("id") or "")
+                    for item in list(package.get("failed_requirements") or [])
+                    if str(item.get("id") or "")
+                ],
+                "artifact_image_relative_path": str(preview_record.get("relative_path") or ""),
+                "artifact_image_source_path": str(preview_record.get("source_path") or ""),
+            }
+        )
+
+    return {
+        "status": str(q5c_report.get("status") or "unknown"),
+        "gate_id": "volumetric_inspection_q5c_lite",
+        "report_source_path": str(q5c_entry.get("report_path") or ""),
+        "package_count": len(package_summaries),
+        "passing_package_count": sum(1 for item in package_summaries if item.get("status") == "pass"),
+        "diagnostic_class_counts": diagnostic_class_counts,
+        "packages": package_summaries,
+    }
+
+
 def _copy_reports(report_index: dict, reports_dir: Path) -> list[dict]:
     copied = []
     for category in ("active_line", "platform_line", "governance_line", "historical_other"):
@@ -233,11 +292,43 @@ def _render_slot_debugger(slot_debugger: dict) -> str:
     return "".join(blocks) if blocks else "<p class=\"muted\">No slot debugger data was available.</p>"
 
 
+def _render_q5c_quality_summary(quality_summaries: dict) -> str:
+    q5c_summary = dict((quality_summaries or {}).get("q5c_lite") or {})
+    if not q5c_summary or str(q5c_summary.get("status") or "missing") == "missing":
+        return "<p class=\"muted\">No Q5C-lite quality summary was available.</p>"
+    diagnostic_counts = dict(q5c_summary.get("diagnostic_class_counts") or {})
+    package_rows = []
+    for package in list(q5c_summary.get("packages") or []):
+        package_rows.append(
+            f"<tr><td><code>{html.escape(str(package.get('package_id') or ''))}</code></td><td>{html.escape(str(package.get('status') or ''))}</td><td><code>{html.escape(str(package.get('fit_diagnostic_class') or ''))}</code></td><td>{float(package.get('embedding_ratio') or 0.0):.4f}</td><td>{float(package.get('floating_ratio') or 0.0):.4f}</td><td>{float(package.get('penetration_ratio') or 0.0):.4f}</td><td>{html.escape(', '.join(str(item) for item in list(package.get('failed_requirement_ids') or [])) or '-')}</td></tr>"
+        )
+    summary_text = ", ".join(
+        f"{html.escape(str(key))}: {int(value)}"
+        for key, value in sorted(diagnostic_counts.items())
+    ) or "none"
+    return (
+        "<article class=\"card\">"
+        f"<h3>Q5C-lite</h3>"
+        f"<p><strong>Status:</strong> {html.escape(str(q5c_summary.get('status') or 'unknown'))}</p>"
+        f"<p><strong>Packages:</strong> {int(q5c_summary.get('passing_package_count') or 0)} / {int(q5c_summary.get('package_count') or 0)} passing</p>"
+        f"<p><strong>Diagnostic Classes:</strong> {summary_text}</p>"
+        "</article>"
+        + (
+            "<table><thead><tr><th>Package</th><th>Status</th><th>Diagnostic</th><th>Embedding</th><th>Floating</th><th>Penetration</th><th>Failed Requirements</th></tr></thead><tbody>"
+            + "".join(package_rows)
+            + "</tbody></table>"
+            if package_rows
+            else ""
+        )
+    )
+
+
 def _render_html(manifest: dict) -> str:
     report_index = dict(manifest.get("report_index") or {})
     categories = dict(report_index.get("categories") or {})
     preview_artifacts = list(manifest.get("artifacts", {}).get("preview_images") or [])
     slot_debugger = dict(manifest.get("slot_debugger") or {})
+    quality_summaries = dict(manifest.get("quality_summaries") or {})
     counts = dict(report_index.get("counts") or {})
     return f"""<!doctype html>
 <html lang="en">
@@ -253,6 +344,7 @@ def _render_html(manifest: dict) -> str:
 <section class="section"><h2>Historical / Other Reports</h2><div class="grid cards">{_render_report_cards(list(categories.get('historical_other') or []))}</div></section>
 <section class="section"><h2>Key Screenshot Previews</h2><div class="artifact-grid">{_render_preview_cards(preview_artifacts)}</div></section>
 <section class="section"><h2>Before / After Metrics</h2>{_render_r3_metrics(report_index)}</section>
+<section class="section"><h2>Q5C-lite Quality Summary</h2>{_render_q5c_quality_summary(quality_summaries)}</section>
 <section class="section"><h2>Slot Debugger</h2>{_render_slot_debugger(slot_debugger)}</section>
 </main></body></html>"""
 
@@ -272,6 +364,9 @@ def build_evidence_pack(*, verification_root: Path, output_root: Path | None, la
     preview_artifacts = _collect_preview_artifacts(report_index)
     copied_reports = _copy_reports(report_index, reports_dir)
     copied_images = _copy_preview_images(preview_artifacts, images_dir)
+    quality_summaries = {
+        "q5c_lite": _build_q5c_quality_summary(report_index, copied_images),
+    }
 
     manifest = {
         "generated_at_utc": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
@@ -279,6 +374,7 @@ def build_evidence_pack(*, verification_root: Path, output_root: Path | None, la
         "tooling_phase": "T1",
         "verification_root": str(verification_root.resolve()),
         "external_candidate_sources": [],
+        "quality_summaries": quality_summaries,
         "report_index": {
             **report_index,
             "categories": {key: [{field: value for field, value in entry.items() if field != "report"} for entry in list(value or [])] for key, value in dict(report_index.get("categories") or {}).items()},
