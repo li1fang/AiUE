@@ -34,9 +34,10 @@ from aiue_t2.state import (
     load_workbench_state,
 )
 from aiue_t2.demo_control_state import load_demo_control_state, write_demo_control_run
+from aiue_t2.demo_review_state import build_demo_review_state, write_demo_review_state
 from aiue_t2.demo_round_state import load_demo_round_state, write_demo_round_state
 from aiue_t2.demo_request_runner import export_demo_request, invoke_demo_request, load_demo_request_selection
-from aiue_t2.ui_demo import DemoRequestControlState, DemoRequestPanel, DemoSessionPanel
+from aiue_t2.ui_demo import DemoRequestControlState, DemoRequestPanel, DemoReviewPanel, DemoSessionPanel
 from aiue_t2.ui_sections import DetailsPanel, ImagesPanel, SlotDebuggerPanel, SummaryCard
 
 
@@ -144,6 +145,7 @@ class WorkbenchWindow(QMainWindow):
         self.view_state = ViewState()
         self.demo_control_state: dict = {"status": "missing", "last_runs_by_package": {}, "package_run_counts": {}}
         self.demo_round_state: dict = {"status": "missing", "package_results": [], "counts": {}}
+        self.demo_review_state: dict = {"status": "missing", "package_reviews": [], "summary": {}}
         self.demo_round_control: dict = {"status": "idle", "operation": "", "scope": "", "errors": []}
         self.demo_request_control = DemoRequestControlState(
             workspace_config_path=str(self.current_workspace_config_path or ""),
@@ -264,6 +266,12 @@ class WorkbenchWindow(QMainWindow):
         )
         self.tabs.addTab(self.demo_request_panel, "Demo Request")
 
+        self.demo_review_panel = DemoReviewPanel()
+        self.demo_review_summary = self.demo_review_panel.demo_review_summary
+        self.demo_review_package_summary = self.demo_review_panel.demo_review_package_summary
+        self.demo_review_text = self.demo_review_panel.demo_review_text
+        self.tabs.addTab(self.demo_review_panel, "Demo Review")
+
         content_splitter.addWidget(self.tabs)
         content_splitter.setStretchFactor(1, 1)
         root_layout.addWidget(content_splitter)
@@ -286,6 +294,11 @@ class WorkbenchWindow(QMainWindow):
         )
         self.demo_round_state = load_demo_round_state(
             self.app_state.demo_session.session_manifest_path or self.current_session_manifest_path
+        )
+        self.demo_review_state = build_demo_review_state(
+            session_manifest_path=self.app_state.demo_session.session_manifest_path or self.current_session_manifest_path,
+            demo_control_state=self.demo_control_state,
+            demo_round_state=self.demo_round_state,
         )
         self.demo_round_control = {"status": "idle", "operation": "", "scope": "", "errors": []}
         self.demo_request_control = DemoRequestControlState(
@@ -330,6 +343,7 @@ class WorkbenchWindow(QMainWindow):
         payload = self.app_state.to_dump_payload(self.view_state)
         payload["demo_control_state"] = dict(self.demo_control_state)
         payload["demo_round_state"] = dict(self.demo_round_state)
+        payload["demo_review_state"] = dict(self.demo_review_state)
         payload["demo_round_control"] = dict(self.demo_round_control)
         payload["demo_request_control"] = self.demo_request_control.to_dump_dict()
         return payload
@@ -470,6 +484,7 @@ class WorkbenchWindow(QMainWindow):
                 invocation_returncode=invocation_meta.get("returncode"),
                 payload=invocation,
             )
+            self._refresh_demo_review_state(write=not dry_run)
         except Exception as exc:  # pragma: no cover - defensive UI boundary
             self.demo_request_control = DemoRequestControlState(
                 status="error",
@@ -603,6 +618,7 @@ class WorkbenchWindow(QMainWindow):
                 operation="invoke_session_round",
                 package_results=package_results,
             )
+            self._refresh_demo_review_state(write=True)
             round_status = "pass" if self.demo_round_state.get("status") == "pass" and not round_errors else "error"
             self.demo_round_control = {
                 "status": round_status,
@@ -644,6 +660,7 @@ class WorkbenchWindow(QMainWindow):
         self._render_slot_table()
         self._render_demo_session()
         self._render_demo_request()
+        self._render_demo_review()
 
     def _render_errors(self) -> None:
         if not self.app_state.errors:
@@ -711,6 +728,7 @@ class WorkbenchWindow(QMainWindow):
             selected_animation_preset_id=self.view_state.selected_animation_preset_id,
         )
         self._render_demo_request()
+        self._render_demo_review()
 
     def _render_demo_request(self) -> None:
         payload = self.current_dump_payload()
@@ -729,6 +747,28 @@ class WorkbenchWindow(QMainWindow):
             demo_round_state,
             workspace_path=workspace_path if workspace_ready else "",
         )
+
+    def _render_demo_review(self) -> None:
+        self.demo_review_panel.render_review(
+            dict(self.demo_review_state),
+            selected_package_id=self.view_state.selected_package_id,
+        )
+
+    def _refresh_demo_review_state(self, *, write: bool) -> None:
+        session_manifest_path = self.app_state.demo_session.session_manifest_path or self.current_session_manifest_path
+        if write:
+            self.demo_review_state = write_demo_review_state(
+                session_manifest_path=session_manifest_path,
+                demo_control_state=self.demo_control_state,
+                demo_round_state=self.demo_round_state,
+            )
+        else:
+            self.demo_review_state = build_demo_review_state(
+                session_manifest_path=session_manifest_path,
+                demo_control_state=self.demo_control_state,
+                demo_round_state=self.demo_round_state,
+            )
+        self._render_demo_review()
 
     def _selected_report_record(self) -> ReportRecord | None:
         gate_id = self.view_state.selected_report_gate_id

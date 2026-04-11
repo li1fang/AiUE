@@ -307,6 +307,36 @@ What this eighth slice still does **not** do:
 - it still does not own free-form live session mutation inside UE
 - it is a native session roundtrip, not yet a richer playable loop
 
+Current ninth slice:
+
+- [latest_playable_demo_e2_curated_review_report.json](C:/AiUE/Saved/verification/latest_playable_demo_e2_curated_review_report.json)
+- [playable_demo_e2_review_state.json](C:/AiUE/Saved/demo/e2/latest/playable_demo_e2_review_state.json)
+- `status = pass`
+- `resolved_package_count = 2`
+- `reviewed_package_count = 2`
+- `passing_packages = 2`
+- `action_review_passed = 2`
+- `animation_review_passed = 2`
+
+What this ninth slice proves:
+
+- the native session-round seam is now followed by a package-focused review layer rather than only raw invoke artifacts
+- `T2 --latest --dump-state-json --exit-after-load` now exposes:
+  - `demo_review_state.status`
+  - `demo_review_state.summary`
+  - `demo_review_state.package_reviews`
+- the Windows native workbench now has a dedicated `Demo Review` view for:
+  - current package review status
+  - action vs animation review outcomes
+  - round-backed evidence readback without log hunting
+- the latest review artifact is now machine-readable enough for a dedicated `E2` gate to validate on a fresh post-run load
+
+What this ninth slice still does **not** do:
+
+- it still does not become a packaged playable shell
+- it still does not provide generalized runtime authoring controls
+- it is a curated native review layer, not yet a richer interactive demo loop
+
 Not in scope yet:
 
 - complex game loop
@@ -356,18 +386,18 @@ Current judgment after `E2A credibility` and `E2 session roundtrip`:
 
 Recommended next route:
 
-1. `E2C`: add a curated native demo review layer on top of the current roundtrip seam
+1. `E2D`: add a compact native demo replay or review-navigation layer on top of the current curated review seam
 2. keep the review output evidence-first so `T1/T2` stay the source of truth
 3. only switch to `Q5C-lite` early if quality pressure rises above demo progress pressure
 4. only pull governance forward if hotspot pressure escalates from `moderate` to `high`
 
-What `E2C` should answer:
+What `E2D` should answer:
 
-- can the current session-round control seam produce a package-focused demo review artifact that is easy for a human operator to trust and reuse
-- can `T2` surface the latest per-package action and animation outcomes without needing ad-hoc log diving
+- can the current curated review seam become easier to step through without reopening ad-hoc files
+- can `T2` let an operator move through package outcomes more fluently while staying within the current evidence model
 - can the next playable slice stay bounded without turning into a free-form operator console
 
-What should stay out of scope until after `E2C`:
+What should stay out of scope until after `E2D`:
 
 - packaged desktop demo distribution
 - generalized UE command consoles inside `T2`

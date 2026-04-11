@@ -33,6 +33,8 @@ def test_workbench_window_renders_fixture_pack(qtbot, tmp_path: Path):
     assert '"animation_preview"' in window.demo_request_text.toPlainText()
     assert window.current_dump_payload()["demo_control_state"]["status"] == "missing"
     assert window.current_dump_payload()["demo_round_state"]["status"] == "missing"
+    assert window.current_dump_payload()["demo_review_state"]["status"] == "missing"
+    assert "Review MISSING" in window.demo_review_summary.text()
     assert window.current_error_codes() == []
 
 
@@ -137,7 +139,12 @@ def test_workbench_window_demo_request_controls(qtbot, tmp_path: Path, monkeypat
     assert payload["demo_round_control"]["status"] == "pass"
     assert payload["demo_round_control"]["operation"] == "invoke_session_round"
     assert payload["demo_round_state"]["status"] == "pass"
+    assert payload["demo_review_state"]["status"] == "pass"
     assert payload["demo_round_state"]["counts"]["package_count"] == 1
     assert payload["demo_round_state"]["counts"]["action_motion_verified"] == 1
     assert payload["demo_round_state"]["counts"]["animation_pose_verified"] == 1
+    assert payload["demo_review_state"]["summary"]["passing_packages"] == 1
+    assert payload["demo_review_state"]["package_reviews"][0]["action_review"]["status"] == "pass"
+    assert payload["demo_review_state"]["package_reviews"][0]["animation_review"]["status"] == "pass"
+    assert "Review PASS" in window.demo_review_summary.text()
     assert "round_state" in window.demo_control_state_text.toPlainText()

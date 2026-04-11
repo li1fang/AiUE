@@ -367,3 +367,83 @@ class DemoRequestPanel(QWidget):
         self.invoke_session_round_button.setEnabled(
             "action_preview" in request_kind_set and "animation_preview" in request_kind_set and workspace_ready
         )
+
+
+class DemoReviewPanel(QWidget):
+    def __init__(self) -> None:
+        super().__init__()
+        self.demo_review_summary = QLabel("No demo review available yet")
+        self.demo_review_summary.setObjectName("demoReviewSummaryLabel")
+        self.demo_review_summary.setProperty("role", "muted")
+        self.demo_review_summary.setWordWrap(True)
+
+        self.demo_review_package_summary = QLabel("No package review selected")
+        self.demo_review_package_summary.setObjectName("demoReviewPackageSummaryLabel")
+        self.demo_review_package_summary.setProperty("role", "muted")
+        self.demo_review_package_summary.setWordWrap(True)
+
+        self.demo_review_text = QPlainTextEdit()
+        self.demo_review_text.setObjectName("demoReviewText")
+        self.demo_review_text.setReadOnly(True)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(self.demo_review_summary)
+        layout.addWidget(self.demo_review_package_summary)
+        layout.addWidget(self.demo_review_text)
+
+    def render_review(self, demo_review_state: dict, *, selected_package_id: str | None) -> None:
+        summary = dict(demo_review_state.get("summary") or {})
+        summary_parts = [
+            f"Review {str(demo_review_state.get('status') or 'missing').upper()}",
+            f"Packages {int(summary.get('package_count') or 0)}",
+            f"Passing {int(summary.get('passing_packages') or 0)}",
+            f"Action Passed {int(summary.get('action_review_passed') or 0)}",
+            f"Animation Passed {int(summary.get('animation_review_passed') or 0)}",
+        ]
+        if demo_review_state.get("review_state_path"):
+            summary_parts.append(f"Artifact {demo_review_state.get('review_state_path')}")
+        self.demo_review_summary.setText(" | ".join(summary_parts))
+
+        package_reviews = [dict(item) for item in list(demo_review_state.get("package_reviews") or [])]
+        selected_review = next((item for item in package_reviews if str(item.get("package_id") or "") == str(selected_package_id or "")), None)
+        if selected_review is None and package_reviews:
+            selected_review = package_reviews[0]
+        if selected_review is None:
+            self.demo_review_package_summary.setText("Package review: none")
+            self.demo_review_text.setPlainText(
+                json.dumps(
+                    {
+                        "status": demo_review_state.get("status"),
+                        "review_state_path": demo_review_state.get("review_state_path"),
+                        "summary": summary,
+                        "errors": demo_review_state.get("errors"),
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
+            return
+
+        package_summary_parts = [
+            f"Package {str(selected_review.get('package_id') or 'unknown')}",
+            f"Status {str(selected_review.get('status') or 'unknown').upper()}",
+            f"Action {str(dict(selected_review.get('action_review') or {}).get('status') or 'missing').upper()}",
+            f"Animation {str(dict(selected_review.get('animation_review') or {}).get('status') or 'missing').upper()}",
+        ]
+        warning_flags = [str(item) for item in list(selected_review.get("warning_flags") or [])]
+        if warning_flags:
+            package_summary_parts.append(f"Warnings {', '.join(warning_flags)}")
+        self.demo_review_package_summary.setText(" | ".join(package_summary_parts))
+        self.demo_review_text.setPlainText(
+            json.dumps(
+                {
+                    "status": demo_review_state.get("status"),
+                    "review_state_path": demo_review_state.get("review_state_path"),
+                    "summary": summary,
+                    "selected_package_review": selected_review,
+                    "errors": demo_review_state.get("errors"),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
