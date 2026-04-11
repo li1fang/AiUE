@@ -386,12 +386,44 @@ class DemoReviewPanel(QWidget):
         self.demo_review_text.setObjectName("demoReviewText")
         self.demo_review_text.setReadOnly(True)
 
+        self.open_review_artifact_button = QPushButton("Open Review Artifact")
+        self.open_review_artifact_button.setObjectName("openReviewArtifactButton")
+
+        self.open_hero_before_button = QPushButton("Open Hero Before")
+        self.open_hero_before_button.setObjectName("openHeroBeforeButton")
+
+        self.open_action_after_button = QPushButton("Open Action After")
+        self.open_action_after_button.setObjectName("openActionAfterButton")
+
+        self.open_animation_after_button = QPushButton("Open Animation After")
+        self.open_animation_after_button.setObjectName("openAnimationAfterButton")
+
+        button_row = QHBoxLayout()
+        button_row.addWidget(self.open_review_artifact_button)
+        button_row.addWidget(self.open_hero_before_button)
+        button_row.addWidget(self.open_action_after_button)
+        button_row.addWidget(self.open_animation_after_button)
+
         layout = QVBoxLayout(self)
         layout.addWidget(self.demo_review_summary)
         layout.addWidget(self.demo_review_package_summary)
+        layout.addLayout(button_row)
         layout.addWidget(self.demo_review_text)
 
-    def render_review(self, demo_review_state: dict, *, selected_package_id: str | None) -> None:
+    def bind_callbacks(
+        self,
+        *,
+        open_review_artifact,
+        open_hero_before,
+        open_action_after,
+        open_animation_after,
+    ) -> None:
+        self.open_review_artifact_button.clicked.connect(open_review_artifact)
+        self.open_hero_before_button.clicked.connect(open_hero_before)
+        self.open_action_after_button.clicked.connect(open_action_after)
+        self.open_animation_after_button.clicked.connect(open_animation_after)
+
+    def render_review(self, demo_review_state: dict, demo_review_focus: dict, *, selected_package_id: str | None) -> None:
         summary = dict(demo_review_state.get("summary") or {})
         summary_parts = [
             f"Review {str(demo_review_state.get('status') or 'missing').upper()}",
@@ -405,9 +437,10 @@ class DemoReviewPanel(QWidget):
         self.demo_review_summary.setText(" | ".join(summary_parts))
 
         package_reviews = [dict(item) for item in list(demo_review_state.get("package_reviews") or [])]
-        selected_review = next((item for item in package_reviews if str(item.get("package_id") or "") == str(selected_package_id or "")), None)
-        if selected_review is None and package_reviews:
-            selected_review = package_reviews[0]
+        selected_review = next(
+            (item for item in package_reviews if str(item.get("package_id") or "") == str(demo_review_focus.get("selected_package_id") or selected_package_id or "")),
+            None,
+        )
         if selected_review is None:
             self.demo_review_package_summary.setText("Package review: none")
             self.demo_review_text.setPlainText(
@@ -422,6 +455,10 @@ class DemoReviewPanel(QWidget):
                     indent=2,
                 )
             )
+            self.open_review_artifact_button.setEnabled(bool(demo_review_state.get("review_state_path")))
+            self.open_hero_before_button.setEnabled(False)
+            self.open_action_after_button.setEnabled(False)
+            self.open_animation_after_button.setEnabled(False)
             return
 
         package_summary_parts = [
@@ -440,6 +477,7 @@ class DemoReviewPanel(QWidget):
                     "status": demo_review_state.get("status"),
                     "review_state_path": demo_review_state.get("review_state_path"),
                     "summary": summary,
+                    "focus": demo_review_focus,
                     "selected_package_review": selected_review,
                     "errors": demo_review_state.get("errors"),
                 },
@@ -447,3 +485,7 @@ class DemoReviewPanel(QWidget):
                 indent=2,
             )
         )
+        self.open_review_artifact_button.setEnabled(bool(demo_review_state.get("review_state_path")))
+        self.open_hero_before_button.setEnabled(bool(demo_review_focus.get("hero_before_image_path")))
+        self.open_action_after_button.setEnabled(bool(demo_review_focus.get("action_primary_after_image_path")))
+        self.open_animation_after_button.setEnabled(bool(demo_review_focus.get("animation_primary_after_image_path")))

@@ -40,6 +40,49 @@ def load_demo_review_state(session_manifest_path: str | Path | None) -> dict[str
     return _normalize_review_state_payload(payload, resolved_path)
 
 
+def build_demo_review_focus(demo_review_state: dict[str, Any], *, selected_package_id: str | None) -> dict[str, Any]:
+    review_state_status = str(demo_review_state.get("status") or "missing")
+    package_reviews = [dict(item) for item in list(demo_review_state.get("package_reviews") or [])]
+    selected_review = next((item for item in package_reviews if str(item.get("package_id") or "") == str(selected_package_id or "")), None)
+    if selected_review is None and package_reviews:
+        selected_review = package_reviews[0]
+    if selected_review is None or review_state_status == "missing":
+        return {
+            "status": "missing",
+            "selected_package_id": str(selected_package_id or ""),
+            "review_state_path": str(demo_review_state.get("review_state_path") or ""),
+            "package_review_status": "",
+            "action_review_status": "",
+            "animation_review_status": "",
+            "hero_before_image_path": "",
+            "hero_after_image_path": "",
+            "action_primary_before_image_path": "",
+            "action_primary_after_image_path": "",
+            "animation_primary_before_image_path": "",
+            "animation_primary_after_image_path": "",
+            "warning_flags": [],
+            "failed_requirements": [],
+        }
+    action_review = dict(selected_review.get("action_review") or {})
+    animation_review = dict(selected_review.get("animation_review") or {})
+    return {
+        "status": "pass" if review_state_status == "pass" and str(selected_review.get("status") or "") == "pass" else "attention",
+        "selected_package_id": str(selected_review.get("package_id") or selected_package_id or ""),
+        "review_state_path": str(demo_review_state.get("review_state_path") or ""),
+        "package_review_status": str(selected_review.get("status") or ""),
+        "action_review_status": str(action_review.get("status") or ""),
+        "animation_review_status": str(animation_review.get("status") or ""),
+        "hero_before_image_path": str(selected_review.get("hero_before_image_path") or ""),
+        "hero_after_image_path": str(selected_review.get("hero_after_image_path") or ""),
+        "action_primary_before_image_path": str(action_review.get("primary_before_image_path") or ""),
+        "action_primary_after_image_path": str(action_review.get("primary_after_image_path") or ""),
+        "animation_primary_before_image_path": str(animation_review.get("primary_before_image_path") or ""),
+        "animation_primary_after_image_path": str(animation_review.get("primary_after_image_path") or ""),
+        "warning_flags": [str(item) for item in list(selected_review.get("warning_flags") or [])],
+        "failed_requirements": [str(item) for item in list(selected_review.get("failed_requirements") or [])],
+    }
+
+
 def build_demo_review_state(
     *,
     session_manifest_path: str | Path | None,

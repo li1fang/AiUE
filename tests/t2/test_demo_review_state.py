@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from aiue_t2.demo_review_state import build_demo_review_state, load_demo_review_state, write_demo_review_state
+from aiue_t2.demo_review_state import build_demo_review_focus, build_demo_review_state, load_demo_review_state, write_demo_review_state
 
 from tests.t2.helpers import build_fixture_pack
 
@@ -118,3 +118,41 @@ def test_build_demo_review_state_is_missing_without_review_sources(tmp_path: Pat
     assert review_state["summary"]["package_count"] == 1
     assert review_state["package_reviews"][0]["status"] == "fail"
     assert "action:run_missing" in review_state["package_reviews"][0]["failed_requirements"]
+
+
+def test_build_demo_review_focus_prefers_selected_package(tmp_path: Path):
+    pack = build_fixture_pack(tmp_path)
+    action_run = _run_summary(tmp_path, request_kind="action_preview")
+    animation_run = _run_summary(tmp_path, request_kind="animation_preview")
+    review_state = build_demo_review_state(
+        session_manifest_path=pack["session_manifest_path"],
+        demo_control_state={
+            "status": "pass",
+            "control_state_path": str((tmp_path / "control.json").resolve()),
+            "last_runs_by_package": {
+                "pkg_alpha": {
+                    "action_preview": action_run,
+                    "animation_preview": animation_run,
+                }
+            },
+        },
+        demo_round_state={
+            "status": "pass",
+            "round_state_path": str((tmp_path / "round.json").resolve()),
+            "package_results": [
+                {
+                    "package_id": "pkg_alpha",
+                    "status": "pass",
+                    "action_invoke": action_run,
+                    "animation_invoke": animation_run,
+                }
+            ],
+        },
+    )
+    focus = build_demo_review_focus(review_state, selected_package_id="pkg_alpha")
+    assert focus["status"] == "pass"
+    assert focus["selected_package_id"] == "pkg_alpha"
+    assert focus["package_review_status"] == "pass"
+    assert focus["action_review_status"] == "pass"
+    assert focus["animation_review_status"] == "pass"
+    assert focus["hero_before_image_path"]

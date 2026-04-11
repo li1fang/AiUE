@@ -34,7 +34,7 @@ from aiue_t2.state import (
     load_workbench_state,
 )
 from aiue_t2.demo_control_state import load_demo_control_state, write_demo_control_run
-from aiue_t2.demo_review_state import build_demo_review_state, write_demo_review_state
+from aiue_t2.demo_review_state import build_demo_review_focus, build_demo_review_state, write_demo_review_state
 from aiue_t2.demo_round_state import load_demo_round_state, write_demo_round_state
 from aiue_t2.demo_request_runner import export_demo_request, invoke_demo_request, load_demo_request_selection
 from aiue_t2.ui_demo import DemoRequestControlState, DemoRequestPanel, DemoReviewPanel, DemoSessionPanel
@@ -146,6 +146,7 @@ class WorkbenchWindow(QMainWindow):
         self.demo_control_state: dict = {"status": "missing", "last_runs_by_package": {}, "package_run_counts": {}}
         self.demo_round_state: dict = {"status": "missing", "package_results": [], "counts": {}}
         self.demo_review_state: dict = {"status": "missing", "package_reviews": [], "summary": {}}
+        self.demo_review_focus: dict = {"status": "missing", "selected_package_id": ""}
         self.demo_round_control: dict = {"status": "idle", "operation": "", "scope": "", "errors": []}
         self.demo_request_control = DemoRequestControlState(
             workspace_config_path=str(self.current_workspace_config_path or ""),
@@ -270,6 +271,16 @@ class WorkbenchWindow(QMainWindow):
         self.demo_review_summary = self.demo_review_panel.demo_review_summary
         self.demo_review_package_summary = self.demo_review_panel.demo_review_package_summary
         self.demo_review_text = self.demo_review_panel.demo_review_text
+        self.open_review_artifact_button = self.demo_review_panel.open_review_artifact_button
+        self.open_hero_before_button = self.demo_review_panel.open_hero_before_button
+        self.open_action_after_button = self.demo_review_panel.open_action_after_button
+        self.open_animation_after_button = self.demo_review_panel.open_animation_after_button
+        self.demo_review_panel.bind_callbacks(
+            open_review_artifact=lambda: self.open_demo_review_artifact(),
+            open_hero_before=lambda: self.open_demo_review_hero_before(),
+            open_action_after=lambda: self.open_demo_review_action_after(),
+            open_animation_after=lambda: self.open_demo_review_animation_after(),
+        )
         self.tabs.addTab(self.demo_review_panel, "Demo Review")
 
         content_splitter.addWidget(self.tabs)
@@ -299,6 +310,10 @@ class WorkbenchWindow(QMainWindow):
             session_manifest_path=self.app_state.demo_session.session_manifest_path or self.current_session_manifest_path,
             demo_control_state=self.demo_control_state,
             demo_round_state=self.demo_round_state,
+        )
+        self.demo_review_focus = build_demo_review_focus(
+            self.demo_review_state,
+            selected_package_id=self.view_state.selected_package_id,
         )
         self.demo_round_control = {"status": "idle", "operation": "", "scope": "", "errors": []}
         self.demo_request_control = DemoRequestControlState(
@@ -344,6 +359,7 @@ class WorkbenchWindow(QMainWindow):
         payload["demo_control_state"] = dict(self.demo_control_state)
         payload["demo_round_state"] = dict(self.demo_round_state)
         payload["demo_review_state"] = dict(self.demo_review_state)
+        payload["demo_review_focus"] = dict(self.demo_review_focus)
         payload["demo_round_control"] = dict(self.demo_round_control)
         payload["demo_request_control"] = self.demo_request_control.to_dump_dict()
         return payload
@@ -386,6 +402,18 @@ class WorkbenchWindow(QMainWindow):
         session_manifest_path = self.app_state.demo_session.session_manifest_path
         if session_manifest_path:
             self._open_in_explorer(session_manifest_path)
+
+    def open_demo_review_artifact(self) -> None:
+        self._open_in_explorer(str(self.demo_review_focus.get("review_state_path") or self.demo_review_state.get("review_state_path") or ""))
+
+    def open_demo_review_hero_before(self) -> None:
+        self._open_in_explorer(str(self.demo_review_focus.get("hero_before_image_path") or ""))
+
+    def open_demo_review_action_after(self) -> None:
+        self._open_in_explorer(str(self.demo_review_focus.get("action_primary_after_image_path") or ""))
+
+    def open_demo_review_animation_after(self) -> None:
+        self._open_in_explorer(str(self.demo_review_focus.get("animation_primary_after_image_path") or ""))
 
     def _selected_demo_request_kwargs(self) -> dict:
         return {
@@ -749,8 +777,13 @@ class WorkbenchWindow(QMainWindow):
         )
 
     def _render_demo_review(self) -> None:
+        self.demo_review_focus = build_demo_review_focus(
+            self.demo_review_state,
+            selected_package_id=self.view_state.selected_package_id,
+        )
         self.demo_review_panel.render_review(
             dict(self.demo_review_state),
+            dict(self.demo_review_focus),
             selected_package_id=self.view_state.selected_package_id,
         )
 
