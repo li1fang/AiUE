@@ -23,4 +23,5 @@ def test_report_index_knows_new_e1_and_q5x_gates():
     assert classify_gate("showcase_demo_e1")[0] == "active_line"
     assert classify_gate("volumetric_fit_spatial_evidence_q5bx")[0] == "platform_line"
     assert classify_gate("volumetric_inspection_q5c_lite")[0] == "platform_line"
+    assert classify_gate("q5c_lite_contrast_lab")[0] == "platform_line"
     assert classify_gate("dynamic_balance_governance_progress")[0] == "governance_line"

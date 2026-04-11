@@ -115,6 +115,21 @@ def _collect_preview_artifacts(report_index: dict) -> list[dict]:
                     "key": f"q5c_{package_id}_debug",
                 }
             )
+    q5c_contrast_report = dict((reports_by_gate_id.get("q5c_lite_contrast_lab") or {}).get("report") or {})
+    for package in list(q5c_contrast_report.get("per_package_results") or []):
+        package_id = str(package.get("package_id") or "")
+        for case in list(package.get("case_results") or []):
+            case_id = str(case.get("case_id") or "")
+            image_path = str((dict(case.get("artifacts") or {})).get("debug_image_path") or "")
+            if image_path:
+                artifacts.append(
+                    {
+                        "title": f"Q5C contrast {package_id} {case_id}",
+                        "section": "Q5C Contrast Lab",
+                        "source_path": image_path,
+                        "key": f"q5c_contrast_{package_id}_{case_id}",
+                    }
+                )
     e1_report = dict((reports_by_gate_id.get("showcase_demo_e1") or {}).get("report") or {})
     for package in list(e1_report.get("per_package_results") or []):
         package_id = str(package.get("package_id") or "")

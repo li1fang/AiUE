@@ -62,6 +62,34 @@ def test_build_evidence_pack_generates_static_bundle(tmp_path: Path):
         artifacts["q5c_debug_image_path"] = preview_image_path
         package["artifacts"] = artifacts
     write_json(q5c_report_path, q5c_report)
+    write_json(
+        verification_root / "latest_q5c_lite_contrast_lab_report.json",
+        {
+            "gate_id": "q5c_lite_contrast_lab",
+            "status": "pass",
+            "generated_at_utc": "2026-04-12T00:00:00+00:00",
+            "per_package_results": [
+                {
+                    "package_id": "pkg_alpha",
+                    "status": "pass",
+                    "case_results": [
+                        {
+                            "case_id": "baseline_current",
+                            "artifacts": {
+                                "debug_image_path": preview_image_path,
+                            },
+                        },
+                        {
+                            "case_id": "closest_fail_reference",
+                            "artifacts": {
+                                "debug_image_path": preview_image_path,
+                            },
+                        },
+                    ],
+                }
+            ],
+        },
+    )
     output_root = tmp_path / "tooling" / "run"
     latest_root = tmp_path / "tooling" / "latest"
     latest_root.mkdir(parents=True, exist_ok=True)
@@ -80,6 +108,7 @@ def test_build_evidence_pack_generates_static_bundle(tmp_path: Path):
     assert manifest["report_index"]["counts"]["governance_line_reports"] == 1
     assert len(manifest["artifacts"]["preview_images"]) >= 4
     assert any(str(item.get("key") or "").startswith("q5c_") for item in list(manifest["artifacts"]["preview_images"] or []))
+    assert any(str(item.get("key") or "").startswith("q5c_contrast_") for item in list(manifest["artifacts"]["preview_images"] or []))
     q5c_summary = dict((manifest.get("quality_summaries") or {}).get("q5c_lite") or {})
     assert q5c_summary["status"] == "pass"
     assert q5c_summary["package_count"] >= 1

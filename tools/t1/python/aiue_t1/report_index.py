@@ -22,6 +22,7 @@ PLATFORM_LINE_GATE_IDS = [
     "volumetric_fit_inspection_q5b",
     "volumetric_fit_spatial_evidence_q5bx",
     "volumetric_inspection_q5c_lite",
+    "q5c_lite_contrast_lab",
     "fx_vertical_slice_p3",
     "multi_slot_composition_p4",
     "real_fx_item_kind_r2",
