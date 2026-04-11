@@ -163,6 +163,32 @@ What this third slice still does **not** do:
 - it does not yet own a full launch lifecycle
 - it is a request surface, not the final playable control loop
 
+Current fourth slice:
+
+- `tools/run_e2_demo_request.ps1` now provides a repo-local controlled runner for the current `E2` request surface
+- the runner can:
+  - resolve the current request from `--latest` or a specific manifest
+  - dump the selected request JSON
+  - export the request to a file
+  - invoke the request through the existing host bridge
+  - invoke the same path in `--dry-run` mode for controlled smoke checks
+- the runner keeps the execution boundary outside the native UI while reusing the same deterministic request lowering that `T2` exposes
+
+What this fourth slice proves:
+
+- the `E2` request surface is now executable through a stable repo-local tooling path
+- request selection is deterministic enough to support:
+  - automation smoke tests
+  - request export
+  - future controlled launch integration
+- the repo no longer has to rebuild playable-demo request payloads ad hoc once the selection has already been resolved in `T2`
+
+What this fourth slice still does **not** do:
+
+- it does not yet add an in-app launch button to the Windows native workbench
+- it does not own session lifecycle management after the initial command invocation
+- it is a controlled request runner, not the final playable demo shell
+
 Not in scope yet:
 
 - complex game loop

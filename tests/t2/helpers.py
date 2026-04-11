@@ -13,6 +13,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXTURE_ROOT = REPO_ROOT / "tests" / "fixtures"
 REPORT_FIXTURES = FIXTURE_ROOT / "reports"
 WORKBENCH_SCRIPT = REPO_ROOT / "tools" / "run_t2_workbench.ps1"
+DEMO_REQUEST_SCRIPT = REPO_ROOT / "tools" / "run_e2_demo_request.ps1"
 DEFAULT_E2_SESSION_NAME = "playable_demo_e2_session.json"
 
 
@@ -189,6 +190,46 @@ def run_workbench_process(
         capture_output=True,
         text=True,
         env=env,
+        timeout=120,
+    )
+    payload = parse_json_from_stdout(completed.stdout)
+    return completed, payload
+
+
+def run_demo_request_process(
+    *,
+    manifest_path: Path,
+    session_manifest_path: Path | None = None,
+    request_kind: str = "action_preview",
+    package_id: str | None = None,
+    dump_request_json: bool = True,
+    write_request_path: Path | None = None,
+) -> tuple[subprocess.CompletedProcess[str], dict]:
+    command = [
+        "powershell",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        str(DEMO_REQUEST_SCRIPT),
+        "-Manifest",
+        str(manifest_path),
+        "-RequestKind",
+        request_kind,
+    ]
+    if session_manifest_path is not None:
+        command += ["-SessionManifest", str(session_manifest_path)]
+    if package_id is not None:
+        command += ["-PackageId", str(package_id)]
+    if dump_request_json:
+        command += ["-DumpRequestJson"]
+    if write_request_path is not None:
+        command += ["-WriteRequestPath", str(write_request_path)]
+    completed = subprocess.run(
+        command,
+        cwd=str(REPO_ROOT),
+        capture_output=True,
+        text=True,
         timeout=120,
     )
     payload = parse_json_from_stdout(completed.stdout)
