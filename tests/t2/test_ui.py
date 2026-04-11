@@ -23,4 +23,7 @@ def test_workbench_window_renders_fixture_pack(qtbot, tmp_path: Path):
     assert window.demo_animation_preset_list.count() == 1
     assert "playable_demo_e2_bootstrap" in window.demo_session_summary.text()
     assert "pkg_alpha" in window.demo_package_details.toPlainText()
+    assert "ACTION_PREVIEW" in window.demo_request_summary.text().upper()
+    assert '"action_preview"' in window.demo_request_text.toPlainText()
+    assert '"animation_preview"' in window.demo_request_text.toPlainText()
     assert window.current_error_codes() == []

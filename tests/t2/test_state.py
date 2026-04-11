@@ -19,6 +19,8 @@ def test_load_workbench_state_reads_fixture_pack(tmp_path: Path):
     assert state.demo_session.status == "pass"
     assert state.demo_session.default_package_id == "pkg_alpha"
     assert len(state.demo_session.packages) == 1
+    assert state.demo_request.status == "pass"
+    assert sorted(state.demo_request.requests) == ["action_preview", "animation_preview"]
     assert len(state.preview_images) >= 4
 
 
@@ -40,6 +42,10 @@ def test_dump_payload_exposes_expected_native_state(tmp_path: Path):
     assert payload["demo_session"]["package_ids"] == ["pkg_alpha"]
     assert payload["selected_default_action_preset"] == "showcase_root_translate_and_turn"
     assert payload["selected_default_animation_preset"] == "MM_Attack_01"
+    assert payload["demo_request"]["status"] == "pass"
+    assert sorted(payload["demo_request"]["request_kinds"]) == ["action_preview", "animation_preview"]
+    assert payload["demo_request"]["requests"]["action_preview"]["command"] == "action-preview"
+    assert payload["demo_request"]["requests"]["animation_preview"]["command"] == "animation-preview"
 
 
 def test_load_workbench_state_flags_invalid_manifest(tmp_path: Path):

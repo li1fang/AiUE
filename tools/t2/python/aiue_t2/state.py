@@ -13,6 +13,30 @@ CATEGORY_LABELS = {
     "historical_other": "Historical / Other",
 }
 DEFAULT_E2_SESSION_NAME = "playable_demo_e2_session.json"
+DEFAULT_ACTION_REQUEST_PROFILE = {
+    "capture_width": 1280,
+    "capture_height": 720,
+    "capture_delay_seconds": 0.2,
+    "subject_min_screen_coverage": 0.015,
+    "weapon_min_screen_coverage": 0.001,
+    "scene_capture_source": "SCS_FINAL_COLOR_HDR",
+    "scene_capture_warmup_count": 4,
+    "scene_capture_warmup_delay_seconds": 0.08,
+    "min_distance_delta": 40.0,
+    "min_yaw_delta": 10.0,
+    "tracked_slots": ["clothing", "fx"],
+}
+DEFAULT_ANIMATION_REQUEST_PROFILE = {
+    "capture_width": 1280,
+    "capture_height": 720,
+    "capture_delay_seconds": 0.2,
+    "subject_min_screen_coverage": 0.015,
+    "weapon_min_screen_coverage": 0.001,
+    "animation_sample_time_seconds": 0.25,
+    "animation_settle_seconds": 0.1,
+    "retarget_if_needed": False,
+    "pose_probe_bone_names": [],
+}
 
 
 @dataclass
@@ -160,6 +184,29 @@ class DemoSessionRecord:
 
 
 @dataclass
+class DemoRequestRecord:
+    status: str
+    selected_package_id: str | None
+    selected_action_preset_id: str | None
+    selected_animation_preset_id: str | None
+    requests: dict[str, dict[str, Any]] = field(default_factory=dict)
+    warnings: list[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+
+    def to_dump_dict(self) -> dict[str, Any]:
+        return {
+            "status": self.status,
+            "selected_package_id": self.selected_package_id,
+            "selected_action_preset_id": self.selected_action_preset_id,
+            "selected_animation_preset_id": self.selected_animation_preset_id,
+            "request_kinds": sorted(self.requests.keys()),
+            "requests": dict(self.requests),
+            "warnings": list(self.warnings),
+            "errors": list(self.errors),
+        }
+
+
+@dataclass
 class AppState:
     status: str
     manifest_path: str
@@ -172,6 +219,7 @@ class AppState:
     r3_metrics: list[dict[str, Any]]
     slot_debugger: dict[str, Any]
     demo_session: DemoSessionRecord
+    demo_request: DemoRequestRecord
     errors: list[ErrorRecord]
     default_report_gate_id: str | None
     default_image_key: str | None
@@ -185,6 +233,12 @@ class AppState:
         selected_package = view_state.selected_package_id if view_state else self.default_package_id
         selected_action_preset = view_state.selected_action_preset_id if view_state else self.default_action_preset_id
         selected_animation_preset = view_state.selected_animation_preset_id if view_state else self.default_animation_preset_id
+        resolved_demo_request = build_demo_request(
+            demo_session=self.demo_session,
+            selected_package_id=selected_package,
+            selected_action_preset_id=selected_action_preset,
+            selected_animation_preset_id=selected_animation_preset,
+        )
         slot_packages = list(self.slot_debugger.get("packages") or [])
         return {
             "status": self.status,
@@ -210,6 +264,7 @@ class AppState:
                 selected_action_preset_id=selected_action_preset,
                 selected_animation_preset_id=selected_animation_preset,
             ),
+            "demo_request": resolved_demo_request.to_dump_dict(),
             "preview_images": [record.to_dump_dict() for record in self.preview_images],
             "errors": [error.to_dict() for error in self.errors],
         }
@@ -274,6 +329,12 @@ def _error_app_state(*, manifest_path: Path, code: str, message: str) -> AppStat
             mode="",
             level_path="",
             default_package_id=None,
+        ),
+        demo_request=DemoRequestRecord(
+            status="missing",
+            selected_package_id=None,
+            selected_action_preset_id=None,
+            selected_animation_preset_id=None,
         ),
         errors=[error],
         default_report_gate_id=None,
@@ -562,6 +623,218 @@ def _default_demo_preset_id(
     return presets[0].preset_id or None
 
 
+def _demo_preset_by_id(
+    package: DemoPackageRecord | None,
+    *,
+    preset_kind: str,
+    preset_id: str | None,
+) -> DemoPresetRecord | None:
+    if package is None:
+        return None
+    presets = package.action_presets if preset_kind == "action" else package.animation_presets
+    if preset_id:
+        exact_match = next((preset for preset in presets if preset.preset_id == preset_id), None)
+        if exact_match is not None:
+            return exact_match
+    return presets[0] if presets else None
+
+
+def _read_json_if_exists(path: str | None) -> dict[str, Any]:
+    if not path:
+        return {}
+    candidate = Path(path).expanduser().resolve()
+    if not candidate.exists():
+        return {}
+    try:
+        return _load_json(candidate)
+    except Exception:
+        return {}
+
+
+def _request_defaults_from_session_source_reports(demo_session: DemoSessionRecord) -> tuple[dict[str, Any], dict[str, Any]]:
+    e1_report = _read_json_if_exists(demo_session.source_reports.get("e1_report_path"))
+    d8_report = _read_json_if_exists(demo_session.source_reports.get("d8_report_path"))
+    action_profile = {
+        **DEFAULT_ACTION_REQUEST_PROFILE,
+        **dict(e1_report.get("fixed_execution_profile") or {}),
+    }
+    animation_profile = {
+        **DEFAULT_ANIMATION_REQUEST_PROFILE,
+        **dict(d8_report.get("fixed_execution_profile") or {}),
+    }
+    return action_profile, animation_profile
+
+
+def _slot_binding_overrides_from_package_payload(package_payload: dict[str, Any]) -> list[dict[str, Any]]:
+    overrides: list[dict[str, Any]] = []
+    for field_name in ("clothing_binding", "fx_binding"):
+        binding = dict(package_payload.get(field_name) or {})
+        if binding:
+            overrides.append(binding)
+    return overrides
+
+
+def _build_request_output_root(demo_session: DemoSessionRecord, package_id: str, request_kind: str, preset_id: str) -> str:
+    session_path = Path(demo_session.session_manifest_path).expanduser().resolve()
+    base_root = session_path.parent / "requests" / package_id / request_kind / preset_id
+    return str(base_root.resolve())
+
+
+def _resolved_animation_asset_for_preset(preset: DemoPresetRecord) -> str:
+    return (
+        preset.resolved_asset_path
+        or str(preset.payload.get("retargeted_animation_asset_path") or "")
+        or preset.requested_asset_path
+    )
+
+
+def build_demo_request(
+    *,
+    demo_session: DemoSessionRecord,
+    selected_package_id: str | None,
+    selected_action_preset_id: str | None,
+    selected_animation_preset_id: str | None,
+) -> DemoRequestRecord:
+    if demo_session.status != "pass":
+        return DemoRequestRecord(
+            status="missing",
+            selected_package_id=selected_package_id,
+            selected_action_preset_id=selected_action_preset_id,
+            selected_animation_preset_id=selected_animation_preset_id,
+            errors=["demo_session_missing"],
+        )
+
+    package = demo_session.package_by_id(selected_package_id or demo_session.default_package_id)
+    if package is None:
+        return DemoRequestRecord(
+            status="error",
+            selected_package_id=selected_package_id,
+            selected_action_preset_id=selected_action_preset_id,
+            selected_animation_preset_id=selected_animation_preset_id,
+            errors=["demo_package_missing"],
+        )
+
+    action_profile, animation_profile = _request_defaults_from_session_source_reports(demo_session)
+    action_preset = _demo_preset_by_id(
+        package,
+        preset_kind="action",
+        preset_id=selected_action_preset_id,
+    )
+    animation_preset = _demo_preset_by_id(
+        package,
+        preset_kind="animation",
+        preset_id=selected_animation_preset_id,
+    )
+
+    package_payload = dict(package.payload or {})
+    level_path = str(package_payload.get("level_path") or demo_session.level_path or "")
+    hero_shot_id = str(package_payload.get("hero_shot_id") or package.hero_shot_id or "")
+    hero_shot_plan = dict(package_payload.get("hero_shot_plan") or {})
+    request_warnings: list[str] = []
+    request_errors: list[str] = []
+    requests: dict[str, dict[str, Any]] = {}
+
+    if not hero_shot_id or not hero_shot_plan:
+        request_errors.append("hero_shot_plan_missing")
+
+    common_payload = {
+        "package_id": package.package_id,
+        "sample_id": package.sample_id,
+        "host_blueprint_asset_path": package.host_blueprint_asset,
+        "level_path": level_path,
+        "location": dict(package_payload.get("spawn_location") or {}),
+        "rotation": dict(package_payload.get("spawn_rotation") or {}),
+        "shot_order": [hero_shot_id] if hero_shot_id else [],
+        "shot_plans": [hero_shot_plan] if hero_shot_plan else [],
+        "slot_binding_overrides": _slot_binding_overrides_from_package_payload(package_payload),
+    }
+
+    if action_preset is not None and not request_errors:
+        action_params = {
+            **common_payload,
+            "output_root": _build_request_output_root(
+                demo_session,
+                package.package_id,
+                "action_preview",
+                action_preset.preset_id or "action",
+            ),
+            "capture_width": int(action_profile.get("capture_width") or DEFAULT_ACTION_REQUEST_PROFILE["capture_width"]),
+            "capture_height": int(action_profile.get("capture_height") or DEFAULT_ACTION_REQUEST_PROFILE["capture_height"]),
+            "capture_delay_seconds": float(action_profile.get("capture_delay_seconds") or DEFAULT_ACTION_REQUEST_PROFILE["capture_delay_seconds"]),
+            "subject_min_screen_coverage": float(action_profile.get("subject_min_screen_coverage") or DEFAULT_ACTION_REQUEST_PROFILE["subject_min_screen_coverage"]),
+            "weapon_min_screen_coverage": float(action_profile.get("weapon_min_screen_coverage") or DEFAULT_ACTION_REQUEST_PROFILE["weapon_min_screen_coverage"]),
+            "scene_capture_source": str(action_profile.get("scene_capture_source") or DEFAULT_ACTION_REQUEST_PROFILE["scene_capture_source"]),
+            "scene_capture_warmup_count": int(action_profile.get("scene_capture_warmup_count") or DEFAULT_ACTION_REQUEST_PROFILE["scene_capture_warmup_count"]),
+            "scene_capture_warmup_delay_seconds": float(action_profile.get("scene_capture_warmup_delay_seconds") or DEFAULT_ACTION_REQUEST_PROFILE["scene_capture_warmup_delay_seconds"]),
+            "tracked_slots": list(action_profile.get("tracked_slots") or DEFAULT_ACTION_REQUEST_PROFILE["tracked_slots"]),
+            "min_distance_delta": float(action_profile.get("min_distance_delta") or DEFAULT_ACTION_REQUEST_PROFILE["min_distance_delta"]),
+            "min_yaw_delta": float(action_profile.get("min_yaw_delta") or DEFAULT_ACTION_REQUEST_PROFILE["min_yaw_delta"]),
+            "action_kind": str(action_preset.payload.get("action_kind") or "root_translate_and_turn"),
+            "action_distance": float(action_preset.payload.get("action_distance") or action_preset.payload.get("expected_distance_delta") or 85.0),
+            "action_yaw_delta": float(action_preset.payload.get("action_yaw_delta") or action_preset.payload.get("expected_yaw_delta") or 24.0),
+            "action_settle_seconds": float(action_preset.payload.get("action_settle_seconds") or 0.2),
+        }
+        fx_binding = dict(package_payload.get("fx_binding") or {})
+        if fx_binding:
+            action_params["prime_niagara_before_capture"] = True
+            action_params["niagara_desired_age_seconds"] = float(fx_binding.get("niagara_desired_age_seconds") or 0.08)
+            action_params["niagara_seek_delta_seconds"] = float(fx_binding.get("niagara_seek_delta_seconds") or (1.0 / 60.0))
+            action_params["niagara_advance_step_count"] = int(fx_binding.get("niagara_advance_step_count") or 4)
+            action_params["niagara_advance_step_delta_seconds"] = float(fx_binding.get("niagara_advance_step_delta_seconds") or (1.0 / 60.0))
+            action_params["niagara_flush_world"] = True
+        requests["action_preview"] = {
+            "host_key": demo_session.host_key or "demo",
+            "mode": demo_session.mode or "editor_rendered",
+            "command": "action-preview",
+            "params": action_params,
+        }
+
+    if animation_preset is not None and not request_errors:
+        resolved_animation_asset = _resolved_animation_asset_for_preset(animation_preset)
+        if not resolved_animation_asset:
+            request_warnings.append("animation_asset_missing")
+        else:
+            animation_params = {
+                **common_payload,
+                "output_root": _build_request_output_root(
+                    demo_session,
+                    package.package_id,
+                    "animation_preview",
+                    animation_preset.preset_id or "animation",
+                ),
+                "capture_width": int(animation_profile.get("capture_width") or DEFAULT_ANIMATION_REQUEST_PROFILE["capture_width"]),
+                "capture_height": int(animation_profile.get("capture_height") or DEFAULT_ANIMATION_REQUEST_PROFILE["capture_height"]),
+                "capture_delay_seconds": float(animation_profile.get("capture_delay_seconds") or DEFAULT_ANIMATION_REQUEST_PROFILE["capture_delay_seconds"]),
+                "subject_min_screen_coverage": float(animation_profile.get("subject_min_screen_coverage") or DEFAULT_ANIMATION_REQUEST_PROFILE["subject_min_screen_coverage"]),
+                "weapon_min_screen_coverage": float(animation_profile.get("weapon_min_screen_coverage") or DEFAULT_ANIMATION_REQUEST_PROFILE["weapon_min_screen_coverage"]),
+                "animation_asset_path": resolved_animation_asset,
+                "animation_sample_time_seconds": float(animation_profile.get("animation_sample_time_seconds") or DEFAULT_ANIMATION_REQUEST_PROFILE["animation_sample_time_seconds"]),
+                "animation_settle_seconds": float(animation_profile.get("animation_settle_seconds") or DEFAULT_ANIMATION_REQUEST_PROFILE["animation_settle_seconds"]),
+                "retarget_if_needed": bool(animation_profile.get("retarget_if_needed", DEFAULT_ANIMATION_REQUEST_PROFILE["retarget_if_needed"])),
+                "pose_probe_bone_names": list(animation_profile.get("pose_probe_bone_names") or DEFAULT_ANIMATION_REQUEST_PROFILE["pose_probe_bone_names"]),
+            }
+            requests["animation_preview"] = {
+                "host_key": demo_session.host_key or "demo",
+                "mode": demo_session.mode or "editor_rendered",
+                "command": "animation-preview",
+                "params": animation_params,
+            }
+
+    if not requests and not request_errors:
+        request_errors.append("no_requestable_preset_available")
+
+    status = "pass" if not request_errors else "error"
+    return DemoRequestRecord(
+        status=status,
+        selected_package_id=package.package_id,
+        selected_action_preset_id=action_preset.preset_id if action_preset is not None else None,
+        selected_animation_preset_id=animation_preset.preset_id if animation_preset is not None else None,
+        requests=requests,
+        warnings=request_warnings,
+        errors=request_errors,
+    )
+
+
 def load_workbench_state(
     manifest_path: str | Path,
     *,
@@ -616,6 +889,12 @@ def load_workbench_state(
         package_id=default_package_id,
         preset_kind="animation",
     )
+    demo_request = build_demo_request(
+        demo_session=demo_session,
+        selected_package_id=default_package_id,
+        selected_action_preset_id=default_action_preset_id,
+        selected_animation_preset_id=default_animation_preset_id,
+    )
     return AppState(
         status="pass" if not errors else "error",
         manifest_path=str(resolved_manifest_path),
@@ -628,6 +907,7 @@ def load_workbench_state(
         r3_metrics=_extract_r3_metrics(reports_by_gate_id),
         slot_debugger=slot_debugger,
         demo_session=demo_session,
+        demo_request=demo_request,
         errors=errors,
         default_report_gate_id=default_report_gate_id,
         default_image_key=default_image_key,

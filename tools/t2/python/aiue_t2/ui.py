@@ -33,6 +33,7 @@ from aiue_t2.state import (
     AppState,
     DemoPackageRecord,
     DemoPresetRecord,
+    DemoRequestRecord,
     DemoSessionRecord,
     PreviewImageRecord,
     ReportRecord,
@@ -134,6 +135,12 @@ class WorkbenchWindow(QMainWindow):
                 mode="",
                 level_path="",
                 default_package_id=None,
+            ),
+            demo_request=DemoRequestRecord(
+                status="missing",
+                selected_package_id=None,
+                selected_action_preset_id=None,
+                selected_animation_preset_id=None,
             ),
             errors=[],
             default_report_gate_id=None,
@@ -322,6 +329,21 @@ class WorkbenchWindow(QMainWindow):
         demo_layout.addWidget(session_splitter)
         self.tabs.addTab(demo_root, "Demo Session")
 
+        self.demo_request_summary = QLabel("No demo request selected")
+        self.demo_request_summary.setObjectName("demoRequestSummaryLabel")
+        self.demo_request_summary.setProperty("role", "muted")
+        self.demo_request_summary.setWordWrap(True)
+
+        self.demo_request_text = QPlainTextEdit()
+        self.demo_request_text.setObjectName("demoRequestText")
+        self.demo_request_text.setReadOnly(True)
+
+        request_root = QWidget()
+        request_layout = QVBoxLayout(request_root)
+        request_layout.addWidget(self.demo_request_summary)
+        request_layout.addWidget(self.demo_request_text)
+        self.tabs.addTab(request_root, "Demo Request")
+
         content_splitter.addWidget(self.tabs)
         content_splitter.setStretchFactor(1, 1)
         root_layout.addWidget(content_splitter)
@@ -408,6 +430,7 @@ class WorkbenchWindow(QMainWindow):
         self._render_metrics()
         self._render_slot_table()
         self._render_demo_session()
+        self._render_demo_request()
 
     def _render_errors(self) -> None:
         if not self.app_state.errors:
@@ -585,6 +608,7 @@ class WorkbenchWindow(QMainWindow):
             return
         self._render_demo_preset_lists(package)
         self.demo_package_details.setPlainText(json.dumps(package.payload or {}, ensure_ascii=False, indent=2))
+        self._render_demo_request()
 
     def _render_demo_preset_lists(self, package: DemoPackageRecord) -> None:
         self.demo_action_preset_list.clear()
@@ -625,6 +649,19 @@ class WorkbenchWindow(QMainWindow):
         if preset.status:
             parts.append(preset.status)
         return " | ".join(parts)
+
+    def _render_demo_request(self) -> None:
+        payload = self.current_dump_payload()
+        demo_request = dict(payload.get("demo_request") or {})
+        summary_parts = [
+            f"Status {str(demo_request.get('status') or 'unknown').upper()}",
+            f"Package {str(demo_request.get('selected_package_id') or 'none')}",
+        ]
+        request_kinds = list(demo_request.get("request_kinds") or [])
+        if request_kinds:
+            summary_parts.append(f"Kinds {', '.join(request_kinds)}")
+        self.demo_request_summary.setText(" | ".join(summary_parts))
+        self.demo_request_text.setPlainText(json.dumps(demo_request, ensure_ascii=False, indent=2))
 
     def _selected_report_record(self) -> ReportRecord | None:
         gate_id = self.view_state.selected_report_gate_id
@@ -669,12 +706,14 @@ class WorkbenchWindow(QMainWindow):
         if item is None:
             return
         self.view_state.selected_action_preset_id = str(item.data(Qt.UserRole) or "")
+        self._render_demo_request()
 
     def _on_demo_animation_preset_changed(self) -> None:
         item = self.demo_animation_preset_list.currentItem()
         if item is None:
             return
         self.view_state.selected_animation_preset_id = str(item.data(Qt.UserRole) or "")
+        self._render_demo_request()
 
     def _select_report(self, gate_id: str) -> None:
         item = self.report_items_by_gate_id.get(gate_id)

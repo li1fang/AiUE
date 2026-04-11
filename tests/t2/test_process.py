@@ -23,6 +23,7 @@ def test_workbench_cli_seven_open_cycles(tmp_path: Path):
         assert payload["slot_debugger"]["package_count"] == 1
         assert payload["demo_session"]["status"] == "pass"
         assert payload["demo_session"]["package_ids"] == ["pkg_alpha"]
+        assert sorted(payload["demo_request"]["request_kinds"]) == ["action_preview", "animation_preview"]
         assert set(payload["report_categories"]) == {"active_line", "platform_line", "historical_other"}
 
 
@@ -55,3 +56,4 @@ def test_workbench_cli_reads_latest_manifest_smoke():
     assert payload["summary_counts"]["platform_line_reports"] >= 1
     assert payload["slot_debugger"]["package_count"] >= 1
     assert payload["demo_session"]["status"] in {"pass", "missing"}
+    assert payload["demo_request"]["status"] in {"pass", "missing", "error"}

@@ -141,6 +141,28 @@ What this second slice still does **not** do:
 - it does not yet provide a true playable control loop
 - it is a native session explorer, not the final `E2` interaction layer
 
+Current third slice:
+
+- `T2 --latest --dump-state-json --exit-after-load` now also exposes `demo_request`
+- `demo_request.requests.action_preview` is now shaped as a ready host-command request
+- `demo_request.requests.animation_preview` is now shaped as a ready host-command request
+- the Windows native workbench now has a dedicated `Demo Request` view that follows the current package and preset selection
+
+What this third slice proves:
+
+- the current `E2` session state can now be deterministically lowered into concrete host-command payloads
+- the lowering stays read-only and local to `T2`
+- the request surface is now stable enough for the next slice to decide whether to:
+  - save request JSON
+  - call a runner
+  - or attach a future controlled launch button
+
+What this third slice still does **not** do:
+
+- it does not execute the generated requests
+- it does not yet own a full launch lifecycle
+- it is a request surface, not the final playable control loop
+
 Not in scope yet:
 
 - complex game loop
@@ -182,5 +204,6 @@ After the current `c -> e -> E1 -> a -> d` route:
 
 1. stabilize `E1` with repeat passes
 2. keep `playable_demo_e2_bootstrap` as the controlled `E2` entry slice
-3. decide when the next `E2` slice should add real interaction rather than more bootstrap metadata
-4. keep the demo line connected to `Q5` evidence rather than drifting into pure presentation work
+3. keep `E2 session explorer` and `E2 request surface` as the native control foundation
+4. decide when the next `E2` slice should execute the generated requests rather than only expose them
+5. keep the demo line connected to `Q5` evidence rather than drifting into pure presentation work
