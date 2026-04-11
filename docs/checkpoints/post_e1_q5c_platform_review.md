@@ -25,13 +25,19 @@ It is now asking:
 
 ## Current Evidence Snapshot
 
-Latest overall evidence state:
+Latest overall evidence state after the 2026-04-11 checkpoint refresh:
 
-- latest reports present: `29`
+- latest reports present: `30`
 - latest reports passing: `29`
 - active line reports: `8`
 - platform line reports: `10`
-- historical / other reports: `11`
+- historical / other reports: `12`
+
+Important note:
+
+- the single non-passing latest report is still historical: `demo_animation_preview_d3 = fail`
+- the failure class is `animation_skeleton_incompatible`
+- this is not an active-line regression, but it does still pollute global "latest" summaries until it is archived or reclassified
 
 Latest route-relevant reports:
 
@@ -49,6 +55,7 @@ Current route-specific status:
 - `T1 latest evidence pack = refreshed`
 - `T2 latest smoke = pass`
 - `pytest = 25 passed`
+- `historical D3 latest = still fail and visible`
 
 ## Capability Assessment
 
@@ -177,27 +184,35 @@ Judgment:
 The `inspection.py` split was worth it.
 That was a real improvement.
 
-Current runtime file sizes now make the next risk obvious:
+Current runtime file sizes now make the next risk clearer:
 
-- [retarget.py](C:/AiUE/adapters/unreal/host_project/runtime/retarget.py): `2871` lines
-- [common.py](C:/AiUE/adapters/unreal/host_project/runtime/common.py): `2237` lines
-- [capture.py](C:/AiUE/adapters/unreal/host_project/runtime/capture.py): `1196` lines
 - [inspection.py](C:/AiUE/adapters/unreal/host_project/runtime/inspection.py): `16` lines
+- [retarget.py](C:/AiUE/adapters/unreal/host_project/runtime/retarget.py): `12` lines
+- [preview.py](C:/AiUE/adapters/unreal/host_project/runtime/preview.py): `12` lines
+- [capture.py](C:/AiUE/adapters/unreal/host_project/runtime/capture.py): `21` lines
+- [common.py](C:/AiUE/adapters/unreal/host_project/runtime/common.py): `2029` lines
+- [retarget_preview.py](C:/AiUE/adapters/unreal/host_project/runtime/retarget_preview.py): `1091` lines
+- [retarget_profile.py](C:/AiUE/adapters/unreal/host_project/runtime/retarget_profile.py): `981` lines
+- [composition.py](C:/AiUE/adapters/unreal/host_project/runtime/composition.py): `406` lines
+- [composition_registry.py](C:/AiUE/adapters/unreal/host_project/runtime/composition_registry.py): `370` lines
+- [capture_visual.py](C:/AiUE/adapters/unreal/host_project/runtime/capture_visual.py): `363` lines
 
 Judgment:
 
 - the old inspection monolith is no longer the problem
-- the next structural hotspot is now `retarget.py`, then `common.py`
+- `retarget.py` and `capture.py` are now correctly reduced to thin shims
+- the next structural hotspot is `common.py`
+- the best next low-risk governance target is `composition.py`, not `common.py`
 
 ### 2. Workflow growth is becoming a governance problem
 
 Several active workflow scripts are already large enough to behave like mini-subsystems:
 
-- [run_editor_gate_g1.py](C:/AiUE/workflows/pmx_pipeline/run_editor_gate_g1.py): `677`
-- [run_live_fx_visual_quality_r3.py](C:/AiUE/workflows/pmx_pipeline/run_live_fx_visual_quality_r3.py): `650`
-- [run_multi_slot_composition_p4.py](C:/AiUE/workflows/pmx_pipeline/run_multi_slot_composition_p4.py): `618`
+- [run_live_fx_visual_quality_r3.py](C:/AiUE/workflows/pmx_pipeline/run_live_fx_visual_quality_r3.py): `634`
+- [run_editor_gate_g1.py](C:/AiUE/workflows/pmx_pipeline/run_editor_gate_g1.py): `629`
+- [run_multi_slot_composition_p4.py](C:/AiUE/workflows/pmx_pipeline/run_multi_slot_composition_p4.py): `607`
 - [run_demo_gate_d1.py](C:/AiUE/workflows/pmx_pipeline/run_demo_gate_d1.py): `566`
-- [run_showcase_demo_e1.py](C:/AiUE/workflows/pmx_pipeline/run_showcase_demo_e1.py): `527`
+- [run_showcase_demo_e1.py](C:/AiUE/workflows/pmx_pipeline/run_showcase_demo_e1.py): `517`
 
 Judgment:
 
@@ -220,6 +235,36 @@ Judgment:
 
 - keep calling it `Q5C-lite`
 - do not oversell it as full content auto-QA yet
+
+### 4. The tooling layer is healthy, but it is still snapshot-driven
+
+After refreshing `T1` and running a `T2` latest smoke again, the tooling line looks solid.
+
+Current live read:
+
+- `T1 latest manifest` regenerated successfully
+- `T2 --latest --dump-state-json --exit-after-load` returned `status = pass`
+- `slot_debugger.package_count = 2`
+- `report counts = 30 total / 29 pass / 1 historical fail`
+
+Judgment:
+
+- `T1/T2` are not a concern for correctness right now
+- the current gap is operational, not architectural
+- evidence packs are still manual refresh artifacts, so the latest dashboard can lag behind the latest gate results until regenerated
+
+### 5. Historical report hygiene is now a real governance concern
+
+The remaining visible fail is:
+
+- [latest_demo_animation_preview_d3_report.json](C:/AiUE/Saved/verification/latest_demo_animation_preview_d3_report.json)
+
+This is useful historical evidence, but it should not continue to sit in the same surface as current success criteria forever.
+
+Judgment:
+
+- this is not a reason to panic
+- it is a reason to formalize historical report archiving or reclassification
 
 ## Should Anything Be Rewritten?
 
@@ -321,11 +366,12 @@ It is:
 
 - "protect the gains, harden the biggest hotspots, and only add depth where evidence quality clearly improves"
 
-The most pragmatic next priorities are:
+The most pragmatic next priorities are now:
 
-1. stabilize `E1` toward its `E2` entry threshold
-2. choose whether the next governance pass targets `retarget.py` or shared workflow skeletons first
-3. only then deepen `Q5C` from `lite` toward richer spatial / volumetric evidence
+1. clean up or archive the lingering historical `D3` latest fail so dashboard surfaces match the active line
+2. if governance continues, target `composition.py` before touching `common.py`
+3. keep `E1` stable enough to become a real `E2` entry gate
+4. only then deepen `Q5C` from `lite` toward richer spatial / volumetric evidence
 
 ## Bottom Line
 
