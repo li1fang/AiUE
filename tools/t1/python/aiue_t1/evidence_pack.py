@@ -247,6 +247,32 @@ def _copy_preview_images(preview_artifacts: list[dict], images_dir: Path) -> lis
     return copied
 
 
+def _refresh_latest_root(*, run_root: Path, latest_root: Path) -> None:
+    parent = latest_root.parent
+    incoming_root = parent / f"{latest_root.name}.__incoming__{_run_stamp()}"
+    backup_root = parent / f"{latest_root.name}.__backup__{_run_stamp()}"
+
+    if incoming_root.exists():
+        shutil.rmtree(incoming_root)
+    if backup_root.exists():
+        shutil.rmtree(backup_root)
+
+    shutil.copytree(run_root, incoming_root)
+    had_existing_latest = latest_root.exists()
+    try:
+        if had_existing_latest:
+            latest_root.replace(backup_root)
+        incoming_root.replace(latest_root)
+        if backup_root.exists():
+            shutil.rmtree(backup_root)
+    except Exception:
+        if incoming_root.exists():
+            shutil.rmtree(incoming_root)
+        if backup_root.exists() and not latest_root.exists():
+            backup_root.replace(latest_root)
+        raise
+
+
 def _render_report_cards(entries: list[dict]) -> str:
     cards = []
     for entry in entries:
@@ -432,7 +458,5 @@ def build_evidence_pack(*, verification_root: Path, output_root: Path | None, la
     (run_root / "index.html").write_text(_render_html(manifest), encoding="utf-8")
     write_json(run_root / "manifest.json", manifest)
 
-    if latest_root.exists():
-        shutil.rmtree(latest_root)
-    shutil.copytree(run_root, latest_root)
+    _refresh_latest_root(run_root=run_root, latest_root=latest_root)
     return manifest

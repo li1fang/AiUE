@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+import threading
+import time
 
-from aiue_t2.state import build_default_view_state, load_workbench_state
+from aiue_t2.state import build_default_view_state, load_workbench_state, wait_for_manifest_path
 
 from tests.t2.helpers import build_fixture_pack, create_invalid_manifest, create_missing_artifact_manifest
 
@@ -75,6 +77,22 @@ def test_load_workbench_state_handles_missing_governance_report(tmp_path: Path):
     assert state.status == "pass"
     assert state.summary_counts["governance_line_reports"] == 0
     assert state.governance_balance.status == "missing"
+
+
+def test_wait_for_manifest_path_tolerates_short_missing_latest(tmp_path: Path):
+    manifest_path = tmp_path / "tooling" / "latest" / "manifest.json"
+
+    def _writer() -> None:
+        time.sleep(0.2)
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        manifest_path.write_text("{}", encoding="utf-8")
+
+    thread = threading.Thread(target=_writer)
+    thread.start()
+    resolved = wait_for_manifest_path(manifest_path, timeout_seconds=1.0, poll_interval_seconds=0.05)
+    thread.join(timeout=1.0)
+    assert resolved == manifest_path.resolve()
+    assert resolved.exists()
 
 
 def test_load_workbench_state_reads_q5c_quality_summary(tmp_path: Path):

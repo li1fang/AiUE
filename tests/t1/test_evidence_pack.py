@@ -48,6 +48,8 @@ def test_build_evidence_pack_generates_static_bundle(tmp_path: Path):
     write_json(q5c_report_path, q5c_report)
     output_root = tmp_path / "tooling" / "run"
     latest_root = tmp_path / "tooling" / "latest"
+    latest_root.mkdir(parents=True, exist_ok=True)
+    (latest_root / "stale.txt").write_text("stale", encoding="utf-8")
     manifest = build_evidence_pack(
         verification_root=verification_root,
         output_root=output_root,
@@ -57,6 +59,7 @@ def test_build_evidence_pack_generates_static_bundle(tmp_path: Path):
     assert (output_root / "index.html").exists()
     assert (output_root / "manifest.json").exists()
     assert (latest_root / "index.html").exists()
+    assert not (latest_root / "stale.txt").exists()
     assert manifest["slot_debugger"]["package_count"] == 1
     assert manifest["report_index"]["counts"]["governance_line_reports"] == 1
     assert len(manifest["artifacts"]["preview_images"]) >= 4

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QApplication
 
-from aiue_t2.state import resolve_manifest_path
+from aiue_t2.state import resolve_manifest_path, wait_for_manifest_path
 from aiue_t2.ui import WorkbenchWindow
 
 
@@ -47,6 +47,8 @@ def main(argv: list[str] | None = None) -> int:
         manifest_path=args.manifest,
         latest=args.latest or not args.manifest,
     )
+    if args.latest or not args.manifest:
+        manifest_path = wait_for_manifest_path(manifest_path)
     app = QApplication.instance() or QApplication(sys.argv[:1] if argv is None else ["aiue-t2", *argv])
     app.setApplicationName("AiUE T2 Workbench")
     window = WorkbenchWindow(

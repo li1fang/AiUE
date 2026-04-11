@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 from typing import Any
 
@@ -56,6 +57,22 @@ def resolve_manifest_path(*, repo_root: Path, manifest_path: str | Path | None =
     if latest or not manifest_path:
         return (repo_root / "Saved" / "tooling" / "t1" / "latest" / "manifest.json").resolve()
     raise ValueError("Unable to resolve a manifest path.")
+
+
+def wait_for_manifest_path(
+    manifest_path: str | Path,
+    *,
+    timeout_seconds: float = 3.0,
+    poll_interval_seconds: float = 0.1,
+) -> Path:
+    resolved_path = Path(manifest_path).expanduser().resolve()
+    deadline = time.monotonic() + max(0.0, float(timeout_seconds))
+    while True:
+        if resolved_path.exists():
+            return resolved_path
+        if time.monotonic() >= deadline:
+            return resolved_path
+        time.sleep(max(0.01, float(poll_interval_seconds)))
 
 
 def _load_json(path: Path) -> dict[str, Any]:
