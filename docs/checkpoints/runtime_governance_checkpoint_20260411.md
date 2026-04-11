@@ -26,6 +26,7 @@ The immediate goal of this checkpoint is simple:
 | --- | ---: | --- |
 | `capture.py` | 21 | Export surface only; `capture_frame` and `run_scene_sweep` moved out. |
 | `composition.py` | 10 | Export surface only; import and registry commands now live in dedicated modules. |
+| `composition_registry.py` | 33 | Export surface only; asset helpers and slot/runtime helpers now live in dedicated modules. |
 | `inspection.py` | 16 | Export surface only; implementation moved into focused helpers. |
 | `inspection_inventory.py` | 12 | Compatibility shim for inventory style inspection entry points. |
 | `preview.py` | 12 | Export surface only; preview implementation is split out. |
@@ -38,8 +39,9 @@ The immediate goal of this checkpoint is simple:
 | `common.py` | 2237 | Biggest hotspot. Do not split next without a clear forcing function. |
 | `retarget_preview.py` | 1180 | Large, but now isolated behind a thin retarget shim. |
 | `retarget_profile.py` | 1078 | Large, but now isolated behind a thin retarget shim. |
-| `composition_registry.py` | 435 | Still dense, but bounded compared with `common.py`. |
+| `composition_registry_bindings.py` | 326 | Bounded slot/runtime helper layer; safer next candidate than `common.py`. |
 | `composition_import.py` | 249 | Still helper-heavy, but no longer shares a command shim with registry creation. |
+| `composition_registry_assets.py` | 133 | Asset/path helper layer; acceptable size after split. |
 | `capture_visual.py` | 383 | Acceptable for now; not the next pressure point. |
 
 ## Governance Progress
@@ -57,6 +59,7 @@ Recent governance slices now in the branch:
 - `refactor(unreal): split retarget author chains command`
 - `refactor(unreal): split retarget preflight and bootstrap commands`
 - `refactor(unreal): split composition command shims`
+- `refactor(unreal): split composition registry helpers`
 
 Net effect:
 
@@ -101,7 +104,7 @@ Targeted regression reruns during this refactor phase also stayed green:
 
 1. The runtime is now in a good intermediate state: thin shims plus focused implementation modules for the major command surfaces.
 2. `common.py` should not be the next refactor target.
-3. `composition.py` is now reduced to a thin shim; if governance continues, `composition_registry.py` is the next low-risk bounded candidate.
+3. `composition.py` and `composition_registry.py` are now both reduced to thin shims; if governance continues, `composition_registry_bindings.py` is the next low-risk bounded candidate.
 4. It is also reasonable to stop governance here and return to feature work, because the current structure is already materially better than the previous single-file concentration.
 
 ## Recommended Next Step
@@ -110,7 +113,7 @@ Treat this checkpoint as a deliberate stop point.
 
 The next move should be one of:
 
-1. Continue governance with `composition_registry.py` as the next bounded target.
+1. Continue governance with `composition_registry_bindings.py` as the next bounded target.
 2. Pause governance and review whether the runtime is stable enough to shift effort back to feature work.
 
 The one move we should avoid next is entering `common.py` without a stronger reason.
