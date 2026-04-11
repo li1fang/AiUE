@@ -24,6 +24,28 @@ def _materialize_reports(target_root: Path) -> Path:
 
 def test_build_evidence_pack_generates_static_bundle(tmp_path: Path):
     verification_root = _materialize_reports(tmp_path / "verification")
+    q5c_report_path = verification_root / "latest_volumetric_inspection_q5c_lite_report.json"
+    preview_image_path = str((FIXTURE_ROOT / "images" / "front.ppm").resolve())
+    if q5c_report_path.exists():
+        q5c_report = load_json(q5c_report_path)
+    else:
+        q5c_report = {
+            "gate_id": "volumetric_inspection_q5c_lite",
+            "status": "pass",
+            "generated_at_utc": "2026-04-12T00:00:00+00:00",
+            "per_package_results": [
+                {
+                    "package_id": "pkg_alpha",
+                    "status": "pass",
+                    "artifacts": {},
+                }
+            ],
+        }
+    for package in list(q5c_report.get("per_package_results") or []):
+        artifacts = dict(package.get("artifacts") or {})
+        artifacts["q5c_debug_image_path"] = preview_image_path
+        package["artifacts"] = artifacts
+    write_json(q5c_report_path, q5c_report)
     output_root = tmp_path / "tooling" / "run"
     latest_root = tmp_path / "tooling" / "latest"
     manifest = build_evidence_pack(
@@ -38,3 +60,4 @@ def test_build_evidence_pack_generates_static_bundle(tmp_path: Path):
     assert manifest["slot_debugger"]["package_count"] == 1
     assert manifest["report_index"]["counts"]["governance_line_reports"] == 1
     assert len(manifest["artifacts"]["preview_images"]) >= 4
+    assert any(str(item.get("key") or "").startswith("q5c_") for item in list(manifest["artifacts"]["preview_images"] or []))

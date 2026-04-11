@@ -55,9 +55,12 @@ def analyze_q5c_lite(*, host_result: dict, thresholds: dict | None = None) -> di
             "penetration_clusters": [],
             "local_fit_volume": 0.0,
             "quality_class": "fail",
+            "body_bounds_world": {},
             "local_fit_envelope": {},
             "body_keepout_envelope": {},
             "slot_bounds_world": {},
+            "local_fit_intersection": {},
+            "penetration_intersection": {},
         }
 
     slot_world = bounds_debug_payload(slot_bounds)
@@ -133,9 +136,12 @@ def analyze_q5c_lite(*, host_result: dict, thresholds: dict | None = None) -> di
         "penetration_clusters": penetration_clusters,
         "local_fit_volume": float(local_fit_intersection["volume"]),
         "quality_class": quality_class,
+        "body_bounds_world": body_world,
         "slot_bounds_world": slot_world,
         "local_fit_envelope": local_fit_envelope,
         "body_keepout_envelope": body_keepout_envelope,
+        "local_fit_intersection": local_fit_intersection,
+        "penetration_intersection": penetration_intersection,
         "penetration_ratio": float(penetration_ratio),
         "thresholds": {
             key: float(value) if isinstance(value, (int, float)) else value

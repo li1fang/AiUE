@@ -37,6 +37,9 @@ def test_q5c_lite_passes_for_local_fit_fixture():
     assert result["embedding_ratio"] >= 0.82
     assert result["floating_ratio"] <= 0.18
     assert result["penetration_clusters"] == []
+    assert result["body_bounds_world"]["source"] == "fixture_body"
+    assert result["local_fit_intersection"]["volume"] > 0.0
+    assert result["penetration_intersection"]["volume"] == 0.0
 
 
 def test_q5c_lite_detects_penetration_cluster():

@@ -18,6 +18,7 @@ from _gate_common import build_discussion_signal, default_latest_report_path, de
 
 from aiue_core.report_writer import make_compatibility_block, with_report_envelope
 from aiue_core.schema_utils import load_json, load_workspace_config
+from aiue_t1.q5c_lite_debug import render_q5c_lite_debug_image
 from aiue_t1.q5c_lite import DEFAULT_THRESHOLDS, analyze_q5c_lite
 
 GATE_ID = "volumetric_inspection_q5c_lite"
@@ -53,7 +54,7 @@ def host_result_payload(package_result: dict) -> tuple[dict | None, str]:
     return dict(payload.get("result") or {}), str(host_result_path.resolve())
 
 
-def evaluate_package(package_result: dict) -> tuple[dict, list[dict]]:
+def evaluate_package(package_result: dict, *, output_root: Path) -> tuple[dict, list[dict]]:
     package_id = str(package_result.get("package_id") or "")
     failed_requirements: list[dict] = []
     host_result, host_result_path = host_result_payload(package_result)
@@ -83,6 +84,22 @@ def evaluate_package(package_result: dict) -> tuple[dict, list[dict]]:
         host_result=host_result,
         thresholds={key: value for key, value in FIXED_EXECUTION_PROFILE.items() if key not in {"source_gate", "required_package_count", "fixture_scope"}},
     )
+    debug_artifacts = {}
+    try:
+        debug_artifacts = render_q5c_lite_debug_image(
+            package_id=package_id,
+            analysis=analysis,
+            output_path=output_root / "debug_images" / f"{package_id}_q5c_lite_debug.png",
+        )
+    except Exception as exc:
+        failed_requirements.append(
+            make_failed_requirement(
+                "q5c_lite_debug_artifact_failed",
+                "Q5C-lite requires a per-package local volumetric debug artifact for evidence-first inspection.",
+                package_id=package_id,
+                error=str(exc),
+            )
+        )
     for requirement_id in list(analysis.get("failed_requirements") or []):
         failed_requirements.append(
             make_failed_requirement(
@@ -108,7 +125,10 @@ def evaluate_package(package_result: dict) -> tuple[dict, list[dict]]:
             "penetration_clusters": list(analysis.get("penetration_clusters") or []),
             "analysis": analysis,
             "failed_requirements": failed_requirements,
-            "artifacts": {"q5a_host_result_path": host_result_path},
+            "artifacts": {
+                "q5a_host_result_path": host_result_path,
+                "q5c_debug_image_path": str(debug_artifacts.get("image_path") or ""),
+            },
         },
         failed_requirements,
     )
@@ -153,10 +173,14 @@ def main():
         )
 
     per_package_results = []
+    debug_image_paths = []
     for package_result in passing_packages:
-        evaluation, package_failures = evaluate_package(package_result)
+        evaluation, package_failures = evaluate_package(package_result, output_root=output_root)
         per_package_results.append(evaluation)
         failed_requirements.extend(package_failures)
+        debug_image_path = str((evaluation.get("artifacts") or {}).get("q5c_debug_image_path") or "")
+        if debug_image_path:
+            debug_image_paths.append(debug_image_path)
 
     counts = {
         "required_package_count": int(FIXED_EXECUTION_PROFILE["required_package_count"]),
@@ -190,6 +214,7 @@ def main():
             "discussion_signal": discussion_signal,
             "artifacts": {
                 "run_root": str(output_root.resolve()),
+                "debug_image_paths": debug_image_paths,
             },
         },
         "aiue_volumetric_inspection_q5c_lite_report",
