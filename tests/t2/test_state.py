@@ -102,9 +102,14 @@ def test_load_workbench_state_reads_q5c_quality_summary(tmp_path: Path):
     assert q5c_summary["status"] == "pass"
     assert q5c_summary["package_count"] == 1
     assert q5c_summary["diagnostic_class_counts"]["pass_stable"] == 1
+    assert q5c_summary["risk_band_counts"]["watch"] == 1
+    assert q5c_summary["highest_risk_band"] == "watch"
+    assert q5c_summary["watchlist_count"] == 1
+    assert q5c_summary["watchlist_package_ids"] == ["pkg_alpha"]
     assert q5c_summary["focus_package_id"] == "pkg_alpha"
     assert q5c_summary["focus_metric"] == "penetration_ratio_margin_to_failure"
     assert q5c_summary["focus_margin_to_failure"] == 0.02
     assert q5c_summary["packages"][0]["closest_margin_metric"] == "penetration_ratio_margin_to_failure"
     assert q5c_summary["packages"][0]["closest_margin_value"] == 0.02
+    assert q5c_summary["packages"][0]["risk_band"] == "watch"
     assert q5c_summary["packages"][0]["artifact_image_path"].endswith("q5c_pkg_alpha_debug.ppm")

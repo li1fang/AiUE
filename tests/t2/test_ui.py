@@ -55,6 +55,7 @@ def test_workbench_window_shows_q5c_quality_summary(qtbot, tmp_path: Path):
     assert window.q5c_quality_summary.isVisible() is True
     assert "Q5C-lite PASS" in window.q5c_quality_summary.text()
     assert "pass_stable:1" in window.q5c_quality_summary.text()
+    assert "risk watch | watch 1" in window.q5c_quality_summary.text()
     assert "focus penetration_ratio_margin_to_failure=0.0200 @ pkg_alpha" in window.q5c_quality_summary.text()
 
 

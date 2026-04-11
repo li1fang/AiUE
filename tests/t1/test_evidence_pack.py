@@ -37,6 +37,22 @@ def test_build_evidence_pack_generates_static_bundle(tmp_path: Path):
                 {
                     "package_id": "pkg_alpha",
                     "status": "pass",
+                    "fit_diagnostic_class": "pass_stable",
+                    "embedding_ratio": 0.48,
+                    "floating_ratio": 0.02,
+                    "penetration_ratio": 0.0,
+                    "diagnostic_signals": {
+                        "embedding_ratio_below_threshold": False,
+                        "floating_ratio_exceeded": False,
+                        "penetration_ratio_exceeded": False,
+                        "borderline_fit": False,
+                    },
+                    "threshold_deltas": {
+                        "embedding_ratio_delta_to_min": 0.18,
+                        "floating_ratio_delta_to_max": -0.18,
+                        "penetration_ratio_delta_to_max": -0.02,
+                    },
+                    "failed_requirements": [],
                     "artifacts": {},
                 }
             ],
@@ -68,6 +84,10 @@ def test_build_evidence_pack_generates_static_bundle(tmp_path: Path):
     assert q5c_summary["status"] == "pass"
     assert q5c_summary["package_count"] >= 1
     assert q5c_summary["diagnostic_class_counts"]
+    assert q5c_summary["risk_band_counts"]["watch"] >= 1
+    assert q5c_summary["highest_risk_band"] == "watch"
+    assert q5c_summary["watchlist_count"] >= 1
+    assert "pkg_alpha" in q5c_summary["watchlist_package_ids"]
     assert q5c_summary["focus_package_id"]
     assert q5c_summary["focus_metric"]
     assert any(str(item.get("artifact_image_relative_path") or "").startswith("images/q5c_") for item in list(q5c_summary.get("packages") or []))

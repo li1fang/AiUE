@@ -31,6 +31,13 @@ code { background: #1e293b; padding: 2px 6px; border-radius: 6px; }
 .section { margin-top: 28px; }
 """
 
+Q5C_RISK_BAND_ORDER = {
+    "fail": 0,
+    "borderline": 1,
+    "watch": 2,
+    "stable": 3,
+}
+
 
 def _run_stamp() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -135,6 +142,48 @@ def _collect_preview_artifacts(report_index: dict) -> list[dict]:
     return artifacts
 
 
+def _q5c_risk_band(*, status: str, fit_diagnostic_class: str, closest_margin_value: float) -> str:
+    diagnostic = str(fit_diagnostic_class or "")
+    if str(status or "") != "pass" or diagnostic in {
+        "input_invalid",
+        "floating_fit_out_of_range",
+        "penetration_keepout_overlap",
+        "mixed_penetration_and_floating",
+    }:
+        return "fail"
+    if float(closest_margin_value) <= 0.0:
+        return "fail"
+    if diagnostic == "pass_borderline" or float(closest_margin_value) <= 0.01:
+        return "borderline"
+    if float(closest_margin_value) <= 0.05:
+        return "watch"
+    return "stable"
+
+
+def _q5c_risk_reason(
+    *,
+    risk_band: str,
+    fit_diagnostic_class: str,
+    closest_margin_metric: str,
+    closest_margin_value: float,
+) -> str:
+    if risk_band == "fail":
+        return str(fit_diagnostic_class or closest_margin_metric or "fail")
+    if risk_band in {"borderline", "watch"}:
+        return f"{closest_margin_metric}:{float(closest_margin_value):.4f}"
+    return ""
+
+
+def _q5c_highest_risk_band(package_summaries: list[dict]) -> str:
+    if not package_summaries:
+        return "missing"
+    highest = min(
+        (str(item.get("risk_band") or "stable") for item in package_summaries),
+        key=lambda band: int(Q5C_RISK_BAND_ORDER.get(band, 999)),
+    )
+    return highest
+
+
 def _build_q5c_quality_summary(report_index: dict, copied_images: list[dict]) -> dict:
     reports_by_gate_id = dict(report_index.get("reports_by_gate_id") or {})
     q5c_entry = dict(reports_by_gate_id.get("volumetric_inspection_q5c_lite") or {})
@@ -147,6 +196,10 @@ def _build_q5c_quality_summary(report_index: dict, copied_images: list[dict]) ->
             "package_count": 0,
             "passing_package_count": 0,
             "diagnostic_class_counts": {},
+            "risk_band_counts": {},
+            "watchlist_package_ids": [],
+            "watchlist_count": 0,
+            "highest_risk_band": "missing",
             "packages": [],
         }
 
@@ -157,6 +210,8 @@ def _build_q5c_quality_summary(report_index: dict, copied_images: list[dict]) ->
     }
     package_summaries = []
     diagnostic_class_counts: dict[str, int] = {}
+    risk_band_counts: dict[str, int] = {}
+    watchlist_package_ids: list[str] = []
     focus_package_id = ""
     focus_metric = ""
     focus_margin_to_failure = 0.0
@@ -184,6 +239,20 @@ def _build_q5c_quality_summary(report_index: dict, copied_images: list[dict]) ->
             focus_margin_to_failure = float(closest_margin_value)
             focus_diagnostic_class = diagnostic_class
             focus_initialized = True
+        risk_band = _q5c_risk_band(
+            status=str(package.get("status") or ""),
+            fit_diagnostic_class=diagnostic_class,
+            closest_margin_value=float(closest_margin_value),
+        )
+        risk_reason = _q5c_risk_reason(
+            risk_band=risk_band,
+            fit_diagnostic_class=diagnostic_class,
+            closest_margin_metric=closest_margin_metric,
+            closest_margin_value=float(closest_margin_value),
+        )
+        risk_band_counts[risk_band] = risk_band_counts.get(risk_band, 0) + 1
+        if risk_band in {"watch", "borderline", "fail"}:
+            watchlist_package_ids.append(package_id)
         package_summaries.append(
             {
                 "package_id": package_id,
@@ -197,6 +266,8 @@ def _build_q5c_quality_summary(report_index: dict, copied_images: list[dict]) ->
                 "margin_to_failure_by_metric": margin_to_failure_by_metric,
                 "closest_margin_metric": closest_margin_metric,
                 "closest_margin_value": float(closest_margin_value),
+                "risk_band": risk_band,
+                "risk_reason": risk_reason,
                 "failed_requirement_ids": [
                     str(item.get("id") or "")
                     for item in list(package.get("failed_requirements") or [])
@@ -214,10 +285,31 @@ def _build_q5c_quality_summary(report_index: dict, copied_images: list[dict]) ->
         "package_count": len(package_summaries),
         "passing_package_count": sum(1 for item in package_summaries if item.get("status") == "pass"),
         "diagnostic_class_counts": diagnostic_class_counts,
+        "risk_band_counts": risk_band_counts,
+        "watchlist_package_ids": watchlist_package_ids,
+        "watchlist_count": len(watchlist_package_ids),
+        "highest_risk_band": _q5c_highest_risk_band(package_summaries),
         "focus_package_id": focus_package_id,
         "focus_metric": focus_metric,
         "focus_margin_to_failure": float(focus_margin_to_failure) if focus_initialized else 0.0,
         "focus_fit_diagnostic_class": focus_diagnostic_class,
+        "ordered_packages_by_risk": [
+            {
+                "package_id": str(item.get("package_id") or ""),
+                "risk_band": str(item.get("risk_band") or ""),
+                "closest_margin_metric": str(item.get("closest_margin_metric") or ""),
+                "closest_margin_value": float(item.get("closest_margin_value") or 0.0),
+                "fit_diagnostic_class": str(item.get("fit_diagnostic_class") or ""),
+            }
+            for item in sorted(
+                package_summaries,
+                key=lambda item: (
+                    int(Q5C_RISK_BAND_ORDER.get(str(item.get("risk_band") or ""), 999)),
+                    float(item.get("closest_margin_value") or 0.0),
+                    str(item.get("package_id") or ""),
+                ),
+            )
+        ],
         "packages": package_summaries,
     }
 
@@ -351,16 +443,21 @@ def _render_q5c_quality_summary(quality_summaries: dict) -> str:
     if not q5c_summary or str(q5c_summary.get("status") or "missing") == "missing":
         return "<p class=\"muted\">No Q5C-lite quality summary was available.</p>"
     diagnostic_counts = dict(q5c_summary.get("diagnostic_class_counts") or {})
+    risk_band_counts = dict(q5c_summary.get("risk_band_counts") or {})
     package_rows = []
     for package in list(q5c_summary.get("packages") or []):
         closest_metric = str(package.get("closest_margin_metric") or "")
         closest_margin_value = float(package.get("closest_margin_value") or 0.0)
         package_rows.append(
-            f"<tr><td><code>{html.escape(str(package.get('package_id') or ''))}</code></td><td>{html.escape(str(package.get('status') or ''))}</td><td><code>{html.escape(str(package.get('fit_diagnostic_class') or ''))}</code></td><td>{float(package.get('embedding_ratio') or 0.0):.4f}</td><td>{float(package.get('floating_ratio') or 0.0):.4f}</td><td>{float(package.get('penetration_ratio') or 0.0):.4f}</td><td>{html.escape(closest_metric)} = {closest_margin_value:.4f}</td><td>{html.escape(', '.join(str(item) for item in list(package.get('failed_requirement_ids') or [])) or '-')}</td></tr>"
+            f"<tr><td><code>{html.escape(str(package.get('package_id') or ''))}</code></td><td>{html.escape(str(package.get('status') or ''))}</td><td><code>{html.escape(str(package.get('fit_diagnostic_class') or ''))}</code></td><td><code>{html.escape(str(package.get('risk_band') or ''))}</code></td><td>{float(package.get('embedding_ratio') or 0.0):.4f}</td><td>{float(package.get('floating_ratio') or 0.0):.4f}</td><td>{float(package.get('penetration_ratio') or 0.0):.4f}</td><td>{html.escape(closest_metric)} = {closest_margin_value:.4f}</td><td>{html.escape(', '.join(str(item) for item in list(package.get('failed_requirement_ids') or [])) or '-')}</td></tr>"
         )
     summary_text = ", ".join(
         f"{html.escape(str(key))}: {int(value)}"
         for key, value in sorted(diagnostic_counts.items())
+    ) or "none"
+    risk_text = ", ".join(
+        f"{html.escape(str(key))}: {int(value)}"
+        for key, value in sorted(risk_band_counts.items(), key=lambda item: int(Q5C_RISK_BAND_ORDER.get(str(item[0]), 999)))
     ) or "none"
     focus_package_id = str(q5c_summary.get("focus_package_id") or "")
     focus_metric = str(q5c_summary.get("focus_metric") or "")
@@ -376,10 +473,13 @@ def _render_q5c_quality_summary(quality_summaries: dict) -> str:
         f"<p><strong>Status:</strong> {html.escape(str(q5c_summary.get('status') or 'unknown'))}</p>"
         f"<p><strong>Packages:</strong> {int(q5c_summary.get('passing_package_count') or 0)} / {int(q5c_summary.get('package_count') or 0)} passing</p>"
         f"<p><strong>Diagnostic Classes:</strong> {summary_text}</p>"
+        f"<p><strong>Risk Bands:</strong> {risk_text}</p>"
+        f"<p><strong>Highest Risk:</strong> {html.escape(str(q5c_summary.get('highest_risk_band') or 'unknown'))}</p>"
+        f"<p><strong>Watchlist Count:</strong> {int(q5c_summary.get('watchlist_count') or 0)}</p>"
         f"<p><strong>Closest Margin:</strong> {focus_text}</p>"
         "</article>"
         + (
-            "<table><thead><tr><th>Package</th><th>Status</th><th>Diagnostic</th><th>Embedding</th><th>Floating</th><th>Penetration</th><th>Closest Margin</th><th>Failed Requirements</th></tr></thead><tbody>"
+            "<table><thead><tr><th>Package</th><th>Status</th><th>Diagnostic</th><th>Risk</th><th>Embedding</th><th>Floating</th><th>Penetration</th><th>Closest Margin</th><th>Failed Requirements</th></tr></thead><tbody>"
             + "".join(package_rows)
             + "</tbody></table>"
             if package_rows
