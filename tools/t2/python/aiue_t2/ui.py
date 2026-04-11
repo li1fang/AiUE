@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from PySide6.QtCore import Qt
@@ -16,6 +17,7 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QMainWindow,
     QPlainTextEdit,
+    QPushButton,
     QSplitter,
     QTabWidget,
     QTableWidget,
@@ -42,6 +44,7 @@ from aiue_t2.state import (
     load_workbench_state,
     report_payload_to_text,
 )
+from aiue_t2.demo_request_runner import export_demo_request, invoke_demo_request, load_demo_request_selection
 
 
 APP_STYLESHEET = """
@@ -86,6 +89,32 @@ QFrame[card="true"] {
 """
 
 
+@dataclass
+class DemoRequestControlState:
+    status: str = "idle"
+    operation: str = ""
+    request_kind: str = ""
+    workspace_config_path: str = ""
+    request_json_path: str = ""
+    result_json_path: str = ""
+    host_key: str = ""
+    errors: list[str] = field(default_factory=list)
+    payload: dict = field(default_factory=dict)
+
+    def to_dump_dict(self) -> dict:
+        return {
+            "status": self.status,
+            "operation": self.operation,
+            "request_kind": self.request_kind,
+            "workspace_config_path": self.workspace_config_path,
+            "request_json_path": self.request_json_path,
+            "result_json_path": self.result_json_path,
+            "host_key": self.host_key,
+            "errors": list(self.errors),
+            "payload": dict(self.payload),
+        }
+
+
 class SummaryCard(QFrame):
     def __init__(self, *, title: str, object_name: str) -> None:
         super().__init__()
@@ -106,15 +135,24 @@ class SummaryCard(QFrame):
 
 
 class WorkbenchWindow(QMainWindow):
-    def __init__(self, *, manifest_path: Path, session_manifest_path: Path | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        manifest_path: Path,
+        session_manifest_path: Path | None = None,
+        repo_root: Path | None = None,
+        workspace_config_path: Path | None = None,
+    ) -> None:
         super().__init__()
         self.setWindowTitle("AiUE T2 Windows Native Workbench")
         self.resize(1440, 900)
         self.setStyleSheet(APP_STYLESHEET)
+        self.repo_root = Path(repo_root or Path(__file__).resolve().parents[4]).expanduser().resolve()
         self.current_manifest_path = Path(manifest_path).expanduser().resolve()
         self.current_session_manifest_path = (
             Path(session_manifest_path).expanduser().resolve() if session_manifest_path is not None else None
         )
+        self.current_workspace_config_path = self._resolve_workspace_config_path(workspace_config_path)
         self.app_state = AppState(
             status="error",
             manifest_path=str(self.current_manifest_path),
@@ -150,6 +188,9 @@ class WorkbenchWindow(QMainWindow):
             default_animation_preset_id=None,
         )
         self.view_state = ViewState()
+        self.demo_request_control = DemoRequestControlState(
+            workspace_config_path=str(self.current_workspace_config_path or ""),
+        )
         self.report_items_by_gate_id: dict[str, QTreeWidgetItem] = {}
         self.preview_records_by_key: dict[str, PreviewImageRecord] = {}
         self._build_ui()
@@ -334,14 +375,67 @@ class WorkbenchWindow(QMainWindow):
         self.demo_request_summary.setProperty("role", "muted")
         self.demo_request_summary.setWordWrap(True)
 
+        self.demo_request_workspace = QLabel("Workspace config: not configured")
+        self.demo_request_workspace.setObjectName("demoRequestWorkspaceLabel")
+        self.demo_request_workspace.setProperty("role", "muted")
+        self.demo_request_workspace.setWordWrap(True)
+
+        self.export_action_request_button = QPushButton("Export Action Request")
+        self.export_action_request_button.setObjectName("exportActionRequestButton")
+        self.export_action_request_button.clicked.connect(
+            lambda: self.export_current_demo_request(request_kind="action_preview")
+        )
+
+        self.export_animation_request_button = QPushButton("Export Animation Request")
+        self.export_animation_request_button.setObjectName("exportAnimationRequestButton")
+        self.export_animation_request_button.clicked.connect(
+            lambda: self.export_current_demo_request(request_kind="animation_preview")
+        )
+
+        self.dry_run_action_request_button = QPushButton("Dry Run Action Request")
+        self.dry_run_action_request_button.setObjectName("dryRunActionRequestButton")
+        self.dry_run_action_request_button.clicked.connect(
+            lambda: self.dry_run_current_demo_request(request_kind="action_preview")
+        )
+
+        self.dry_run_animation_request_button = QPushButton("Dry Run Animation Request")
+        self.dry_run_animation_request_button.setObjectName("dryRunAnimationRequestButton")
+        self.dry_run_animation_request_button.clicked.connect(
+            lambda: self.dry_run_current_demo_request(request_kind="animation_preview")
+        )
+
+        button_row = QHBoxLayout()
+        button_row.addWidget(self.export_action_request_button)
+        button_row.addWidget(self.export_animation_request_button)
+        button_row.addWidget(self.dry_run_action_request_button)
+        button_row.addWidget(self.dry_run_animation_request_button)
+
+        self.demo_request_control_summary = QLabel("No demo request control operation yet")
+        self.demo_request_control_summary.setObjectName("demoRequestControlSummaryLabel")
+        self.demo_request_control_summary.setProperty("role", "muted")
+        self.demo_request_control_summary.setWordWrap(True)
+
         self.demo_request_text = QPlainTextEdit()
         self.demo_request_text.setObjectName("demoRequestText")
         self.demo_request_text.setReadOnly(True)
 
+        self.demo_request_control_text = QPlainTextEdit()
+        self.demo_request_control_text.setObjectName("demoRequestControlText")
+        self.demo_request_control_text.setReadOnly(True)
+
+        request_splitter = QSplitter(Qt.Vertical)
+        request_splitter.addWidget(self.demo_request_text)
+        request_splitter.addWidget(self.demo_request_control_text)
+        request_splitter.setStretchFactor(0, 2)
+        request_splitter.setStretchFactor(1, 1)
+
         request_root = QWidget()
         request_layout = QVBoxLayout(request_root)
         request_layout.addWidget(self.demo_request_summary)
-        request_layout.addWidget(self.demo_request_text)
+        request_layout.addWidget(self.demo_request_workspace)
+        request_layout.addLayout(button_row)
+        request_layout.addWidget(self.demo_request_control_summary)
+        request_layout.addWidget(request_splitter)
         self.tabs.addTab(request_root, "Demo Request")
 
         content_splitter.addWidget(self.tabs)
@@ -360,7 +454,16 @@ class WorkbenchWindow(QMainWindow):
             session_manifest_path=self.current_session_manifest_path,
         )
         self.view_state = build_default_view_state(self.app_state)
+        self.demo_request_control = DemoRequestControlState(
+            workspace_config_path=str(self.current_workspace_config_path or ""),
+        )
         self._render_state()
+
+    def _resolve_workspace_config_path(self, workspace_config_path: Path | None = None) -> Path | None:
+        if workspace_config_path is not None:
+            return Path(workspace_config_path).expanduser().resolve()
+        default_path = self.repo_root / "local" / "pipeline_workspace.local.json"
+        return default_path.resolve() if default_path.exists() else None
 
     def refresh_from_manifest(self) -> None:
         self.load_manifest(self.current_manifest_path)
@@ -376,7 +479,9 @@ class WorkbenchWindow(QMainWindow):
             self.load_manifest(Path(path))
 
     def current_dump_payload(self) -> dict:
-        return self.app_state.to_dump_payload(self.view_state)
+        payload = self.app_state.to_dump_payload(self.view_state)
+        payload["demo_request_control"] = self.demo_request_control.to_dump_dict()
+        return payload
 
     def current_error_codes(self) -> list[str]:
         return [error.code for error in self.app_state.errors]
@@ -416,6 +521,92 @@ class WorkbenchWindow(QMainWindow):
         session_manifest_path = self.app_state.demo_session.session_manifest_path
         if session_manifest_path:
             self._open_in_explorer(session_manifest_path)
+
+    def _selected_demo_request_kwargs(self) -> dict:
+        return {
+            "repo_root": self.repo_root,
+            "manifest_path": self.current_manifest_path,
+            "session_manifest_path": self.current_session_manifest_path,
+            "package_id": self.view_state.selected_package_id,
+            "action_preset_id": self.view_state.selected_action_preset_id,
+            "animation_preset_id": self.view_state.selected_animation_preset_id,
+        }
+
+    def export_current_demo_request(self, *, request_kind: str = "action_preview") -> None:
+        try:
+            selection = load_demo_request_selection(
+                **self._selected_demo_request_kwargs(),
+                request_kind=request_kind,
+            )
+            exported_path = export_demo_request(selection)
+            self.demo_request_control = DemoRequestControlState(
+                status="pass",
+                operation="export",
+                request_kind=selection.request_kind,
+                workspace_config_path=str(self.current_workspace_config_path or ""),
+                request_json_path=str(exported_path),
+                payload=selection.to_dump_dict(),
+            )
+        except Exception as exc:  # pragma: no cover - defensive UI boundary
+            self.demo_request_control = DemoRequestControlState(
+                status="error",
+                operation="export",
+                request_kind=str(request_kind or ""),
+                workspace_config_path=str(self.current_workspace_config_path or ""),
+                errors=[str(exc)],
+            )
+        self._render_demo_request()
+
+    def dry_run_current_demo_request(
+        self,
+        *,
+        request_kind: str = "action_preview",
+        workspace_config_path: Path | None = None,
+    ) -> None:
+        resolved_workspace = (
+            Path(workspace_config_path).expanduser().resolve()
+            if workspace_config_path is not None
+            else (self.current_workspace_config_path or self._resolve_workspace_config_path(None))
+        )
+        if resolved_workspace is None or not resolved_workspace.exists():
+            self.demo_request_control = DemoRequestControlState(
+                status="error",
+                operation="dry_run",
+                request_kind=str(request_kind or ""),
+                workspace_config_path=str(resolved_workspace or ""),
+                errors=["workspace_config_missing"],
+            )
+            self._render_demo_request()
+            return
+        self.current_workspace_config_path = resolved_workspace
+        try:
+            selection = load_demo_request_selection(
+                **self._selected_demo_request_kwargs(),
+                request_kind=request_kind,
+            )
+            invocation = invoke_demo_request(
+                selection,
+                workspace_config=resolved_workspace,
+                dry_run=True,
+            )
+            self.demo_request_control = DemoRequestControlState(
+                status="pass",
+                operation="dry_run",
+                request_kind=selection.request_kind,
+                workspace_config_path=str(resolved_workspace),
+                result_json_path=str(invocation.get("result_json_path") or ""),
+                host_key=str(invocation.get("host_key") or ""),
+                payload=invocation,
+            )
+        except Exception as exc:  # pragma: no cover - defensive UI boundary
+            self.demo_request_control = DemoRequestControlState(
+                status="error",
+                operation="dry_run",
+                request_kind=str(request_kind or ""),
+                workspace_config_path=str(resolved_workspace),
+                errors=[str(exc)],
+            )
+        self._render_demo_request()
 
     def _render_state(self) -> None:
         self._render_errors()
@@ -653,6 +844,7 @@ class WorkbenchWindow(QMainWindow):
     def _render_demo_request(self) -> None:
         payload = self.current_dump_payload()
         demo_request = dict(payload.get("demo_request") or {})
+        control_state = dict(payload.get("demo_request_control") or {})
         summary_parts = [
             f"Status {str(demo_request.get('status') or 'unknown').upper()}",
             f"Package {str(demo_request.get('selected_package_id') or 'none')}",
@@ -661,7 +853,30 @@ class WorkbenchWindow(QMainWindow):
         if request_kinds:
             summary_parts.append(f"Kinds {', '.join(request_kinds)}")
         self.demo_request_summary.setText(" | ".join(summary_parts))
+        workspace_path = str(self.current_workspace_config_path or "")
+        self.demo_request_workspace.setText(
+            f"Workspace config: {workspace_path if workspace_path else 'not configured'}"
+        )
         self.demo_request_text.setPlainText(json.dumps(demo_request, ensure_ascii=False, indent=2))
+        control_parts = [
+            f"Control {str(control_state.get('status') or 'idle').upper()}",
+            f"Op {str(control_state.get('operation') or 'none')}",
+        ]
+        if control_state.get("request_kind"):
+            control_parts.append(f"Kind {control_state['request_kind']}")
+        if control_state.get("result_json_path"):
+            control_parts.append(f"Result {control_state['result_json_path']}")
+        elif control_state.get("request_json_path"):
+            control_parts.append(f"Request {control_state['request_json_path']}")
+        self.demo_request_control_summary.setText(" | ".join(control_parts))
+        self.demo_request_control_text.setPlainText(json.dumps(control_state, ensure_ascii=False, indent=2))
+
+        request_kind_set = set(request_kinds)
+        self.export_action_request_button.setEnabled("action_preview" in request_kind_set)
+        self.export_animation_request_button.setEnabled("animation_preview" in request_kind_set)
+        workspace_ready = bool(self.current_workspace_config_path and Path(self.current_workspace_config_path).exists())
+        self.dry_run_action_request_button.setEnabled("action_preview" in request_kind_set and workspace_ready)
+        self.dry_run_animation_request_button.setEnabled("animation_preview" in request_kind_set and workspace_ready)
 
     def _selected_report_record(self) -> ReportRecord | None:
         gate_id = self.view_state.selected_report_gate_id

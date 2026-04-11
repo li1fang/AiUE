@@ -3,6 +3,11 @@ param(
     [switch]$Latest,
     [string]$Manifest = "",
     [string]$SessionManifest = "",
+    [string]$WorkspaceConfig = "",
+    [switch]$DemoRequestExport,
+    [switch]$DemoRequestDryRun,
+    [ValidateSet("action_preview", "animation_preview")]
+    [string]$DemoRequestKind = "action_preview",
     [switch]$DumpStateJson,
     [switch]$ExitAfterLoad
 )
@@ -29,6 +34,18 @@ if ($Manifest) {
 }
 if ($SessionManifest) {
     $args += @("--session-manifest", $SessionManifest)
+}
+if ($WorkspaceConfig) {
+    $args += @("--workspace-config", $WorkspaceConfig)
+}
+if ($DemoRequestExport) {
+    $args += "--demo-request-export"
+}
+if ($DemoRequestDryRun) {
+    $args += "--demo-request-dry-run"
+}
+if ($DemoRequestKind) {
+    $args += @("--demo-request-kind", $DemoRequestKind)
 }
 if ($DumpStateJson) {
     $args += "--dump-state-json"

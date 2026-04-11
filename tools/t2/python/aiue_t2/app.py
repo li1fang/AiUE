@@ -19,6 +19,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--latest", action="store_true", help="Open Saved/tooling/t1/latest/manifest.json")
     parser.add_argument("--manifest", help="Open a specific T1 manifest path.")
     parser.add_argument("--session-manifest", help="Open a specific E2 session manifest path.")
+    parser.add_argument("--workspace-config", help="Workspace config path for controlled demo request dry-runs.")
+    parser.add_argument("--demo-request-export", action="store_true", help="Export the currently selected E2 demo request.")
+    parser.add_argument("--demo-request-dry-run", action="store_true", help="Dry-run the currently selected E2 demo request.")
+    parser.add_argument(
+        "--demo-request-kind",
+        choices=["action_preview", "animation_preview"],
+        default="action_preview",
+        help="Select which demo request kind to export or dry-run.",
+    )
     parser.add_argument("--dump-state-json", action="store_true", help="Print the current workbench state as JSON.")
     parser.add_argument("--exit-after-load", action="store_true", help="Load the manifest and exit immediately.")
     return parser.parse_args(argv)
@@ -36,17 +45,38 @@ def main(argv: list[str] | None = None) -> int:
     window = WorkbenchWindow(
         manifest_path=manifest_path,
         session_manifest_path=Path(args.session_manifest).expanduser().resolve() if args.session_manifest else None,
+        repo_root=REPO_ROOT,
+        workspace_config_path=Path(args.workspace_config).expanduser().resolve() if args.workspace_config else None,
     )
     window.show()
     app.processEvents()
+
+    operation_requested = False
+    if args.demo_request_export:
+        operation_requested = True
+        window.export_current_demo_request(request_kind=args.demo_request_kind)
+        app.processEvents()
+    if args.demo_request_dry_run:
+        operation_requested = True
+        window.dry_run_current_demo_request(
+            request_kind=args.demo_request_kind,
+            workspace_config_path=Path(args.workspace_config).expanduser().resolve() if args.workspace_config else None,
+        )
+        app.processEvents()
 
     if args.dump_state_json:
         print(json.dumps(window.current_dump_payload(), ensure_ascii=False, indent=2))
 
     if args.exit_after_load:
-        return 0 if window.app_state.status == "pass" else 1
+        status_ok = window.app_state.status == "pass"
+        if operation_requested:
+            status_ok = status_ok and window.current_dump_payload().get("demo_request_control", {}).get("status") == "pass"
+        return 0 if status_ok else 1
 
     exit_code = app.exec()
     if exit_code != 0:
         return exit_code
-    return 0 if window.app_state.status == "pass" else 1
+    status_ok = window.app_state.status == "pass"
+    if operation_requested:
+        status_ok = status_ok and window.current_dump_payload().get("demo_request_control", {}).get("status") == "pass"
+    return 0 if status_ok else 1

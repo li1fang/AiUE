@@ -57,3 +57,19 @@ def test_workbench_cli_reads_latest_manifest_smoke():
     assert payload["slot_debugger"]["package_count"] >= 1
     assert payload["demo_session"]["status"] in {"pass", "missing"}
     assert payload["demo_request"]["status"] in {"pass", "missing", "error"}
+
+
+def test_workbench_cli_demo_request_export_fixture(tmp_path: Path):
+    pack = build_fixture_pack(tmp_path)
+    completed, payload = run_workbench_process(
+        manifest_path=pack["manifest_path"],
+        session_manifest_path=pack["session_manifest_path"],
+        demo_request_export=True,
+        demo_request_kind="animation_preview",
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert payload["status"] == "pass"
+    assert payload["demo_request_control"]["status"] == "pass"
+    assert payload["demo_request_control"]["operation"] == "export"
+    assert payload["demo_request_control"]["request_kind"] == "animation_preview"
+    assert Path(payload["demo_request_control"]["request_json_path"]).exists()

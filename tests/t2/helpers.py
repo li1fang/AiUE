@@ -164,6 +164,10 @@ def run_workbench_process(
     manifest_path: Path | None = None,
     latest: bool = False,
     session_manifest_path: Path | None = None,
+    workspace_config_path: Path | None = None,
+    demo_request_export: bool = False,
+    demo_request_dry_run: bool = False,
+    demo_request_kind: str | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], dict]:
     command = [
         "powershell",
@@ -181,6 +185,14 @@ def run_workbench_process(
         command += ["-Latest"]
     if session_manifest_path is not None:
         command += ["-SessionManifest", str(session_manifest_path)]
+    if workspace_config_path is not None:
+        command += ["-WorkspaceConfig", str(workspace_config_path)]
+    if demo_request_export:
+        command += ["-DemoRequestExport"]
+    if demo_request_dry_run:
+        command += ["-DemoRequestDryRun"]
+    if demo_request_kind is not None:
+        command += ["-DemoRequestKind", str(demo_request_kind)]
     env = os.environ.copy()
     env["QT_QPA_PLATFORM"] = "offscreen"
     env["QT_API"] = "pyside6"

@@ -189,6 +189,36 @@ What this fourth slice still does **not** do:
 - it does not own session lifecycle management after the initial command invocation
 - it is a controlled request runner, not the final playable demo shell
 
+Current fifth slice:
+
+- `T2` now exposes a lightweight `demo_request_control` state alongside `demo_request`
+- the Windows native workbench now provides controlled buttons for:
+  - `Export Action Request`
+  - `Export Animation Request`
+  - `Dry Run Action Request`
+  - `Dry Run Animation Request`
+- `T2 --dump-state-json --exit-after-load` can now include the control result when called with:
+  - `--demo-request-export`
+  - `--demo-request-dry-run`
+  - `--demo-request-kind action_preview|animation_preview`
+
+What this fifth slice proves:
+
+- the native workbench is no longer limited to session reading and request lowering
+- it can now surface a controlled execution seam while keeping the scope intentionally small
+- the same native tool now exposes:
+  - current request intent
+  - current workspace config
+  - last export or dry-run result
+  - request/result artifact paths
+- that makes the Windows tooling layer materially more testable and easier to automate against
+
+What this fifth slice still does **not** do:
+
+- it still does not own a full playable session lifecycle
+- it still does not provide general-purpose UE operation controls
+- it is a native control surface for `export + dry-run`, not a complete playable shell
+
 Not in scope yet:
 
 - complex game loop
