@@ -29,6 +29,7 @@ def test_workbench_cli_seven_open_cycles(tmp_path: Path):
         assert payload["demo_round_state"]["status"] == "missing"
         assert payload["demo_review_state"]["status"] == "missing"
         assert payload["demo_review_focus"]["status"] == "missing"
+        assert payload["demo_review_replay_state"]["status"] == "missing"
         assert sorted(payload["demo_request"]["request_kinds"]) == ["action_preview", "animation_preview"]
         assert set(payload["report_categories"]) == {"active_line", "platform_line", "governance_line", "historical_other"}
 
@@ -65,6 +66,7 @@ def test_workbench_cli_reads_latest_manifest_smoke():
     assert payload["governance_balance"]["status"] in {"pass", "attention", "missing"}
     assert payload["demo_session"]["status"] in {"pass", "missing"}
     assert payload["demo_request"]["status"] in {"pass", "missing", "error"}
+    assert payload["demo_review_replay_state"]["status"] in {"pass", "missing", "error"}
 
 
 def test_workbench_cli_demo_request_export_fixture(tmp_path: Path):

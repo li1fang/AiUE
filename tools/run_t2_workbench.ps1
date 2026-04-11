@@ -11,6 +11,7 @@ param(
     [switch]$DemoRequestDryRun,
     [switch]$DemoRequestInvoke,
     [switch]$DemoSessionRoundInvoke,
+    [switch]$DemoReviewReplay,
     [ValidateSet("action_preview", "animation_preview")]
     [string]$DemoRequestKind = "action_preview",
     [switch]$DumpStateJson,
@@ -63,6 +64,9 @@ if ($DemoRequestInvoke) {
 }
 if ($DemoSessionRoundInvoke) {
     $args += "--demo-session-round-invoke"
+}
+if ($DemoReviewReplay) {
+    $args += "--demo-review-replay"
 }
 if ($DemoRequestKind) {
     $args += @("--demo-request-kind", $DemoRequestKind)

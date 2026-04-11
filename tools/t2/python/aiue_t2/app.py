@@ -27,6 +27,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--demo-request-dry-run", action="store_true", help="Dry-run the currently selected E2 demo request.")
     parser.add_argument("--demo-request-invoke", action="store_true", help="Invoke the currently selected E2 demo request.")
     parser.add_argument("--demo-session-round-invoke", action="store_true", help="Invoke the full E2 session round through T2 native control.")
+    parser.add_argument("--demo-review-replay", action="store_true", help="Replay the focused E2 review request through T2 native review control.")
     parser.add_argument(
         "--demo-request-kind",
         choices=["action_preview", "animation_preview"],
@@ -84,6 +85,13 @@ def main(argv: list[str] | None = None) -> int:
             workspace_config_path=Path(args.workspace_config).expanduser().resolve() if args.workspace_config else None,
         )
         app.processEvents()
+    if args.demo_review_replay:
+        operation_requested = True
+        window.replay_current_demo_review(
+            request_kind=args.demo_request_kind,
+            workspace_config_path=Path(args.workspace_config).expanduser().resolve() if args.workspace_config else None,
+        )
+        app.processEvents()
 
     if args.dump_state_json:
         print(json.dumps(window.current_dump_payload(), ensure_ascii=False, indent=2))
@@ -94,6 +102,7 @@ def main(argv: list[str] | None = None) -> int:
             payload = window.current_dump_payload()
             status_ok = status_ok and (
                 payload.get("demo_request_control", {}).get("status") == "pass"
+                or payload.get("demo_review_replay_control", {}).get("status") == "pass"
                 or payload.get("demo_round_control", {}).get("status") == "pass"
             )
         return 0 if status_ok else 1
@@ -106,6 +115,7 @@ def main(argv: list[str] | None = None) -> int:
         payload = window.current_dump_payload()
         status_ok = status_ok and (
             payload.get("demo_request_control", {}).get("status") == "pass"
+            or payload.get("demo_review_replay_control", {}).get("status") == "pass"
             or payload.get("demo_round_control", {}).get("status") == "pass"
         )
     return 0 if status_ok else 1

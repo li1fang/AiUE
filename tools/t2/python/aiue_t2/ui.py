@@ -35,6 +35,7 @@ from aiue_t2.state import (
 )
 from aiue_t2.demo_control_state import load_demo_control_state, write_demo_control_run
 from aiue_t2.demo_review_state import build_demo_review_focus, build_demo_review_state, write_demo_review_state
+from aiue_t2.demo_review_replay_state import load_demo_review_replay_state, write_demo_review_replay_run
 from aiue_t2.demo_round_state import load_demo_round_state, write_demo_round_state
 from aiue_t2.demo_request_runner import export_demo_request, invoke_demo_request, load_demo_request_selection
 from aiue_t2.ui_demo import DemoRequestControlState, DemoRequestPanel, DemoReviewPanel, DemoSessionPanel
@@ -147,6 +148,8 @@ class WorkbenchWindow(QMainWindow):
         self.demo_round_state: dict = {"status": "missing", "package_results": [], "counts": {}}
         self.demo_review_state: dict = {"status": "missing", "package_reviews": [], "summary": {}}
         self.demo_review_focus: dict = {"status": "missing", "selected_package_id": ""}
+        self.demo_review_replay_state: dict = {"status": "missing", "last_replays_by_package": {}, "package_replay_counts": {}}
+        self.demo_review_replay_control: dict = {"status": "idle", "operation": "", "request_kind": "", "errors": []}
         self.demo_round_control: dict = {"status": "idle", "operation": "", "scope": "", "errors": []}
         self.demo_request_control = DemoRequestControlState(
             workspace_config_path=str(self.current_workspace_config_path or ""),
@@ -275,11 +278,16 @@ class WorkbenchWindow(QMainWindow):
         self.open_hero_before_button = self.demo_review_panel.open_hero_before_button
         self.open_action_after_button = self.demo_review_panel.open_action_after_button
         self.open_animation_after_button = self.demo_review_panel.open_animation_after_button
+        self.replay_action_button = self.demo_review_panel.replay_action_button
+        self.replay_animation_button = self.demo_review_panel.replay_animation_button
+        self.demo_review_replay_summary = self.demo_review_panel.demo_review_replay_summary
         self.demo_review_panel.bind_callbacks(
             open_review_artifact=lambda: self.open_demo_review_artifact(),
             open_hero_before=lambda: self.open_demo_review_hero_before(),
             open_action_after=lambda: self.open_demo_review_action_after(),
             open_animation_after=lambda: self.open_demo_review_animation_after(),
+            replay_action=lambda: self.replay_current_demo_review(request_kind="action_preview"),
+            replay_animation=lambda: self.replay_current_demo_review(request_kind="animation_preview"),
         )
         self.tabs.addTab(self.demo_review_panel, "Demo Review")
 
@@ -315,6 +323,10 @@ class WorkbenchWindow(QMainWindow):
             self.demo_review_state,
             selected_package_id=self.view_state.selected_package_id,
         )
+        self.demo_review_replay_state = load_demo_review_replay_state(
+            self.app_state.demo_session.session_manifest_path or self.current_session_manifest_path
+        )
+        self.demo_review_replay_control = {"status": "idle", "operation": "", "request_kind": "", "errors": []}
         self.demo_round_control = {"status": "idle", "operation": "", "scope": "", "errors": []}
         self.demo_request_control = DemoRequestControlState(
             workspace_config_path=str(self.current_workspace_config_path or ""),
@@ -360,6 +372,8 @@ class WorkbenchWindow(QMainWindow):
         payload["demo_round_state"] = dict(self.demo_round_state)
         payload["demo_review_state"] = dict(self.demo_review_state)
         payload["demo_review_focus"] = dict(self.demo_review_focus)
+        payload["demo_review_replay_state"] = dict(self.demo_review_replay_state)
+        payload["demo_review_replay_control"] = dict(self.demo_review_replay_control)
         payload["demo_round_control"] = dict(self.demo_round_control)
         payload["demo_request_control"] = self.demo_request_control.to_dump_dict()
         return payload
@@ -414,6 +428,96 @@ class WorkbenchWindow(QMainWindow):
 
     def open_demo_review_animation_after(self) -> None:
         self._open_in_explorer(str(self.demo_review_focus.get("animation_primary_after_image_path") or ""))
+
+    def replay_current_demo_review(
+        self,
+        *,
+        request_kind: str,
+        workspace_config_path: Path | None = None,
+    ) -> None:
+        resolved_workspace = (
+            Path(workspace_config_path).expanduser().resolve()
+            if workspace_config_path is not None
+            else (self.current_workspace_config_path or self._resolve_workspace_config_path(None))
+        )
+        if resolved_workspace is None or not resolved_workspace.exists():
+            self.demo_review_replay_control = {
+                "status": "error",
+                "operation": "review_replay",
+                "request_kind": str(request_kind or ""),
+                "workspace_config_path": str(resolved_workspace or ""),
+                "errors": ["workspace_config_missing"],
+            }
+            self._render_demo_review()
+            return
+        if str(self.demo_review_focus.get("status") or "") != "pass":
+            self.demo_review_replay_control = {
+                "status": "error",
+                "operation": "review_replay",
+                "request_kind": str(request_kind or ""),
+                "workspace_config_path": str(resolved_workspace),
+                "errors": ["review_focus_not_ready"],
+            }
+            self._render_demo_review()
+            return
+        self.current_workspace_config_path = resolved_workspace
+        try:
+            selection = load_demo_request_selection(
+                **self._selected_demo_request_kwargs(),
+                request_kind=request_kind,
+            )
+            invocation = invoke_demo_request(
+                selection,
+                workspace_config=resolved_workspace,
+                dry_run=False,
+            )
+            invocation_payload = dict(invocation.get("payload") or {})
+            invocation_result = dict(invocation_payload.get("result") or {})
+            invocation_meta = dict(invocation.get("invocation") or {})
+            self.demo_control_state = write_demo_control_run(
+                session_manifest_path=self.app_state.demo_session.session_manifest_path or self.current_session_manifest_path,
+                session_id=self.app_state.demo_session.session_id,
+                selected_package_id=selection.selected_package_id,
+                selected_action_preset_id=selection.selected_action_preset_id,
+                selected_animation_preset_id=selection.selected_animation_preset_id,
+                request_kind=selection.request_kind,
+                operation="review_replay",
+                invocation=invocation,
+            )
+            self.demo_review_replay_state = write_demo_review_replay_run(
+                session_manifest_path=self.app_state.demo_session.session_manifest_path or self.current_session_manifest_path,
+                source_review_state_path=str(self.demo_review_state.get("review_state_path") or ""),
+                session_id=self.app_state.demo_session.session_id,
+                selected_package_id=selection.selected_package_id,
+                selected_action_preset_id=selection.selected_action_preset_id,
+                selected_animation_preset_id=selection.selected_animation_preset_id,
+                request_kind=selection.request_kind,
+                invocation=invocation,
+            )
+            self._refresh_demo_review_state(write=False)
+            result_status = str(invocation_result.get("status") or invocation_payload.get("status") or "")
+            self.demo_review_replay_control = {
+                "status": "pass" if result_status == "pass" else "error",
+                "operation": "review_replay",
+                "request_kind": selection.request_kind,
+                "workspace_config_path": str(resolved_workspace),
+                "request_json_path": str(invocation.get("request_json_path") or ""),
+                "result_json_path": str(invocation.get("result_json_path") or ""),
+                "host_key": str(invocation.get("host_key") or ""),
+                "result_status": result_status,
+                "invocation_returncode": invocation_meta.get("returncode"),
+                "errors": [],
+            }
+        except Exception as exc:  # pragma: no cover - defensive UI boundary
+            self.demo_review_replay_control = {
+                "status": "error",
+                "operation": "review_replay",
+                "request_kind": str(request_kind or ""),
+                "workspace_config_path": str(resolved_workspace),
+                "errors": [str(exc)],
+            }
+        self._render_demo_request()
+        self._render_demo_review()
 
     def _selected_demo_request_kwargs(self) -> dict:
         return {
@@ -784,6 +888,9 @@ class WorkbenchWindow(QMainWindow):
         self.demo_review_panel.render_review(
             dict(self.demo_review_state),
             dict(self.demo_review_focus),
+            dict(self.demo_review_replay_state),
+            dict(self.demo_review_replay_control),
+            workspace_path=str(self.current_workspace_config_path or "") if self.current_workspace_config_path and Path(self.current_workspace_config_path).exists() else "",
             selected_package_id=self.view_state.selected_package_id,
         )
 

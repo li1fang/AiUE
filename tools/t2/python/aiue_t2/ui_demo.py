@@ -398,16 +398,30 @@ class DemoReviewPanel(QWidget):
         self.open_animation_after_button = QPushButton("Open Animation After")
         self.open_animation_after_button.setObjectName("openAnimationAfterButton")
 
+        self.replay_action_button = QPushButton("Replay Action")
+        self.replay_action_button.setObjectName("replayActionButton")
+
+        self.replay_animation_button = QPushButton("Replay Animation")
+        self.replay_animation_button.setObjectName("replayAnimationButton")
+
         button_row = QHBoxLayout()
         button_row.addWidget(self.open_review_artifact_button)
         button_row.addWidget(self.open_hero_before_button)
         button_row.addWidget(self.open_action_after_button)
         button_row.addWidget(self.open_animation_after_button)
+        button_row.addWidget(self.replay_action_button)
+        button_row.addWidget(self.replay_animation_button)
+
+        self.demo_review_replay_summary = QLabel("No review replay yet")
+        self.demo_review_replay_summary.setObjectName("demoReviewReplaySummaryLabel")
+        self.demo_review_replay_summary.setProperty("role", "muted")
+        self.demo_review_replay_summary.setWordWrap(True)
 
         layout = QVBoxLayout(self)
         layout.addWidget(self.demo_review_summary)
         layout.addWidget(self.demo_review_package_summary)
         layout.addLayout(button_row)
+        layout.addWidget(self.demo_review_replay_summary)
         layout.addWidget(self.demo_review_text)
 
     def bind_callbacks(
@@ -417,13 +431,26 @@ class DemoReviewPanel(QWidget):
         open_hero_before,
         open_action_after,
         open_animation_after,
+        replay_action,
+        replay_animation,
     ) -> None:
         self.open_review_artifact_button.clicked.connect(open_review_artifact)
         self.open_hero_before_button.clicked.connect(open_hero_before)
         self.open_action_after_button.clicked.connect(open_action_after)
         self.open_animation_after_button.clicked.connect(open_animation_after)
+        self.replay_action_button.clicked.connect(replay_action)
+        self.replay_animation_button.clicked.connect(replay_animation)
 
-    def render_review(self, demo_review_state: dict, demo_review_focus: dict, *, selected_package_id: str | None) -> None:
+    def render_review(
+        self,
+        demo_review_state: dict,
+        demo_review_focus: dict,
+        demo_review_replay_state: dict,
+        demo_review_replay_control: dict,
+        *,
+        workspace_path: str,
+        selected_package_id: str | None,
+    ) -> None:
         summary = dict(demo_review_state.get("summary") or {})
         summary_parts = [
             f"Review {str(demo_review_state.get('status') or 'missing').upper()}",
@@ -449,6 +476,8 @@ class DemoReviewPanel(QWidget):
                         "status": demo_review_state.get("status"),
                         "review_state_path": demo_review_state.get("review_state_path"),
                         "summary": summary,
+                        "review_replay_state": demo_review_replay_state,
+                        "review_replay_control": demo_review_replay_control,
                         "errors": demo_review_state.get("errors"),
                     },
                     ensure_ascii=False,
@@ -459,6 +488,9 @@ class DemoReviewPanel(QWidget):
             self.open_hero_before_button.setEnabled(False)
             self.open_action_after_button.setEnabled(False)
             self.open_animation_after_button.setEnabled(False)
+            self.replay_action_button.setEnabled(False)
+            self.replay_animation_button.setEnabled(False)
+            self.demo_review_replay_summary.setText("Review Replay MISSING | Package none | Kinds none")
             return
 
         package_summary_parts = [
@@ -471,6 +503,15 @@ class DemoReviewPanel(QWidget):
         if warning_flags:
             package_summary_parts.append(f"Warnings {', '.join(warning_flags)}")
         self.demo_review_package_summary.setText(" | ".join(package_summary_parts))
+        current_replays = dict((demo_review_replay_state.get("last_replays_by_package") or {}).get(str(selected_review.get("package_id") or ""), {}) or {})
+        replay_parts = [
+            f"Review Replay {str(demo_review_replay_state.get('status') or 'missing').upper()}",
+            f"Package {str(selected_review.get('package_id') or 'none')}",
+            f"Kinds {', '.join(sorted(current_replays)) if current_replays else 'none'}",
+        ]
+        if demo_review_replay_control:
+            replay_parts.append(f"Control {str(demo_review_replay_control.get('status') or 'idle').upper()}")
+        self.demo_review_replay_summary.setText(" | ".join(replay_parts))
         self.demo_review_text.setPlainText(
             json.dumps(
                 {
@@ -478,6 +519,9 @@ class DemoReviewPanel(QWidget):
                     "review_state_path": demo_review_state.get("review_state_path"),
                     "summary": summary,
                     "focus": demo_review_focus,
+                    "review_replay_state": demo_review_replay_state,
+                    "review_replay_control": demo_review_replay_control,
+                    "last_replays_for_selected_package": current_replays,
                     "selected_package_review": selected_review,
                     "errors": demo_review_state.get("errors"),
                 },
@@ -489,3 +533,6 @@ class DemoReviewPanel(QWidget):
         self.open_hero_before_button.setEnabled(bool(demo_review_focus.get("hero_before_image_path")))
         self.open_action_after_button.setEnabled(bool(demo_review_focus.get("action_primary_after_image_path")))
         self.open_animation_after_button.setEnabled(bool(demo_review_focus.get("animation_primary_after_image_path")))
+        workspace_ready = bool(workspace_path)
+        self.replay_action_button.setEnabled(bool(demo_review_focus.get("status") == "pass" and workspace_ready))
+        self.replay_animation_button.setEnabled(bool(demo_review_focus.get("status") == "pass" and workspace_ready))

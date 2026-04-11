@@ -35,6 +35,7 @@ def test_workbench_window_renders_fixture_pack(qtbot, tmp_path: Path):
     assert window.current_dump_payload()["demo_round_state"]["status"] == "missing"
     assert window.current_dump_payload()["demo_review_state"]["status"] == "missing"
     assert window.current_dump_payload()["demo_review_focus"]["status"] == "missing"
+    assert window.current_dump_payload()["demo_review_replay_state"]["status"] == "missing"
     assert "Review MISSING" in window.demo_review_summary.text()
     assert window.current_error_codes() == []
 
@@ -143,6 +144,7 @@ def test_workbench_window_demo_request_controls(qtbot, tmp_path: Path, monkeypat
     assert payload["demo_review_state"]["status"] == "pass"
     assert payload["demo_review_focus"]["status"] == "pass"
     assert payload["demo_review_focus"]["selected_package_id"] == "pkg_alpha"
+    assert payload["demo_review_replay_state"]["status"] == "missing"
     assert payload["demo_round_state"]["counts"]["package_count"] == 1
     assert payload["demo_round_state"]["counts"]["action_motion_verified"] == 1
     assert payload["demo_round_state"]["counts"]["animation_pose_verified"] == 1
@@ -232,3 +234,87 @@ def test_workbench_window_demo_review_navigation_buttons(qtbot, tmp_path: Path, 
 
     assert any(path.endswith("playable_demo_e2_review_state.json") for path in opened_paths)
     assert any(path.endswith(".png") for path in opened_paths)
+
+
+def test_workbench_window_demo_review_replay_controls(qtbot, tmp_path: Path, monkeypatch):
+    pack = build_fixture_pack(tmp_path)
+    workspace_config_path = tmp_path / "local" / "pipeline_workspace.local.json"
+    workspace_config_path.parent.mkdir(parents=True, exist_ok=True)
+    workspace_config_path.write_text("{}", encoding="utf-8")
+
+    def fake_invoke(selection, *, workspace_config, result_json_path=None, dry_run=False):
+        request_json_path = tmp_path / f"{selection.request_kind}_request.json"
+        request_json_path.write_text("{}", encoding="utf-8")
+        resolved_result_path = Path(result_json_path or (tmp_path / f"{selection.request_kind}_result.json"))
+        resolved_result_path.write_text("{}", encoding="utf-8")
+        before_image = tmp_path / f"{selection.request_kind}_before.png"
+        after_image = tmp_path / f"{selection.request_kind}_after.png"
+        before_image.write_text("fixture", encoding="utf-8")
+        after_image.write_text("fixture", encoding="utf-8")
+        return {
+            "status": "pass",
+            "request_kind": selection.request_kind,
+            "dry_run": dry_run,
+            "selected_package_id": selection.selected_package_id,
+            "selected_action_preset_id": selection.selected_action_preset_id,
+            "selected_animation_preset_id": selection.selected_animation_preset_id,
+            "request_payload": selection.request_payload,
+            "request_json_path": str(request_json_path),
+            "result_json_path": str(resolved_result_path),
+            "host_key": "demo",
+            "payload": {
+                "status": "pass",
+                "generated_at_utc": "2026-04-11T07:10:00+00:00",
+                "result": {
+                    "status": "pass",
+                    "shots": [
+                        {
+                            "before": {
+                                "image_path": str(before_image.resolve()),
+                                "subject_screen_coverage": 0.08,
+                                "weapon_screen_coverage": 0.01,
+                                "line_of_sight_clear": True,
+                                "tracked_slot_coverages": {"fx": {"coverage_ratio": 0.005}},
+                            },
+                            "after": {
+                                "image_path": str(after_image.resolve()),
+                                "subject_screen_coverage": 0.07,
+                                "weapon_screen_coverage": 0.01,
+                                "line_of_sight_clear": True,
+                                "tracked_slot_coverages": {"fx": {"coverage_ratio": 0.004}},
+                            },
+                        }
+                    ],
+                    "transform_delta": {"distance_delta": 85.0, "yaw_delta": 24.0},
+                    "native_animation_pose_evaluation": {"pose_changed": True, "changed_bone_count": 12},
+                    "pose_probe_delta": {"moving_bone_count": 8, "max_location_delta": 321.0},
+                },
+            },
+        }
+
+    monkeypatch.setattr("aiue_t2.ui.invoke_demo_request", fake_invoke)
+    window = WorkbenchWindow(
+        manifest_path=pack["manifest_path"],
+        session_manifest_path=pack["session_manifest_path"],
+        workspace_config_path=workspace_config_path,
+    )
+    qtbot.addWidget(window)
+    window.show()
+    qtbot.waitUntil(lambda: window.demo_session_package_list.count() == 1)
+
+    qtbot.mouseClick(window.invoke_session_round_button, Qt.LeftButton)
+    assert window.current_dump_payload()["demo_review_focus"]["status"] == "pass"
+
+    qtbot.mouseClick(window.replay_action_button, Qt.LeftButton)
+    payload = window.current_dump_payload()
+    assert payload["demo_review_replay_control"]["status"] == "pass"
+    assert payload["demo_review_replay_control"]["request_kind"] == "action_preview"
+    assert payload["demo_review_replay_state"]["status"] == "pass"
+    assert payload["demo_review_replay_state"]["last_replays_by_package"]["pkg_alpha"]["action_preview"]["credibility_summary"]["action_motion_verified"] is True
+
+    qtbot.mouseClick(window.replay_animation_button, Qt.LeftButton)
+    payload = window.current_dump_payload()
+    assert payload["demo_review_replay_control"]["status"] == "pass"
+    assert payload["demo_review_replay_control"]["request_kind"] == "animation_preview"
+    assert payload["demo_review_replay_state"]["last_replays_by_package"]["pkg_alpha"]["animation_preview"]["credibility_summary"]["animation_pose_verified"] is True
+    assert "Review Replay PASS" in window.demo_review_replay_summary.text()

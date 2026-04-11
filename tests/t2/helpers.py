@@ -230,6 +230,7 @@ def run_workbench_process(
     demo_request_dry_run: bool = False,
     demo_request_invoke: bool = False,
     demo_session_round_invoke: bool = False,
+    demo_review_replay: bool = False,
     demo_request_kind: str | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], dict]:
     command = [
@@ -264,6 +265,8 @@ def run_workbench_process(
         command += ["-DemoRequestInvoke"]
     if demo_session_round_invoke:
         command += ["-DemoSessionRoundInvoke"]
+    if demo_review_replay:
+        command += ["-DemoReviewReplay"]
     if demo_request_kind is not None:
         command += ["-DemoRequestKind", str(demo_request_kind)]
     env = os.environ.copy()

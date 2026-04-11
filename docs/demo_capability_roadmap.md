@@ -370,6 +370,40 @@ What this tenth slice still does **not** do:
 - it still does not provide broader session-history browsing
 - it is native review navigation, not yet native review replay
 
+Current eleventh slice:
+
+- [latest_playable_demo_e2_review_replay_report.json](C:/AiUE/Saved/verification/latest_playable_demo_e2_review_replay_report.json)
+- [playable_demo_e2_review_replay_state.json](C:/AiUE/Saved/demo/e2/latest/playable_demo_e2_review_replay_state.json)
+- `T2 --latest --package-id <package> --demo-review-replay --demo-request-kind action_preview|animation_preview --dump-state-json --exit-after-load` now exposes:
+  - `demo_review_replay_state`
+  - `demo_review_replay_control`
+- the Windows native workbench `Demo Review` view now provides:
+  - `Replay Action`
+  - `Replay Animation`
+- `status = pass`
+- `resolved_package_count = 2`
+- `replayed_package_count = 2`
+- `replay_invoke_count = 4`
+- `passing_packages = 2`
+- `action_replay_verified = 2`
+- `animation_replay_verified = 2`
+- `fresh_readback_passed = 2`
+
+What this eleventh slice proves:
+
+- the focused native review seam can now trigger bounded replays without falling back to ad-hoc request rebuilding
+- replay operations now persist their own latest artifact instead of being visible only through the generic control surface
+- a fresh `T2` load after replay can still recover:
+  - focused package review evidence
+  - replayed action evidence
+  - replayed animation evidence
+
+What this eleventh slice still does **not** do:
+
+- it still does not provide multi-run replay history browsing
+- it still does not provide a broader session playlist or choreography layer
+- it is native review replay, not yet richer review history or orchestration
+
 Not in scope yet:
 
 - complex game loop
@@ -419,18 +453,18 @@ Current judgment after `E2A credibility` and `E2 session roundtrip`:
 
 Recommended next route:
 
-1. `E2E`: add a compact native review replay layer on top of the current focused review seam
+1. `E2F`: add a compact native review history or replay-history layer on top of the current focused replay seam
 2. keep the review output evidence-first so `T1/T2` stay the source of truth
 3. only switch to `Q5C-lite` early if quality pressure rises above demo progress pressure
 4. only pull governance forward if hotspot pressure escalates from `moderate` to `high`
 
-What `E2E` should answer:
+What `E2F` should answer:
 
-- can the current focused review seam support a bounded replay or revisit action without reopening ad-hoc paths by hand
-- can `T2` let an operator move from review focus to a tighter re-open or refresh loop while staying within the current evidence model
+- can the current replay seam retain a little more operator memory without becoming a full run-history browser
+- can `T2` help an operator compare the latest focused review and replay results more fluently while staying within the current evidence model
 - can the next playable slice stay bounded without turning into a free-form operator console
 
-What should stay out of scope until after `E2E`:
+What should stay out of scope until after `E2F`:
 
 - packaged desktop demo distribution
 - generalized UE command consoles inside `T2`
