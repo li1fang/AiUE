@@ -82,10 +82,99 @@ def write_fixture_q5c_report(verification_root: Path) -> Path:
     return q5c_report_path
 
 
-def build_fixture_pack(tmp_path: Path, *, include_governance: bool = True, include_q5c: bool = False) -> dict:
+def write_fixture_q5c_contrast_report(verification_root: Path) -> Path:
+    verification_root.mkdir(parents=True, exist_ok=True)
+    baseline_image_path = str((FIXTURE_ROOT / "images" / "front.ppm").resolve())
+    best_pass_image_path = str((FIXTURE_ROOT / "images" / "side.ppm").resolve())
+    closest_fail_image_path = str((FIXTURE_ROOT / "images" / "after.ppm").resolve())
+    report_path = verification_root / "latest_q5c_lite_contrast_lab_report.json"
+    write_json(
+        report_path,
+        {
+            "gate_id": "q5c_lite_contrast_lab",
+            "status": "pass",
+            "generated_at_utc": "2026-04-12T01:10:00+00:00",
+            "fixed_execution_profile": {
+                "required_reference_cases": [
+                    "baseline_current",
+                    "best_pass_reference",
+                    "closest_fail_reference",
+                ]
+            },
+            "per_package_results": [
+                {
+                    "package_id": "pkg_alpha",
+                    "status": "pass",
+                    "selected_case_ids": [
+                        "baseline_current",
+                        "best_pass_reference",
+                        "closest_fail_reference",
+                    ],
+                    "search_summary": {
+                        "explored_case_count": 11,
+                        "pass_case_count": 6,
+                        "fail_case_count": 5,
+                    },
+                    "case_results": [
+                        {
+                            "case_id": "baseline_current",
+                            "status": "pass",
+                            "fit_diagnostic_class": "pass_stable",
+                            "risk_band": "watch",
+                            "risk_reason": "penetration_ratio_margin_to_failure:0.0200",
+                            "delta_z": 0.0,
+                            "closest_margin_metric": "penetration_ratio_margin_to_failure",
+                            "closest_margin_value": 0.02,
+                            "artifacts": {
+                                "debug_image_path": baseline_image_path,
+                            },
+                        },
+                        {
+                            "case_id": "best_pass_reference",
+                            "status": "pass",
+                            "fit_diagnostic_class": "pass_stable",
+                            "risk_band": "watch",
+                            "risk_reason": "penetration_ratio_margin_to_failure:0.0200",
+                            "delta_z": -30.0,
+                            "closest_margin_metric": "penetration_ratio_margin_to_failure",
+                            "closest_margin_value": 0.02,
+                            "artifacts": {
+                                "debug_image_path": best_pass_image_path,
+                            },
+                        },
+                        {
+                            "case_id": "closest_fail_reference",
+                            "status": "fail",
+                            "fit_diagnostic_class": "floating_fit_out_of_range",
+                            "risk_band": "fail",
+                            "risk_reason": "floating_ratio_margin_to_failure:-0.0407",
+                            "delta_z": 20.0,
+                            "closest_margin_metric": "floating_ratio_margin_to_failure",
+                            "closest_margin_value": -0.0407,
+                            "artifacts": {
+                                "debug_image_path": closest_fail_image_path,
+                            },
+                        },
+                    ],
+                }
+            ],
+        },
+    )
+    return report_path
+
+
+def build_fixture_pack(
+    tmp_path: Path,
+    *,
+    include_governance: bool = True,
+    include_q5c: bool = False,
+    include_q5c_contrast: bool = False,
+) -> dict:
     verification_root = materialize_report_fixtures(tmp_path / "verification", include_governance=include_governance)
     if include_q5c:
         write_fixture_q5c_report(verification_root)
+    if include_q5c_contrast:
+        write_fixture_q5c_contrast_report(verification_root)
     output_root = tmp_path / "tooling" / "pack"
     latest_root = tmp_path / "tooling" / "latest"
     manifest = build_evidence_pack(

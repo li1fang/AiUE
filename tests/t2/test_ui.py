@@ -47,7 +47,7 @@ def test_workbench_window_renders_fixture_pack(qtbot, tmp_path: Path):
 
 
 def test_workbench_window_shows_q5c_quality_summary(qtbot, tmp_path: Path):
-    pack = build_fixture_pack(tmp_path, include_q5c=True)
+    pack = build_fixture_pack(tmp_path, include_q5c=True, include_q5c_contrast=True)
     window = WorkbenchWindow(manifest_path=pack["manifest_path"])
     qtbot.addWidget(window)
     window.show()
@@ -57,6 +57,17 @@ def test_workbench_window_shows_q5c_quality_summary(qtbot, tmp_path: Path):
     assert "pass_stable:1" in window.q5c_quality_summary.text()
     assert "risk watch | watch 1" in window.q5c_quality_summary.text()
     assert "focus penetration_ratio_margin_to_failure=0.0200 @ pkg_alpha" in window.q5c_quality_summary.text()
+    assert window.q5c_contrast_summary.isVisible() is True
+    assert "Q5C contrast PASS | package pkg_alpha" in window.q5c_contrast_summary.text()
+    assert window.q5c_contrast_case_list.isVisible() is True
+    assert window.q5c_contrast_case_list.count() == 3
+    assert window.q5c_contrast_case_list.item(0).text().startswith("baseline_current | PASS")
+    assert window.current_dump_payload()["q5c_contrast_focus"]["recommended_preview_image_key"] == "q5c_contrast_pkg_alpha_baseline_current"
+    assert window.current_dump_payload()["selected_default_image"] == "q5c_contrast_pkg_alpha_baseline_current"
+    window.q5c_contrast_case_list.setCurrentRow(2)
+    qtbot.waitUntil(
+        lambda: window.current_dump_payload()["selected_default_image"] == "q5c_contrast_pkg_alpha_closest_fail_reference"
+    )
 
 
 def test_workbench_window_demo_request_controls(qtbot, tmp_path: Path, monkeypatch):

@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
     QLabel,
+    QListWidget,
     QMainWindow,
     QSplitter,
     QTabWidget,
@@ -126,7 +127,10 @@ class WorkbenchWindow(WorkbenchRenderMixin, WorkbenchDemoOpsMixin, QMainWindow):
             reports_by_gate_id={},
             preview_images=[],
             r3_metrics=[],
-            quality_summaries={"q5c_lite": {"status": "missing", "packages": [], "diagnostic_class_counts": {}}},
+            quality_summaries={
+                "q5c_lite": {"status": "missing", "packages": [], "diagnostic_class_counts": {}},
+                "q5c_contrast": {"status": "missing", "packages": []},
+            },
             slot_debugger={"package_count": 0, "packages": []},
             governance_balance=GovernanceBalanceRecord(status="missing"),
             demo_session=DemoSessionRecord(
@@ -226,6 +230,21 @@ class WorkbenchWindow(WorkbenchRenderMixin, WorkbenchDemoOpsMixin, QMainWindow):
         self.q5c_quality_summary.setStyleSheet("padding: 6px 2px 10px 2px;")
         self.q5c_quality_summary.setVisible(False)
         root_layout.addWidget(self.q5c_quality_summary)
+
+        self.q5c_contrast_summary = QLabel("")
+        self.q5c_contrast_summary.setObjectName("q5cContrastSummary")
+        self.q5c_contrast_summary.setWordWrap(True)
+        self.q5c_contrast_summary.setProperty("role", "muted")
+        self.q5c_contrast_summary.setStyleSheet("padding: 0 2px 6px 2px;")
+        self.q5c_contrast_summary.setVisible(False)
+        root_layout.addWidget(self.q5c_contrast_summary)
+
+        self.q5c_contrast_case_list = QListWidget()
+        self.q5c_contrast_case_list.setObjectName("q5cContrastCaseList")
+        self.q5c_contrast_case_list.setMaximumHeight(120)
+        self.q5c_contrast_case_list.currentItemChanged.connect(self._on_q5c_contrast_case_changed)
+        self.q5c_contrast_case_list.setVisible(False)
+        root_layout.addWidget(self.q5c_contrast_case_list)
 
         content_splitter = QSplitter()
 

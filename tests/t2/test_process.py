@@ -142,7 +142,7 @@ def test_workbench_cli_handles_missing_governance_report(tmp_path: Path):
 
 
 def test_workbench_cli_reads_q5c_quality_summary(tmp_path: Path):
-    pack = build_fixture_pack(tmp_path, include_q5c=True)
+    pack = build_fixture_pack(tmp_path, include_q5c=True, include_q5c_contrast=True)
     completed, payload = run_workbench_process(manifest_path=pack["manifest_path"])
     assert completed.returncode == 0, completed.stderr
     assert payload["status"] == "pass"
@@ -156,6 +156,14 @@ def test_workbench_cli_reads_q5c_quality_summary(tmp_path: Path):
     assert payload["quality_summaries"]["q5c_lite"]["focus_metric"] == "penetration_ratio_margin_to_failure"
     assert payload["quality_summaries"]["q5c_lite"]["focus_margin_to_failure"] == 0.02
     assert payload["quality_summaries"]["q5c_lite"]["packages"][0]["package_id"] == "pkg_alpha"
+    assert payload["q5c_contrast_focus"]["status"] == "pass"
+    assert payload["q5c_contrast_focus"]["selected_package_id"] == "pkg_alpha"
+    assert payload["q5c_contrast_focus"]["case_ids"] == [
+        "baseline_current",
+        "best_pass_reference",
+        "closest_fail_reference",
+    ]
+    assert payload["q5c_contrast_focus"]["recommended_preview_image_key"] == "q5c_contrast_pkg_alpha_baseline_current"
 
 
 def test_workbench_cli_review_compare_index_fixture(tmp_path: Path):

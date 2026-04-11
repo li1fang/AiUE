@@ -231,7 +231,7 @@ class AppState:
     default_animation_preset_id: str | None
 
     def to_dump_payload(self, view_state: "ViewState | None" = None) -> dict[str, Any]:
-        from aiue_t2.state import build_demo_request
+        from aiue_t2.state import build_demo_request, build_q5c_contrast_focus
 
         selected_report = view_state.selected_report_gate_id if view_state else self.default_report_gate_id
         selected_image = view_state.selected_image_key if view_state else self.default_image_key
@@ -267,6 +267,10 @@ class AppState:
                 "package_ids": [str(item.get("package_id") or "") for item in slot_packages],
             },
             "governance_balance": self.governance_balance.to_dump_dict(),
+            "q5c_contrast_focus": build_q5c_contrast_focus(
+                self.quality_summaries,
+                selected_package_id=selected_package,
+            ),
             "demo_session": self.demo_session.to_dump_dict(
                 selected_package_id=selected_package,
                 selected_action_preset_id=selected_action_preset,

@@ -5,12 +5,12 @@ import subprocess
 from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QTreeWidgetItem
+from PySide6.QtWidgets import QListWidgetItem, QTreeWidgetItem
 
 from aiue_t2.demo_review_compare_state import build_demo_review_compare_focus
 from aiue_t2.demo_review_history_state import build_demo_review_history_focus
 from aiue_t2.demo_review_state import build_demo_review_focus, build_demo_review_state, write_demo_review_state
-from aiue_t2.state import CATEGORY_LABELS, CATEGORY_ORDER, DemoPackageRecord, PreviewImageRecord, ReportRecord
+from aiue_t2.state import CATEGORY_LABELS, CATEGORY_ORDER, DemoPackageRecord, PreviewImageRecord, ReportRecord, build_q5c_contrast_focus
 
 
 class WorkbenchRenderMixin:
@@ -77,36 +77,83 @@ class WorkbenchRenderMixin:
         if not q5c_summary or str(q5c_summary.get("status") or "missing") == "missing":
             self.q5c_quality_summary.setVisible(False)
             self.q5c_quality_summary.setText("")
+        else:
+            diagnostic_counts = dict(q5c_summary.get("diagnostic_class_counts") or {})
+            classes_text = ", ".join(
+                f"{key}:{int(value)}"
+                for key, value in sorted(diagnostic_counts.items())
+            ) or "none"
+            focus_package_id = str(q5c_summary.get("focus_package_id") or "")
+            focus_metric = str(q5c_summary.get("focus_metric") or "")
+            focus_margin = float(q5c_summary.get("focus_margin_to_failure") or 0.0)
+            highest_risk_band = str(q5c_summary.get("highest_risk_band") or "")
+            watchlist_count = int(q5c_summary.get("watchlist_count") or 0)
+            focus_text = (
+                f" | focus {focus_metric}={focus_margin:.4f} @ {focus_package_id}"
+                if focus_package_id and focus_metric
+                else ""
+            )
+            risk_text = (
+                f" | risk {highest_risk_band} | watch {watchlist_count}"
+                if highest_risk_band
+                else ""
+            )
+            self.q5c_quality_summary.setText(
+                "Q5C-lite "
+                f"{str(q5c_summary.get('status') or 'unknown').upper()} | "
+                f"packages {int(q5c_summary.get('passing_package_count') or 0)}/{int(q5c_summary.get('package_count') or 0)} | "
+                f"classes {classes_text}"
+                f"{risk_text}"
+                f"{focus_text}"
+            )
+            self.q5c_quality_summary.setVisible(True)
+        self._render_q5c_contrast_focus()
+
+    def _render_q5c_contrast_focus(self) -> None:
+        contrast_focus = build_q5c_contrast_focus(
+            self.app_state.quality_summaries,
+            selected_package_id=self.view_state.selected_package_id,
+        )
+        if str(contrast_focus.get("status") or "missing") == "missing":
+            self.q5c_contrast_summary.setVisible(False)
+            self.q5c_contrast_summary.setText("")
+            self.q5c_contrast_case_list.blockSignals(True)
+            self.q5c_contrast_case_list.clear()
+            self.q5c_contrast_case_list.blockSignals(False)
+            self.q5c_contrast_case_list.setVisible(False)
             return
-        diagnostic_counts = dict(q5c_summary.get("diagnostic_class_counts") or {})
-        classes_text = ", ".join(
-            f"{key}:{int(value)}"
-            for key, value in sorted(diagnostic_counts.items())
-        ) or "none"
-        focus_package_id = str(q5c_summary.get("focus_package_id") or "")
-        focus_metric = str(q5c_summary.get("focus_metric") or "")
-        focus_margin = float(q5c_summary.get("focus_margin_to_failure") or 0.0)
-        highest_risk_band = str(q5c_summary.get("highest_risk_band") or "")
-        watchlist_count = int(q5c_summary.get("watchlist_count") or 0)
-        focus_text = (
-            f" | focus {focus_metric}={focus_margin:.4f} @ {focus_package_id}"
-            if focus_package_id and focus_metric
-            else ""
+
+        selected_package_id = str(contrast_focus.get("selected_package_id") or "")
+        case_ids = [str(item) for item in list(contrast_focus.get("case_ids") or []) if str(item)]
+        self.q5c_contrast_summary.setText(
+            "Q5C contrast "
+            f"{str(contrast_focus.get('status') or 'unknown').upper()} | "
+            f"package {selected_package_id or 'n/a'} | "
+            f"cases {', '.join(case_ids) if case_ids else 'none'}"
         )
-        risk_text = (
-            f" | risk {highest_risk_band} | watch {watchlist_count}"
-            if highest_risk_band
-            else ""
-        )
-        self.q5c_quality_summary.setText(
-            "Q5C-lite "
-            f"{str(q5c_summary.get('status') or 'unknown').upper()} | "
-            f"packages {int(q5c_summary.get('passing_package_count') or 0)}/{int(q5c_summary.get('package_count') or 0)} | "
-            f"classes {classes_text}"
-            f"{risk_text}"
-            f"{focus_text}"
-        )
-        self.q5c_quality_summary.setVisible(True)
+        self.q5c_contrast_summary.setVisible(True)
+        current_image_key = str(self.view_state.selected_image_key or "")
+        recommended_image_key = str(contrast_focus.get("recommended_preview_image_key") or "")
+        selected_case_key = current_image_key or recommended_image_key
+
+        self.q5c_contrast_case_list.blockSignals(True)
+        self.q5c_contrast_case_list.clear()
+        for case in list(contrast_focus.get("cases") or []):
+            case_id = str(case.get("case_id") or "")
+            image_key = str(case.get("debug_image_key") or "")
+            label = (
+                f"{case_id} | {str(case.get('status') or '').upper()} | "
+                f"{str(case.get('risk_band') or 'unknown')} | dz {float(case.get('delta_z') or 0.0):+.1f}"
+            )
+            item = QListWidgetItem(label)
+            item.setData(Qt.UserRole, image_key)
+            self.q5c_contrast_case_list.addItem(item)
+            if image_key and image_key == selected_case_key:
+                self.q5c_contrast_case_list.setCurrentItem(item)
+        if self.q5c_contrast_case_list.currentItem() is None and self.q5c_contrast_case_list.count():
+            self.q5c_contrast_case_list.setCurrentRow(0)
+        self.q5c_contrast_case_list.blockSignals(False)
+        self.q5c_contrast_case_list.setVisible(self.q5c_contrast_case_list.count() > 0)
 
     def _render_report_tree(self) -> None:
         self.report_tree.clear()
@@ -240,6 +287,16 @@ class WorkbenchRenderMixin:
         image_key = self.view_state.selected_image_key
         return self.images_panel.preview_record(image_key)
 
+    def _select_preview_image(self, image_key: str | None) -> None:
+        if not image_key:
+            return
+        for index in range(self.preview_list.count()):
+            item = self.preview_list.item(index)
+            if str(item.data(Qt.UserRole) or "") == str(image_key):
+                self.preview_list.setCurrentItem(item)
+                self.view_state.selected_image_key = str(image_key)
+                return
+
     def _on_report_selection_changed(self) -> None:
         selected_items = self.report_tree.selectedItems()
         if not selected_items:
@@ -257,6 +314,15 @@ class WorkbenchRenderMixin:
         self.view_state.selected_image_key = str(item.data(Qt.UserRole) or "")
         self._render_preview_image()
 
+    def _on_q5c_contrast_case_changed(self) -> None:
+        item = self.q5c_contrast_case_list.currentItem()
+        if item is None:
+            return
+        image_key = str(item.data(Qt.UserRole) or "")
+        if not image_key:
+            return
+        self._select_preview_image(image_key)
+
     def _on_demo_session_package_changed(self) -> None:
         item = self.demo_session_package_list.currentItem()
         if item is None:
@@ -268,6 +334,15 @@ class WorkbenchRenderMixin:
         self.view_state.selected_animation_preset_id = None
         if package_changed:
             self.view_state.selected_review_compare_index = 0
+            contrast_focus = build_q5c_contrast_focus(
+                self.app_state.quality_summaries,
+                selected_package_id=next_package_id,
+            )
+            recommended_image_key = str(contrast_focus.get("recommended_preview_image_key") or "")
+            if recommended_image_key:
+                self.view_state.selected_image_key = recommended_image_key
+        self._render_quality_summaries()
+        self._render_preview_images()
         self._render_demo_session_package_details()
 
     def _on_demo_action_preset_changed(self) -> None:

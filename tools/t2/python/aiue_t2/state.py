@@ -98,7 +98,10 @@ def _error_app_state(*, manifest_path: Path, code: str, message: str) -> AppStat
         reports_by_gate_id={},
         preview_images=[],
         r3_metrics=[],
-        quality_summaries={"q5c_lite": {"status": "missing", "packages": [], "diagnostic_class_counts": {}}},
+        quality_summaries={
+            "q5c_lite": {"status": "missing", "packages": [], "diagnostic_class_counts": {}},
+            "q5c_contrast": {"status": "missing", "packages": []},
+        },
         slot_debugger={"package_count": 0, "packages": []},
         governance_balance=GovernanceBalanceRecord(status="missing"),
         demo_session=DemoSessionRecord(
@@ -257,11 +260,25 @@ def _load_quality_summaries(
     *,
     manifest: dict[str, Any],
     pack_root: Path,
+    reports_by_gate_id: dict[str, ReportRecord],
+    preview_images: list[PreviewImageRecord],
 ) -> dict[str, Any]:
     payload = dict(manifest.get("quality_summaries") or {})
     q5c_summary = dict(payload.get("q5c_lite") or {})
+    preview_by_key = {
+        str(record.key or ""): record
+        for record in preview_images
+        if str(record.key or "")
+    }
+    q5c_contrast_summary = _load_q5c_contrast_summary(
+        reports_by_gate_id=reports_by_gate_id,
+        preview_by_key=preview_by_key,
+    )
     if not q5c_summary:
-        return {"q5c_lite": {"status": "missing", "packages": [], "diagnostic_class_counts": {}}}
+        return {
+            "q5c_lite": {"status": "missing", "packages": [], "diagnostic_class_counts": {}},
+            "q5c_contrast": q5c_contrast_summary,
+        }
 
     normalized_packages = []
     for package in list(q5c_summary.get("packages") or []):
@@ -273,7 +290,149 @@ def _load_quality_summaries(
         "q5c_lite": {
             **q5c_summary,
             "packages": normalized_packages,
+        },
+        "q5c_contrast": q5c_contrast_summary,
+    }
+
+
+def _load_q5c_contrast_summary(
+    *,
+    reports_by_gate_id: dict[str, ReportRecord],
+    preview_by_key: dict[str, PreviewImageRecord],
+) -> dict[str, Any]:
+    record = reports_by_gate_id.get("q5c_lite_contrast_lab")
+    if not record or not record.report_payload:
+        return {
+            "status": "missing",
+            "gate_id": "q5c_lite_contrast_lab",
+            "report_source_path": "",
+            "package_count": 0,
+            "passing_package_count": 0,
+            "required_case_ids": [],
+            "available_case_id_counts": {},
+            "packages": [],
         }
+
+    report_payload = dict(record.report_payload or {})
+    execution_profile = dict(report_payload.get("fixed_execution_profile") or {})
+    required_case_ids = [
+        str(item)
+        for item in list(execution_profile.get("required_reference_cases") or [])
+        if str(item)
+    ]
+    case_order = {case_id: index for index, case_id in enumerate(required_case_ids)}
+    package_rows = []
+    available_case_id_counts: dict[str, int] = {}
+    for package in list(report_payload.get("per_package_results") or []):
+        package_id = str(package.get("package_id") or "")
+        case_rows = []
+        for case in list(package.get("case_results") or []):
+            case_id = str(case.get("case_id") or "")
+            if case_id:
+                available_case_id_counts[case_id] = available_case_id_counts.get(case_id, 0) + 1
+            debug_image_key = f"q5c_contrast_{package_id}_{case_id}" if package_id and case_id else ""
+            preview_record = preview_by_key.get(debug_image_key)
+            case_rows.append(
+                {
+                    "case_id": case_id,
+                    "status": str(case.get("status") or ""),
+                    "fit_diagnostic_class": str(case.get("fit_diagnostic_class") or ""),
+                    "risk_band": str(case.get("risk_band") or ""),
+                    "risk_reason": str(case.get("risk_reason") or ""),
+                    "delta_z": float(case.get("delta_z") or 0.0),
+                    "closest_margin_metric": str(case.get("closest_margin_metric") or ""),
+                    "closest_margin_value": float(case.get("closest_margin_value") or 0.0),
+                    "debug_image_key": debug_image_key,
+                    "debug_image_path": str(preview_record.image_path if preview_record else ""),
+                    "debug_image_source_path": str(preview_record.source_path if preview_record else ""),
+                }
+            )
+        case_rows.sort(key=lambda item: (case_order.get(str(item.get("case_id") or ""), 999), str(item.get("case_id") or "")))
+        package_rows.append(
+            {
+                "package_id": package_id,
+                "status": str(package.get("status") or ""),
+                "selected_case_ids": [str(item.get("case_id") or "") for item in case_rows if str(item.get("case_id") or "")],
+                "search_summary": dict(package.get("search_summary") or {}),
+                "cases": case_rows,
+            }
+        )
+
+    return {
+        "status": str(report_payload.get("status") or record.status or "unknown"),
+        "gate_id": "q5c_lite_contrast_lab",
+        "report_source_path": record.report_source_path,
+        "package_count": len(package_rows),
+        "passing_package_count": sum(1 for item in package_rows if str(item.get("status") or "") == "pass"),
+        "required_case_ids": required_case_ids,
+        "available_case_id_counts": available_case_id_counts,
+        "packages": package_rows,
+    }
+
+
+def build_q5c_contrast_focus(
+    quality_summaries: dict[str, Any],
+    *,
+    selected_package_id: str | None,
+) -> dict[str, Any]:
+    summary = dict((quality_summaries or {}).get("q5c_contrast") or {})
+    if not summary or str(summary.get("status") or "missing") == "missing":
+        return {
+            "status": "missing",
+            "selected_package_id": selected_package_id,
+            "available_package_ids": [],
+            "case_count": 0,
+            "case_ids": [],
+            "recommended_preview_image_key": None,
+            "cases": [],
+        }
+
+    packages = list(summary.get("packages") or [])
+    selected_package = next(
+        (item for item in packages if str(item.get("package_id") or "") == str(selected_package_id or "")),
+        None,
+    )
+    if selected_package is None and packages:
+        selected_package = dict(packages[0])
+    if selected_package is None:
+        return {
+            "status": str(summary.get("status") or "unknown"),
+            "selected_package_id": selected_package_id,
+            "available_package_ids": [],
+            "case_count": 0,
+            "case_ids": [],
+            "recommended_preview_image_key": None,
+            "cases": [],
+        }
+
+    case_priority = {
+        "baseline_current": 0,
+        "best_pass_reference": 1,
+        "closest_fail_reference": 2,
+    }
+    cases = sorted(
+        [dict(item) for item in list(selected_package.get("cases") or [])],
+        key=lambda item: (case_priority.get(str(item.get("case_id") or ""), 999), str(item.get("case_id") or "")),
+    )
+    recommended_preview_image_key = next(
+        (
+            str(item.get("debug_image_key") or "")
+            for item in cases
+            if str(item.get("debug_image_key") or "")
+            and str(item.get("case_id") or "") in {"baseline_current", "best_pass_reference", "closest_fail_reference"}
+        ),
+        "",
+    ) or None
+    resolved_package_id = str(selected_package.get("package_id") or "") or selected_package_id
+    return {
+        "status": str(summary.get("status") or "unknown"),
+        "selected_package_id": resolved_package_id,
+        "available_package_ids": [str(item.get("package_id") or "") for item in packages if str(item.get("package_id") or "")],
+        "case_count": len(cases),
+        "case_ids": [str(item.get("case_id") or "") for item in cases if str(item.get("case_id") or "")],
+        "required_case_ids": [str(item) for item in list(summary.get("required_case_ids") or []) if str(item)],
+        "recommended_preview_image_key": recommended_preview_image_key,
+        "cases": cases,
     }
 
 
@@ -700,6 +859,8 @@ def load_workbench_state(
     quality_summaries = _load_quality_summaries(
         manifest=manifest,
         pack_root=pack_root,
+        reports_by_gate_id=reports_by_gate_id,
+        preview_images=preview_images,
     )
     slot_debugger = dict(manifest.get("slot_debugger") or {})
     demo_session = _load_demo_session(
@@ -709,10 +870,14 @@ def load_workbench_state(
     )
     summary_counts = _coerce_summary_counts(dict(manifest.get("report_index") or {}))
     default_report_gate_id = _default_report_gate_id(report_categories)
-    default_image_key = preview_images[0].key if preview_images else None
     slot_packages = list(slot_debugger.get("packages") or [])
     governance_balance = _extract_governance_balance(reports_by_gate_id)
     default_package_id = demo_session.default_package_id or (str(slot_packages[0].get("package_id") or "") if slot_packages else None)
+    q5c_contrast_focus = build_q5c_contrast_focus(
+        quality_summaries,
+        selected_package_id=default_package_id,
+    )
+    default_image_key = q5c_contrast_focus.get("recommended_preview_image_key") or (preview_images[0].key if preview_images else None)
     default_action_preset_id = _default_demo_preset_id(
         demo_session,
         package_id=default_package_id,

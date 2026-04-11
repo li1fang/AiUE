@@ -28,6 +28,7 @@ def test_load_workbench_state_reads_fixture_pack(tmp_path: Path):
     assert sorted(state.demo_request.requests) == ["action_preview", "animation_preview"]
     assert len(state.preview_images) >= 4
     assert state.quality_summaries["q5c_lite"]["status"] == "missing"
+    assert state.quality_summaries["q5c_contrast"]["status"] == "missing"
 
 
 def test_dump_payload_exposes_expected_native_state(tmp_path: Path):
@@ -48,6 +49,7 @@ def test_dump_payload_exposes_expected_native_state(tmp_path: Path):
     assert payload["governance_balance"]["status"] == "attention"
     assert payload["governance_balance"]["recommended_next_round_kind"] == "flexible"
     assert payload["quality_summaries"]["q5c_lite"]["status"] == "missing"
+    assert payload["q5c_contrast_focus"]["status"] == "missing"
     assert "tools/t2/python/aiue_t2/ui.py" in payload["governance_balance"]["hotspot_paths"]
     assert payload["demo_session"]["status"] == "pass"
     assert payload["demo_session"]["package_ids"] == ["pkg_alpha"]
@@ -113,3 +115,28 @@ def test_load_workbench_state_reads_q5c_quality_summary(tmp_path: Path):
     assert q5c_summary["packages"][0]["closest_margin_value"] == 0.02
     assert q5c_summary["packages"][0]["risk_band"] == "watch"
     assert q5c_summary["packages"][0]["artifact_image_path"].endswith("q5c_pkg_alpha_debug.ppm")
+
+
+def test_load_workbench_state_reads_q5c_contrast_focus(tmp_path: Path):
+    pack = build_fixture_pack(tmp_path, include_q5c=True, include_q5c_contrast=True)
+    state = load_workbench_state(pack["manifest_path"])
+    payload = state.to_dump_payload(build_default_view_state(state))
+    contrast_summary = state.quality_summaries["q5c_contrast"]
+    contrast_focus = payload["q5c_contrast_focus"]
+    assert contrast_summary["status"] == "pass"
+    assert contrast_summary["package_count"] == 1
+    assert contrast_summary["required_case_ids"] == [
+        "baseline_current",
+        "best_pass_reference",
+        "closest_fail_reference",
+    ]
+    assert state.default_image_key == "q5c_contrast_pkg_alpha_baseline_current"
+    assert contrast_focus["status"] == "pass"
+    assert contrast_focus["selected_package_id"] == "pkg_alpha"
+    assert contrast_focus["case_ids"] == [
+        "baseline_current",
+        "best_pass_reference",
+        "closest_fail_reference",
+    ]
+    assert contrast_focus["recommended_preview_image_key"] == "q5c_contrast_pkg_alpha_baseline_current"
+    assert contrast_focus["cases"][0]["debug_image_path"].endswith("q5c_contrast_pkg_alpha_baseline_current.ppm")
