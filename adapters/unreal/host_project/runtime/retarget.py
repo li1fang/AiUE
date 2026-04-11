@@ -1,67 +1,37 @@
 from __future__ import annotations
 
 from .common import *
-from .capture import load_level
 from .retarget_profile import *
 from .retarget_preview import *
+from .retarget_session import (
+    apply_retarget_configured_loadout,
+    destroy_retarget_host,
+    prepare_retarget_host_session,
+)
 
 # Command shim: profiling/tooling helpers live in retarget_profile/preview.
 def retarget_preflight(request: dict) -> dict:
-    warnings = []
-    level_path = request.get("level_path") or request.get("scene_level_path")
-    if level_path:
-        load_result = load_level({"level_path": level_path})
-        warnings.extend(load_result.get("warnings") or [])
-        if load_result.get("errors"):
-            return {
-                "status": "fail",
-                "warnings": warnings,
-                "errors": list(load_result.get("errors") or []),
-            }
-
-    host_asset_path, host_record, host_warnings = resolve_host_blueprint_asset_path(
-        {
-            **request,
-            "runtime_ready_only": request.get("runtime_ready_only", True),
-        }
+    prepared = prepare_retarget_host_session(
+        request,
+        actor_label_prefix="AIUE_RetargetPreflight",
+        default_location=unreal.Vector(0.0, 0.0, 120.0),
+        default_rotation=make_rotator(0.0, 180.0, 0.0),
+        require_animation_asset=True,
     )
-    warnings.extend(host_warnings)
-    actor_subsystem = editor_actor_subsystem()
-    blueprint_asset = unreal.EditorAssetLibrary.load_asset(object_path_from_asset_path(host_asset_path))
-    if not blueprint_asset:
-        return {
-            "status": "fail",
-            "warnings": warnings,
-            "errors": [f"host_blueprint_load_failed:{host_asset_path}"],
-        }
+    if prepared.get("status") != "pass":
+        return prepared
 
-    animation_asset_path = str(request.get("animation_asset_path") or "")
-    animation_asset = load_asset_from_any_path(animation_asset_path)
-    if not animation_asset:
-        return {
-            "status": "fail",
-            "warnings": warnings,
-            "errors": [f"animation_asset_load_failed:{animation_asset_path or 'missing'}"],
-        }
-
-    spawn_location = vector_from_request(request.get("location"), unreal.Vector(0.0, 0.0, 120.0))
-    spawn_rotation = rotator_from_request(request.get("rotation"), make_rotator(0.0, 180.0, 0.0))
-    actor_label = str(request.get("actor_label") or f"AIUE_RetargetPreflight_{sanitize_segment(host_record.get('character_package_id') if host_record else host_asset_path)}")
-    spawned_host = actor_subsystem.spawn_actor_from_object(blueprint_asset, spawn_location, spawn_rotation, True)
-    if not spawned_host:
-        return {
-            "status": "fail",
-            "warnings": warnings,
-            "errors": [f"failed_to_spawn_host:{host_asset_path}"],
-        }
-
-    spawned_host.set_actor_label(actor_label)
+    warnings = list(prepared.get("warnings") or [])
+    level_path = prepared.get("level_path")
+    host_asset_path = prepared["host_asset_path"]
+    host_record = prepared.get("host_record")
+    animation_asset_path = str(prepared.get("animation_asset_path") or "")
+    animation_asset = prepared.get("animation_asset")
+    actor_subsystem = prepared["actor_subsystem"]
+    spawned_host = prepared["spawned_host"]
     blocking_reasons = []
     try:
-        try:
-            spawned_host.apply_configured_loadout()
-        except Exception as exc:
-            warnings.append(f"apply_configured_loadout_failed:{exc}")
+        apply_retarget_configured_loadout(spawned_host, warnings)
 
         time.sleep(max(float(request.get("settle_delay_seconds") or 0.2), 0.05))
         primary_mesh = actor_primary_mesh_component(spawned_host)
@@ -118,68 +88,31 @@ def retarget_preflight(request: dict) -> dict:
             "errors": [] if viable and not blocking_reasons else sorted(set(blocking_reasons)),
         }
     finally:
-        try:
-            actor_subsystem.destroy_actor(spawned_host)
-        except Exception:
-            pass
+        destroy_retarget_host(actor_subsystem, spawned_host)
 
 
 def retarget_bootstrap(request: dict) -> dict:
-    warnings = []
-    level_path = request.get("level_path") or request.get("scene_level_path")
-    if level_path:
-        load_result = load_level({"level_path": level_path})
-        warnings.extend(load_result.get("warnings") or [])
-        if load_result.get("errors"):
-            return {
-                "status": "fail",
-                "warnings": warnings,
-                "errors": list(load_result.get("errors") or []),
-            }
-
-    host_asset_path, host_record, host_warnings = resolve_host_blueprint_asset_path(
-        {
-            **request,
-            "runtime_ready_only": request.get("runtime_ready_only", True),
-        }
+    prepared = prepare_retarget_host_session(
+        request,
+        actor_label_prefix="AIUE_RetargetBootstrap",
+        default_location=unreal.Vector(0.0, 0.0, 120.0),
+        default_rotation=make_rotator(0.0, 180.0, 0.0),
+        require_animation_asset=True,
     )
-    warnings.extend(host_warnings)
-    actor_subsystem = editor_actor_subsystem()
-    blueprint_asset = unreal.EditorAssetLibrary.load_asset(object_path_from_asset_path(host_asset_path))
-    if not blueprint_asset:
-        return {
-            "status": "fail",
-            "warnings": warnings,
-            "errors": [f"host_blueprint_load_failed:{host_asset_path}"],
-        }
+    if prepared.get("status") != "pass":
+        return prepared
 
-    animation_asset_path = str(request.get("animation_asset_path") or "")
-    animation_asset = load_asset_from_any_path(animation_asset_path)
-    if not animation_asset:
-        return {
-            "status": "fail",
-            "warnings": warnings,
-            "errors": [f"animation_asset_load_failed:{animation_asset_path or 'missing'}"],
-        }
-
-    spawn_location = vector_from_request(request.get("location"), unreal.Vector(0.0, 0.0, 120.0))
-    spawn_rotation = rotator_from_request(request.get("rotation"), make_rotator(0.0, 180.0, 0.0))
-    actor_label = str(request.get("actor_label") or f"AIUE_RetargetBootstrap_{sanitize_segment(host_record.get('character_package_id') if host_record else host_asset_path)}")
-    spawned_host = actor_subsystem.spawn_actor_from_object(blueprint_asset, spawn_location, spawn_rotation, True)
-    if not spawned_host:
-        return {
-            "status": "fail",
-            "warnings": warnings,
-            "errors": [f"failed_to_spawn_host:{host_asset_path}"],
-        }
-
-    spawned_host.set_actor_label(actor_label)
+    warnings = list(prepared.get("warnings") or [])
+    level_path = prepared.get("level_path")
+    host_asset_path = prepared["host_asset_path"]
+    host_record = prepared.get("host_record")
+    animation_asset_path = str(prepared.get("animation_asset_path") or "")
+    animation_asset = prepared.get("animation_asset")
+    actor_subsystem = prepared["actor_subsystem"]
+    spawned_host = prepared["spawned_host"]
     errors = []
     try:
-        try:
-            spawned_host.apply_configured_loadout()
-        except Exception as exc:
-            warnings.append(f"apply_configured_loadout_failed:{exc}")
+        apply_retarget_configured_loadout(spawned_host, warnings)
 
         time.sleep(max(float(request.get("settle_delay_seconds") or 0.2), 0.05))
         primary_mesh = actor_primary_mesh_component(spawned_host)
@@ -400,10 +333,7 @@ def retarget_bootstrap(request: dict) -> dict:
             "errors": errors,
         }
     finally:
-        try:
-            actor_subsystem.destroy_actor(spawned_host)
-        except Exception:
-            pass
+        destroy_retarget_host(actor_subsystem, spawned_host)
 
 
 def retarget_author_chains(request: dict) -> dict:
