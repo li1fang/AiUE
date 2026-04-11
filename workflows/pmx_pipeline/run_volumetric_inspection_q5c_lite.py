@@ -19,7 +19,14 @@ from _gate_common import build_discussion_signal, default_latest_report_path, de
 from aiue_core.report_writer import make_compatibility_block, with_report_envelope
 from aiue_core.schema_utils import load_json, load_workspace_config
 from aiue_t1.q5c_lite_debug import render_q5c_lite_debug_image
-from aiue_t1.q5c_lite import DEFAULT_THRESHOLDS, analyze_q5c_lite
+from aiue_t1.q5c_lite import (
+    DEFAULT_THRESHOLDS,
+    analyze_q5c_lite,
+    closest_margin_info,
+    margin_to_failure_by_metric,
+    risk_band_for_q5c_lite,
+    risk_reason_for_q5c_lite,
+)
 
 GATE_ID = "volumetric_inspection_q5c_lite"
 DEFAULT_Q5BX_LATEST_NAME = "latest_volumetric_fit_spatial_evidence_q5bx_report.json"
@@ -85,11 +92,34 @@ def evaluate_package(package_result: dict, *, output_root: Path) -> tuple[dict, 
         host_result=host_result,
         thresholds={key: value for key, value in FIXED_EXECUTION_PROFILE.items() if key not in {"source_gate", "required_package_count", "fixture_scope"}},
     )
+    closest_margin_metric, closest_margin_value = closest_margin_info(
+        threshold_deltas=dict(analysis.get("threshold_deltas") or {}),
+    )
+    risk_band = risk_band_for_q5c_lite(
+        status=str(analysis.get("status") or ""),
+        fit_diagnostic_class=str(analysis.get("fit_diagnostic_class") or ""),
+        closest_margin_value=float(closest_margin_value),
+    )
+    risk_reason = risk_reason_for_q5c_lite(
+        risk_band=risk_band,
+        fit_diagnostic_class=str(analysis.get("fit_diagnostic_class") or ""),
+        closest_margin_metric=closest_margin_metric,
+        closest_margin_value=float(closest_margin_value),
+    )
     debug_artifacts = {}
     try:
         debug_artifacts = render_q5c_lite_debug_image(
             package_id=package_id,
             analysis=analysis,
+            risk_context={
+                "risk_band": risk_band,
+                "risk_reason": risk_reason,
+                "closest_margin_metric": closest_margin_metric,
+                "closest_margin_value": float(closest_margin_value),
+                "margin_to_failure_by_metric": margin_to_failure_by_metric(
+                    threshold_deltas=dict(analysis.get("threshold_deltas") or {})
+                ),
+            },
             output_path=output_root / "debug_images" / f"{package_id}_q5c_lite_debug.png",
         )
     except Exception as exc:
@@ -124,6 +154,13 @@ def evaluate_package(package_result: dict, *, output_root: Path) -> tuple[dict, 
             "fit_diagnostic_class": str(analysis.get("fit_diagnostic_class") or "unknown"),
             "diagnostic_signals": dict(analysis.get("diagnostic_signals") or {}),
             "threshold_deltas": dict(analysis.get("threshold_deltas") or {}),
+            "margin_to_failure_by_metric": margin_to_failure_by_metric(
+                threshold_deltas=dict(analysis.get("threshold_deltas") or {})
+            ),
+            "closest_margin_metric": closest_margin_metric,
+            "closest_margin_value": float(closest_margin_value),
+            "risk_band": risk_band,
+            "risk_reason": risk_reason,
             "embedding_ratio": float(analysis.get("embedding_ratio") or 0.0),
             "floating_ratio": float(analysis.get("floating_ratio") or 0.0),
             "local_fit_volume": float(analysis.get("local_fit_volume") or 0.0),

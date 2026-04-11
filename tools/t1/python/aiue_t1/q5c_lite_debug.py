@@ -133,6 +133,7 @@ def render_q5c_lite_debug_image(
     *,
     package_id: str,
     analysis: dict,
+    risk_context: dict | None = None,
     output_path: str | Path,
     image_width: int = 1480,
     image_height: int = 900,
@@ -144,15 +145,29 @@ def render_q5c_lite_debug_image(
     cv2.putText(canvas, title, (36, 54), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (236, 241, 246), 2, cv2.LINE_AA)
 
     quality_class = str(analysis.get("quality_class") or "unknown")
+    risk_payload = dict(risk_context or {})
     summary_lines = [
         f"Status: {str(analysis.get('status') or 'unknown').upper()}",
         f"Quality: {quality_class.upper()}",
         f"Diagnostic: {str(analysis.get('fit_diagnostic_class') or 'unknown')}",
+        f"Risk: {str(risk_payload.get('risk_band') or 'unknown')}",
+        f"Focus: {str(risk_payload.get('closest_margin_metric') or 'n/a')} = {float(risk_payload.get('closest_margin_value') or 0.0):.4f}",
         f"Embedding: {float(analysis.get('embedding_ratio') or 0.0):.3f}",
         f"Floating: {float(analysis.get('floating_ratio') or 0.0):.3f}",
         f"Penetration: {float(analysis.get('penetration_ratio') or 0.0):.3f}",
         f"Local Fit Volume: {float(analysis.get('local_fit_volume') or 0.0):.2f}",
     ]
+    margin_map = dict(risk_payload.get("margin_to_failure_by_metric") or {})
+    if margin_map:
+        summary_lines.append(
+            "Margins: "
+            + ", ".join(
+                f"{str(key)}={float(value):.4f}"
+                for key, value in sorted(margin_map.items())
+            )
+        )
+    if str(risk_payload.get("risk_reason") or ""):
+        summary_lines.append(f"Risk Reason: {str(risk_payload.get('risk_reason') or '')}")
     failed_requirements = [str(item) for item in list(analysis.get("failed_requirements") or []) if str(item).strip()]
     if failed_requirements:
         summary_lines.append("Fails: " + ", ".join(failed_requirements))
@@ -230,6 +245,9 @@ def render_q5c_lite_debug_image(
         "image_path": str(resolved_output_path),
         "image_width": image_width,
         "image_height": image_height,
+        "risk_band": str(risk_payload.get("risk_band") or ""),
+        "closest_margin_metric": str(risk_payload.get("closest_margin_metric") or ""),
+        "closest_margin_value": float(risk_payload.get("closest_margin_value") or 0.0),
         "panels": [
             {"title": title, "horizontal_axis": horizontal_axis, "vertical_axis": vertical_axis}
             for title, horizontal_axis, vertical_axis in _PANEL_SPECS

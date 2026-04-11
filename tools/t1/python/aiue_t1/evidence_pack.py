@@ -7,6 +7,7 @@ from pathlib import Path
 
 from aiue_core.schema_utils import write_json
 
+from aiue_t1.q5c_lite import closest_margin_info, margin_to_failure_by_metric, risk_band_for_q5c_lite, risk_reason_for_q5c_lite
 from aiue_t1.report_index import build_report_index
 from aiue_t1.slot_debugger import build_slot_debugger_payload
 
@@ -142,38 +143,6 @@ def _collect_preview_artifacts(report_index: dict) -> list[dict]:
     return artifacts
 
 
-def _q5c_risk_band(*, status: str, fit_diagnostic_class: str, closest_margin_value: float) -> str:
-    diagnostic = str(fit_diagnostic_class or "")
-    if str(status or "") != "pass" or diagnostic in {
-        "input_invalid",
-        "floating_fit_out_of_range",
-        "penetration_keepout_overlap",
-        "mixed_penetration_and_floating",
-    }:
-        return "fail"
-    if float(closest_margin_value) <= 0.0:
-        return "fail"
-    if diagnostic == "pass_borderline" or float(closest_margin_value) <= 0.01:
-        return "borderline"
-    if float(closest_margin_value) <= 0.05:
-        return "watch"
-    return "stable"
-
-
-def _q5c_risk_reason(
-    *,
-    risk_band: str,
-    fit_diagnostic_class: str,
-    closest_margin_metric: str,
-    closest_margin_value: float,
-) -> str:
-    if risk_band == "fail":
-        return str(fit_diagnostic_class or closest_margin_metric or "fail")
-    if risk_band in {"borderline", "watch"}:
-        return f"{closest_margin_metric}:{float(closest_margin_value):.4f}"
-    return ""
-
-
 def _q5c_highest_risk_band(package_summaries: list[dict]) -> str:
     if not package_summaries:
         return "missing"
@@ -224,32 +193,34 @@ def _build_q5c_quality_summary(report_index: dict, copied_images: list[dict]) ->
         preview_key = f"q5c_{package_id}_debug"
         preview_record = dict(preview_by_key.get(preview_key) or {})
         threshold_deltas = dict(package.get("threshold_deltas") or {})
-        margin_to_failure_by_metric = {
-            "embedding_ratio_margin_to_failure": float(threshold_deltas.get("embedding_ratio_delta_to_min") or 0.0),
-            "floating_ratio_margin_to_failure": -float(threshold_deltas.get("floating_ratio_delta_to_max") or 0.0),
-            "penetration_ratio_margin_to_failure": -float(threshold_deltas.get("penetration_ratio_delta_to_max") or 0.0),
-        }
-        closest_margin_metric, closest_margin_value = min(
-            margin_to_failure_by_metric.items(),
-            key=lambda item: float(item[1]),
-        )
+        margin_map = dict(package.get("margin_to_failure_by_metric") or {})
+        if not margin_map:
+            margin_map = margin_to_failure_by_metric(threshold_deltas=threshold_deltas)
+        closest_margin_metric = str(package.get("closest_margin_metric") or "")
+        closest_margin_value = float(package.get("closest_margin_value") or 0.0)
+        if not closest_margin_metric:
+            closest_margin_metric, closest_margin_value = closest_margin_info(threshold_deltas=threshold_deltas)
         if (not focus_initialized) or float(closest_margin_value) < float(focus_margin_to_failure):
             focus_package_id = package_id
             focus_metric = closest_margin_metric
             focus_margin_to_failure = float(closest_margin_value)
             focus_diagnostic_class = diagnostic_class
             focus_initialized = True
-        risk_band = _q5c_risk_band(
-            status=str(package.get("status") or ""),
-            fit_diagnostic_class=diagnostic_class,
-            closest_margin_value=float(closest_margin_value),
-        )
-        risk_reason = _q5c_risk_reason(
-            risk_band=risk_band,
-            fit_diagnostic_class=diagnostic_class,
-            closest_margin_metric=closest_margin_metric,
-            closest_margin_value=float(closest_margin_value),
-        )
+        risk_band = str(package.get("risk_band") or "")
+        if not risk_band:
+            risk_band = risk_band_for_q5c_lite(
+                status=str(package.get("status") or ""),
+                fit_diagnostic_class=diagnostic_class,
+                closest_margin_value=float(closest_margin_value),
+            )
+        risk_reason = str(package.get("risk_reason") or "")
+        if not risk_reason:
+            risk_reason = risk_reason_for_q5c_lite(
+                risk_band=risk_band,
+                fit_diagnostic_class=diagnostic_class,
+                closest_margin_metric=closest_margin_metric,
+                closest_margin_value=float(closest_margin_value),
+            )
         risk_band_counts[risk_band] = risk_band_counts.get(risk_band, 0) + 1
         if risk_band in {"watch", "borderline", "fail"}:
             watchlist_package_ids.append(package_id)
@@ -263,7 +234,7 @@ def _build_q5c_quality_summary(report_index: dict, copied_images: list[dict]) ->
                 "penetration_ratio": float(package.get("penetration_ratio") or 0.0),
                 "diagnostic_signals": dict(package.get("diagnostic_signals") or {}),
                 "threshold_deltas": threshold_deltas,
-                "margin_to_failure_by_metric": margin_to_failure_by_metric,
+                "margin_to_failure_by_metric": margin_map,
                 "closest_margin_metric": closest_margin_metric,
                 "closest_margin_value": float(closest_margin_value),
                 "risk_band": risk_band,

@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from aiue_t1.q5c_lite import analyze_q5c_lite
+from aiue_t1.q5c_lite import (
+    analyze_q5c_lite,
+    closest_margin_info,
+    margin_to_failure_by_metric,
+    risk_band_for_q5c_lite,
+    risk_reason_for_q5c_lite,
+)
 
 
 def _host_result_fixture() -> dict:
@@ -81,3 +87,26 @@ def test_q5c_lite_detects_input_invalid():
     assert result["status"] == "fail"
     assert result["fit_diagnostic_class"] == "input_invalid"
     assert "anchor_frame_missing" in result["failed_requirements"]
+
+
+def test_q5c_lite_risk_helpers_classify_watch_margin():
+    result = analyze_q5c_lite(host_result=_host_result_fixture())
+    margin_map = margin_to_failure_by_metric(threshold_deltas=result["threshold_deltas"])
+    closest_metric, closest_value = closest_margin_info(threshold_deltas=result["threshold_deltas"])
+    risk_band = risk_band_for_q5c_lite(
+        status=result["status"],
+        fit_diagnostic_class=result["fit_diagnostic_class"],
+        closest_margin_value=closest_value,
+    )
+    risk_reason = risk_reason_for_q5c_lite(
+        risk_band=risk_band,
+        fit_diagnostic_class=result["fit_diagnostic_class"],
+        closest_margin_metric=closest_metric,
+        closest_margin_value=closest_value,
+    )
+
+    assert margin_map["penetration_ratio_margin_to_failure"] == 0.02
+    assert closest_metric == "penetration_ratio_margin_to_failure"
+    assert closest_value == 0.02
+    assert risk_band == "watch"
+    assert risk_reason == "penetration_ratio_margin_to_failure:0.0200"

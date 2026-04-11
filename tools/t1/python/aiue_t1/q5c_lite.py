@@ -80,6 +80,53 @@ def _fit_diagnostic_class(*, input_invalid: bool, diagnostic_signals: dict) -> s
     return "pass_stable"
 
 
+def margin_to_failure_by_metric(*, threshold_deltas: dict) -> dict:
+    deltas = dict(threshold_deltas or {})
+    return {
+        "embedding_ratio_margin_to_failure": float(deltas.get("embedding_ratio_delta_to_min") or 0.0),
+        "floating_ratio_margin_to_failure": -float(deltas.get("floating_ratio_delta_to_max") or 0.0),
+        "penetration_ratio_margin_to_failure": -float(deltas.get("penetration_ratio_delta_to_max") or 0.0),
+    }
+
+
+def closest_margin_info(*, threshold_deltas: dict) -> tuple[str, float]:
+    margins = margin_to_failure_by_metric(threshold_deltas=threshold_deltas)
+    metric, value = min(margins.items(), key=lambda item: float(item[1]))
+    return str(metric), float(value)
+
+
+def risk_band_for_q5c_lite(*, status: str, fit_diagnostic_class: str, closest_margin_value: float) -> str:
+    diagnostic = str(fit_diagnostic_class or "")
+    if str(status or "") != "pass" or diagnostic in {
+        "input_invalid",
+        "floating_fit_out_of_range",
+        "penetration_keepout_overlap",
+        "mixed_penetration_and_floating",
+    }:
+        return "fail"
+    if float(closest_margin_value) <= 0.0:
+        return "fail"
+    if diagnostic == "pass_borderline" or float(closest_margin_value) <= 0.01:
+        return "borderline"
+    if float(closest_margin_value) <= 0.05:
+        return "watch"
+    return "stable"
+
+
+def risk_reason_for_q5c_lite(
+    *,
+    risk_band: str,
+    fit_diagnostic_class: str,
+    closest_margin_metric: str,
+    closest_margin_value: float,
+) -> str:
+    if risk_band == "fail":
+        return str(fit_diagnostic_class or closest_margin_metric or "fail")
+    if risk_band in {"borderline", "watch"}:
+        return f"{closest_margin_metric}:{float(closest_margin_value):.4f}"
+    return ""
+
+
 def analyze_q5c_lite(*, host_result: dict, thresholds: dict | None = None) -> dict:
     cfg = dict(DEFAULT_THRESHOLDS)
     cfg.update(dict(thresholds or {}))
