@@ -26,6 +26,7 @@ The immediate goal of this checkpoint is simple:
 | --- | ---: | --- |
 | `capture.py` | 21 | Export surface only; `capture_frame` and `run_scene_sweep` moved out. |
 | `composition.py` | 10 | Export surface only; import and registry commands now live in dedicated modules. |
+| `composition_import.py` | 17 | Export surface only; import asset helpers and context resolution now live in dedicated modules. |
 | `composition_registry.py` | 33 | Export surface only; asset helpers and slot/runtime helpers now live in dedicated modules. |
 | `composition_registry_bindings.py` | 20 | Export surface only; slot binding and runtime validation now live in dedicated modules. |
 | `inspection.py` | 16 | Export surface only; implementation moved into focused helpers. |
@@ -42,7 +43,7 @@ The immediate goal of this checkpoint is simple:
 | `retarget_profile.py` | 1078 | Large, but now isolated behind a thin retarget shim. |
 | `composition_registry_runtime.py` | 203 | Bounded runtime/blueprint validation helper layer; acceptable for now. |
 | `composition_registry_slot_bindings.py` | 131 | Focused slot binding/data asset helper layer; acceptable for now. |
-| `composition_import.py` | 249 | Still helper-heavy, but no longer shares a command shim with registry creation. |
+| `composition_import_assets.py` | 193 | Focused import asset helper layer; acceptable for now. |
 | `composition_registry_assets.py` | 133 | Asset/path helper layer; acceptable size after split. |
 | `capture_visual.py` | 383 | Acceptable for now; not the next pressure point. |
 
@@ -63,6 +64,7 @@ Recent governance slices now in the branch:
 - `refactor(unreal): split composition command shims`
 - `refactor(unreal): split composition registry helpers`
 - `refactor(unreal): split registry binding helpers`
+- `refactor(unreal): split composition import helpers`
 
 Net effect:
 
@@ -107,7 +109,7 @@ Targeted regression reruns during this refactor phase also stayed green:
 
 1. The runtime is now in a good intermediate state: thin shims plus focused implementation modules for the major command surfaces.
 2. `common.py` should not be the next refactor target.
-3. `composition.py`, `composition_registry.py`, and `composition_registry_bindings.py` are now reduced to thin shims; the remaining composition helpers are now separated into asset, slot-binding, and runtime-validation layers.
+3. `composition.py`, `composition_import.py`, `composition_registry.py`, and `composition_registry_bindings.py` are now reduced to thin shims; the remaining composition helpers are now separated into import asset, import context, registry asset, slot-binding, and runtime-validation layers.
 4. It is also reasonable to stop governance here and return to feature work, because the current structure is already materially better than the previous single-file concentration.
 
 ## Recommended Next Step
@@ -116,8 +118,8 @@ Treat this checkpoint as a deliberate stop point.
 
 The next move should be one of:
 
-1. Continue governance with `composition_import.py` as the next bounded target.
-2. Pause governance and review whether the runtime is stable enough to shift effort back to feature work.
+1. Pause governance and shift effort back to feature work.
+2. Continue governance only if a clearly bounded hotspot emerges outside `common.py`.
 
 The one move we should avoid next is entering `common.py` without a stronger reason.
 
@@ -125,4 +127,6 @@ Update after the latest bounded split:
 
 - the former `composition_registry_bindings.py` hotspot is now retired as a hotspot
 - `P1`, `V1`, and `D1` were rerun after the split and remained `pass`
-- if governance continues, `composition_import.py` is now the clearer bounded candidate than the already-thin registry shim layer
+- the former `composition_import.py` hotspot is now retired as a hotspot
+- `import-package` dry-run and `P1` remained `pass` after the composition import split
+- if governance continues again, it should stay bounded and avoid `common.py`; there is no immediate need to keep peeling composition files
