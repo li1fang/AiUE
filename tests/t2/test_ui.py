@@ -44,6 +44,9 @@ def test_workbench_window_renders_fixture_pack(qtbot, tmp_path: Path):
     assert "Review MISSING" in window.demo_review_summary.text()
     assert window.current_error_codes() == []
     assert window.q5c_quality_summary.isVisible() is False
+    assert window.q5c_contrast_summary.isVisible() is False
+    assert window.q5c_contrast_case_list.isVisible() is False
+    assert window.q5c_contrast_triptych.isVisible() is False
 
 
 def test_workbench_window_shows_q5c_quality_summary(qtbot, tmp_path: Path):
@@ -60,10 +63,16 @@ def test_workbench_window_shows_q5c_quality_summary(qtbot, tmp_path: Path):
     assert window.q5c_contrast_summary.isVisible() is True
     assert "Q5C contrast PASS | package pkg_alpha" in window.q5c_contrast_summary.text()
     assert window.q5c_contrast_case_list.isVisible() is True
+    assert window.q5c_contrast_triptych.isVisible() is True
     assert window.q5c_contrast_case_list.count() == 3
     assert window.q5c_contrast_case_list.item(0).text().startswith("baseline_current | PASS")
     assert window.current_dump_payload()["q5c_contrast_focus"]["recommended_preview_image_key"] == "q5c_contrast_pkg_alpha_baseline_current"
     assert window.current_dump_payload()["selected_default_image"] == "q5c_contrast_pkg_alpha_baseline_current"
+    assert window.q5c_contrast_triptych.case_title_labels["baseline_current"].text().startswith("Baseline | PASS")
+    assert window.q5c_contrast_triptych.case_title_labels["best_pass_reference"].text().startswith("Best Pass | PASS")
+    assert window.q5c_contrast_triptych.case_title_labels["closest_fail_reference"].text().startswith("Closest Fail | FAIL")
+    assert window.q5c_contrast_triptych.case_image_labels["baseline_current"].pixmap() is not None
+    assert not window.q5c_contrast_triptych.case_image_labels["baseline_current"].pixmap().isNull()
     window.q5c_contrast_case_list.setCurrentRow(2)
     qtbot.waitUntil(
         lambda: window.current_dump_payload()["selected_default_image"] == "q5c_contrast_pkg_alpha_closest_fail_reference"

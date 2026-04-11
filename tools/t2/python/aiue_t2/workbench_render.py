@@ -121,6 +121,8 @@ class WorkbenchRenderMixin:
             self.q5c_contrast_case_list.clear()
             self.q5c_contrast_case_list.blockSignals(False)
             self.q5c_contrast_case_list.setVisible(False)
+            self.q5c_contrast_triptych.render_cases([])
+            self.q5c_contrast_triptych.setVisible(False)
             return
 
         selected_package_id = str(contrast_focus.get("selected_package_id") or "")
@@ -154,6 +156,8 @@ class WorkbenchRenderMixin:
             self.q5c_contrast_case_list.setCurrentRow(0)
         self.q5c_contrast_case_list.blockSignals(False)
         self.q5c_contrast_case_list.setVisible(self.q5c_contrast_case_list.count() > 0)
+        self.q5c_contrast_triptych.render_cases(list(contrast_focus.get("cases") or []))
+        self.q5c_contrast_triptych.setVisible(bool(list(contrast_focus.get("cases") or [])))
 
     def _render_report_tree(self) -> None:
         self.report_tree.clear()
@@ -379,6 +383,7 @@ class WorkbenchRenderMixin:
     def resizeEvent(self, event) -> None:  # type: ignore[override]
         super().resizeEvent(event)
         self._render_preview_image()
+        self._render_q5c_contrast_focus()
 
     def export_current_state_json(self) -> str:
         return json.dumps(self.current_dump_payload(), ensure_ascii=False, indent=2)

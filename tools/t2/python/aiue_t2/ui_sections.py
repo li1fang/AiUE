@@ -5,6 +5,7 @@ from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QFrame,
     QGroupBox,
+    QHBoxLayout,
     QLabel,
     QListWidget,
     QListWidgetItem,
@@ -17,6 +18,29 @@ from PySide6.QtWidgets import (
 )
 
 from aiue_t2.state import PreviewImageRecord, ReportRecord, report_payload_to_text
+
+
+def _render_image_label(
+    label: QLabel,
+    *,
+    image_path: str,
+    fallback_text: str,
+    minimum_width: int,
+    minimum_height: int,
+) -> None:
+    pixmap = QPixmap(image_path)
+    if pixmap.isNull():
+        label.setText(fallback_text)
+        label.setPixmap(QPixmap())
+        return
+    scaled = pixmap.scaled(
+        max(label.width(), minimum_width),
+        max(label.height(), minimum_height),
+        Qt.KeepAspectRatio,
+        Qt.SmoothTransformation,
+    )
+    label.setPixmap(scaled)
+    label.setText("")
 
 
 class SummaryCard(QFrame):
@@ -129,19 +153,13 @@ class ImagesPanel(QWidget):
             self.preview_label.setText("No preview image selected")
             self.preview_label.setPixmap(QPixmap())
             return
-        pixmap = QPixmap(preview.image_path)
-        if pixmap.isNull():
-            self.preview_label.setText(f"Preview not available:\n{preview.image_path}")
-            self.preview_label.setPixmap(QPixmap())
-            return
-        scaled = pixmap.scaled(
-            max(self.preview_label.width(), 640),
-            max(self.preview_label.height(), 360),
-            Qt.KeepAspectRatio,
-            Qt.SmoothTransformation,
+        _render_image_label(
+            self.preview_label,
+            image_path=preview.image_path,
+            fallback_text=f"Preview not available:\n{preview.image_path}",
+            minimum_width=640,
+            minimum_height=360,
         )
-        self.preview_label.setPixmap(scaled)
-        self.preview_label.setText("")
 
     def render_metrics(self, rows: list[dict]) -> None:
         self.metrics_table.setRowCount(len(rows))
@@ -212,3 +230,63 @@ class SlotDebuggerPanel(QWidget):
         for row_index, row in enumerate(rows):
             for column_index, value in enumerate(row):
                 self.slot_table.setItem(row_index, column_index, QTableWidgetItem(value))
+
+
+class ContrastTriptychPanel(QWidget):
+    CASE_ORDER = [
+        ("baseline_current", "Baseline"),
+        ("best_pass_reference", "Best Pass"),
+        ("closest_fail_reference", "Closest Fail"),
+    ]
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.case_title_labels: dict[str, QLabel] = {}
+        self.case_image_labels: dict[str, QLabel] = {}
+        layout = QHBoxLayout(self)
+        for case_id, display_name in self.CASE_ORDER:
+            card = QFrame()
+            card.setProperty("card", True)
+            card_layout = QVBoxLayout(card)
+            title_label = QLabel(display_name)
+            title_label.setProperty("role", "muted")
+            title_label.setWordWrap(True)
+            title_label.setObjectName(f"contrastTitle_{case_id}")
+            image_label = QLabel("No contrast preview")
+            image_label.setAlignment(Qt.AlignCenter)
+            image_label.setWordWrap(True)
+            image_label.setMinimumHeight(180)
+            image_label.setStyleSheet("border: 1px solid #334155; border-radius: 8px;")
+            image_label.setObjectName(f"contrastImage_{case_id}")
+            card_layout.addWidget(title_label)
+            card_layout.addWidget(image_label)
+            layout.addWidget(card)
+            self.case_title_labels[case_id] = title_label
+            self.case_image_labels[case_id] = image_label
+
+    def render_cases(self, cases: list[dict]) -> None:
+        case_map = {
+            str(case.get("case_id") or ""): dict(case)
+            for case in cases
+            if str(case.get("case_id") or "")
+        }
+        for case_id, display_name in self.CASE_ORDER:
+            payload = dict(case_map.get(case_id) or {})
+            title_label = self.case_title_labels[case_id]
+            image_label = self.case_image_labels[case_id]
+            if not payload:
+                title_label.setText(f"{display_name} | missing")
+                image_label.setText("No contrast preview")
+                image_label.setPixmap(QPixmap())
+                continue
+            title_label.setText(
+                f"{display_name} | {str(payload.get('status') or 'unknown').upper()} | "
+                f"{str(payload.get('risk_band') or 'unknown')} | dz {float(payload.get('delta_z') or 0.0):+.1f}"
+            )
+            _render_image_label(
+                image_label,
+                image_path=str(payload.get("debug_image_path") or ""),
+                fallback_text=f"Preview not available:\n{str(payload.get('debug_image_path') or 'missing')}",
+                minimum_width=240,
+                minimum_height=180,
+            )
