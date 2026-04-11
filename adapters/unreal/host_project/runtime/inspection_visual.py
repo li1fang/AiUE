@@ -2,6 +2,11 @@ from __future__ import annotations
 
 from .common import *
 from .capture import *
+from .inspection_session import (
+    apply_inspection_configured_loadout,
+    destroy_inspection_host,
+    prepare_inspection_host_session,
+)
 
 
 def capture_visual_state_for_host(
@@ -234,51 +239,24 @@ def capture_visual_state_for_host(
 
 
 def inspect_host_visual(request: dict) -> dict:
-    warnings = []
-    level_path = request.get("level_path") or request.get("scene_level_path")
-    if level_path:
-        load_result = load_level({"level_path": level_path})
-        warnings.extend(load_result.get("warnings") or [])
-        if load_result.get("errors"):
-            return {
-                "status": "fail",
-                "warnings": warnings,
-                "errors": list(load_result.get("errors") or []),
-            }
-
-    host_asset_path, host_record, host_warnings = resolve_host_blueprint_asset_path(
-        {
-            **request,
-            "runtime_ready_only": request.get("runtime_ready_only", True),
-        }
+    prepared = prepare_inspection_host_session(
+        request,
+        actor_label_prefix="AIUE_VisualProof",
+        default_location=unreal.Vector(0.0, 0.0, 30000.0),
+        default_rotation=make_rotator(0.0, 180.0, 0.0),
+        location_keys=("cell_origin",),
+        rotation_keys=("cell_rotation",),
     )
-    warnings.extend(host_warnings)
-    actor_subsystem = editor_actor_subsystem()
-    blueprint_asset = unreal.EditorAssetLibrary.load_asset(object_path_from_asset_path(host_asset_path))
-    if not blueprint_asset:
-        return {
-            "status": "fail",
-            "warnings": warnings,
-            "errors": [f"host_blueprint_load_failed:{host_asset_path}"],
-        }
+    if prepared.get("status") != "pass":
+        return prepared
 
-    cell_origin = vector_from_request(request.get("cell_origin"), unreal.Vector(0.0, 0.0, 30000.0))
-    cell_rotation = rotator_from_request(request.get("cell_rotation"), make_rotator(0.0, 180.0, 0.0))
-    actor_label = str(request.get("actor_label") or f"AIUE_VisualProof_{sanitize_segment(host_record.get('character_package_id') if host_record else host_asset_path)}")
-    spawned_host = actor_subsystem.spawn_actor_from_object(blueprint_asset, cell_origin, cell_rotation, True)
-    if not spawned_host:
-        return {
-            "status": "fail",
-            "warnings": warnings,
-            "errors": [f"failed_to_spawn_host:{host_asset_path}"],
-        }
-
-    spawned_host.set_actor_label(actor_label)
+    warnings = list(prepared.get("warnings") or [])
+    host_asset_path = prepared["host_asset_path"]
+    host_record = prepared.get("host_record")
+    actor_subsystem = prepared["actor_subsystem"]
+    spawned_host = prepared["spawned_host"]
     try:
-        try:
-            spawned_host.apply_configured_loadout()
-        except Exception as exc:
-            warnings.append(f"apply_configured_loadout_failed:{exc}")
+        apply_inspection_configured_loadout(spawned_host, warnings)
 
         output_root = Path(request.get("output_root") or (Path(unreal.Paths.project_saved_dir()) / "pmx_pipeline" / "visual_proof")).expanduser().resolve()
         result = capture_visual_state_for_host(
@@ -292,58 +270,28 @@ def inspect_host_visual(request: dict) -> dict:
         result["warnings"] = sorted(set(list(warnings) + list(result.get("warnings") or [])))
         return result
     finally:
-        try:
-            actor_subsystem.destroy_actor(spawned_host)
-        except Exception:
-            pass
+        destroy_inspection_host(actor_subsystem, spawned_host)
 
 
 def inspect_live_fx_visual_pair(request: dict) -> dict:
-    warnings = []
-    level_path = request.get("level_path") or request.get("scene_level_path")
-    if level_path:
-        load_result = load_level({"level_path": level_path})
-        warnings.extend(load_result.get("warnings") or [])
-        if load_result.get("errors"):
-            return {
-                "status": "fail",
-                "warnings": warnings,
-                "errors": list(load_result.get("errors") or []),
-            }
-
-    host_asset_path, host_record, host_warnings = resolve_host_blueprint_asset_path(
-        {
-            **request,
-            "runtime_ready_only": request.get("runtime_ready_only", True),
-        }
+    prepared = prepare_inspection_host_session(
+        request,
+        actor_label_prefix="AIUE_LiveFxVisualPair",
+        default_location=unreal.Vector(0.0, 0.0, 30000.0),
+        default_rotation=make_rotator(0.0, 180.0, 0.0),
+        location_keys=("cell_origin",),
+        rotation_keys=("cell_rotation",),
     )
-    warnings.extend(host_warnings)
-    actor_subsystem = editor_actor_subsystem()
-    blueprint_asset = unreal.EditorAssetLibrary.load_asset(object_path_from_asset_path(host_asset_path))
-    if not blueprint_asset:
-        return {
-            "status": "fail",
-            "warnings": warnings,
-            "errors": [f"host_blueprint_load_failed:{host_asset_path}"],
-        }
+    if prepared.get("status") != "pass":
+        return prepared
 
-    cell_origin = vector_from_request(request.get("cell_origin"), unreal.Vector(0.0, 0.0, 30000.0))
-    cell_rotation = rotator_from_request(request.get("cell_rotation"), make_rotator(0.0, 180.0, 0.0))
-    actor_label = str(request.get("actor_label") or f"AIUE_LiveFxVisualPair_{sanitize_segment(host_record.get('character_package_id') if host_record else host_asset_path)}")
-    spawned_host = actor_subsystem.spawn_actor_from_object(blueprint_asset, cell_origin, cell_rotation, True)
-    if not spawned_host:
-        return {
-            "status": "fail",
-            "warnings": warnings,
-            "errors": [f"failed_to_spawn_host:{host_asset_path}"],
-        }
-
-    spawned_host.set_actor_label(actor_label)
+    warnings = list(prepared.get("warnings") or [])
+    host_asset_path = prepared["host_asset_path"]
+    host_record = prepared.get("host_record")
+    actor_subsystem = prepared["actor_subsystem"]
+    spawned_host = prepared["spawned_host"]
     try:
-        try:
-            spawned_host.apply_configured_loadout()
-        except Exception as exc:
-            warnings.append(f"apply_configured_loadout_failed:{exc}")
+        apply_inspection_configured_loadout(spawned_host, warnings)
 
         output_root = Path(request.get("output_root") or (Path(unreal.Paths.project_saved_dir()) / "pmx_pipeline" / "live_fx_visual_pair")).expanduser().resolve()
         baseline_root = output_root / "baseline"
@@ -395,7 +343,4 @@ def inspect_live_fx_visual_pair(request: dict) -> dict:
             },
         }
     finally:
-        try:
-            actor_subsystem.destroy_actor(spawned_host)
-        except Exception:
-            pass
+        destroy_inspection_host(actor_subsystem, spawned_host)
