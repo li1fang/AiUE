@@ -1,18 +1,17 @@
 ﻿from __future__ import annotations
 
 import argparse
-from datetime import datetime, timezone
 from pathlib import Path
 
 from _bootstrap import ensure_aiue_paths
 
 REPO_ROOT = ensure_aiue_paths()
 
-from _gate_common import build_discussion_signal, default_latest_report_path, default_output_root, make_failed_requirement, now_utc, repo_root_from_workspace, run_stamp
+from _demo_common import default_named_verification_report_path, resolve_report_path, run_host_command_result
+from _gate_common import build_discussion_signal, default_latest_report_path, default_output_root, make_failed_requirement, now_utc
 
 from aiue_core.report_writer import make_compatibility_block, with_report_envelope
 from aiue_core.schema_utils import load_json, load_workspace_config, write_json
-from aiue_unreal.host_bridge import run_host_auto_ue_cli
 
 GATE_ID = "demo_retarget_bootstrap_d5"
 DEMO_HOST_KEY = "demo"
@@ -42,7 +41,7 @@ def parse_args():
     return parser.parse_args()
 
 def default_latest_d4_report_path(workspace: dict) -> Path:
-    return repo_root_from_workspace(workspace, REPO_ROOT) / "Saved" / "verification" / "latest_demo_retarget_preflight_d4_report.json"
+    return default_named_verification_report_path(workspace, REPO_ROOT, "latest_demo_retarget_preflight_d4_report.json")
 
 def sanitize_segment(value: str) -> str:
     import re
@@ -52,15 +51,11 @@ def sanitize_segment(value: str) -> str:
     return cleaned or "asset"
 
 def resolve_d4_report_path(workspace: dict, explicit_path: str | None) -> Path:
-    if explicit_path:
-        candidate = Path(explicit_path).expanduser().resolve()
-        if candidate.exists():
-            return candidate
-        raise FileNotFoundError(f"D4 report path does not exist: {candidate}")
-    candidate = default_latest_d4_report_path(workspace)
-    if candidate.exists():
-        return candidate
-    raise FileNotFoundError("No latest_demo_retarget_preflight_d4_report.json could be resolved for D5.")
+    return resolve_report_path(
+        explicit_path,
+        default_latest_d4_report_path(workspace),
+        "No latest_demo_retarget_preflight_d4_report.json could be resolved for D5.",
+    )
 
 def main():
     args = parse_args()
@@ -119,33 +114,26 @@ def main():
     host_result = {}
     host_invocation_error = None
     if not failed_requirements:
-        try:
-            host_payload = run_host_auto_ue_cli(
-                workspace_or_config=workspace,
-                mode=REQUIRED_MODE,
-                command="retarget-bootstrap",
-                params={
-                    "package_id": package_id,
-                    "sample_id": sample_id,
-                    "host_blueprint_asset_path": host_blueprint_asset,
-                    "level_path": fixed_execution_profile["level_path"],
-                    "location": fixed_execution_profile["spawn_location"],
-                    "rotation": fixed_execution_profile["spawn_rotation"],
-                    "settle_delay_seconds": fixed_execution_profile["settle_delay_seconds"],
-                    "animation_asset_path": fixed_execution_profile["animation_asset_path"],
-                    "target_ik_rig_asset_path": preferred_target_ik_rig_asset_path,
-                    "source_ik_rig_asset_path": source_ik_rig_asset_path,
-                    "retargeter_asset_path": retargeter_asset_path,
-                },
-                output_path=str(host_result_path.resolve()),
-                host_key=DEMO_HOST_KEY,
-            )
-            host_result = dict((host_payload.get("payload") or {}).get("result") or {})
-        except Exception as exc:
-            host_invocation_error = str(exc)
-            if host_result_path.exists():
-                payload = load_json(host_result_path)
-                host_result = dict(payload.get("result") or {})
+        host_result, host_invocation_error, host_result_path = run_host_command_result(
+            workspace=workspace,
+            mode=REQUIRED_MODE,
+            command="retarget-bootstrap",
+            params={
+                "package_id": package_id,
+                "sample_id": sample_id,
+                "host_blueprint_asset_path": host_blueprint_asset,
+                "level_path": fixed_execution_profile["level_path"],
+                "location": fixed_execution_profile["spawn_location"],
+                "rotation": fixed_execution_profile["spawn_rotation"],
+                "settle_delay_seconds": fixed_execution_profile["settle_delay_seconds"],
+                "animation_asset_path": fixed_execution_profile["animation_asset_path"],
+                "target_ik_rig_asset_path": preferred_target_ik_rig_asset_path,
+                "source_ik_rig_asset_path": source_ik_rig_asset_path,
+                "retargeter_asset_path": retargeter_asset_path,
+            },
+            output_path=host_result_path,
+            host_key=DEMO_HOST_KEY,
+        )
 
     if not failed_requirements:
         if host_result.get("status") != "pass":

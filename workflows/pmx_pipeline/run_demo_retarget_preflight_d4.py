@@ -2,18 +2,17 @@
 
 import argparse
 import json
-from datetime import datetime, timezone
 from pathlib import Path
 
 from _bootstrap import ensure_aiue_paths
 
 REPO_ROOT = ensure_aiue_paths()
 
-from _gate_common import build_discussion_signal, default_latest_report_path, default_output_root, make_failed_requirement, now_utc, repo_root_from_workspace, run_stamp
+from _demo_common import default_named_verification_report_path, run_host_command_result
+from _gate_common import build_discussion_signal, default_latest_report_path, default_output_root, make_failed_requirement, now_utc, repo_root_from_workspace
 
 from aiue_core.report_writer import make_compatibility_block, with_report_envelope
 from aiue_core.schema_utils import load_json, load_workspace_config, write_json
-from aiue_unreal.host_bridge import run_host_auto_ue_cli
 
 GATE_ID = "demo_retarget_preflight_d4"
 DEMO_HOST_KEY = "demo"
@@ -43,10 +42,10 @@ def parse_args():
     return parser.parse_args()
 
 def default_latest_d1_report_path(workspace: dict) -> Path:
-    return repo_root_from_workspace(workspace, REPO_ROOT) / "Saved" / "verification" / "latest_demo_stage_d1_onboarding_report.json"
+    return default_named_verification_report_path(workspace, REPO_ROOT, "latest_demo_stage_d1_onboarding_report.json")
 
 def default_latest_d3_report_path(workspace: dict) -> Path:
-    return repo_root_from_workspace(workspace, REPO_ROOT) / "Saved" / "verification" / "latest_demo_animation_preview_d3_report.json"
+    return default_named_verification_report_path(workspace, REPO_ROOT, "latest_demo_animation_preview_d3_report.json")
 
 def resolve_optional_report_path(explicit_path: str | None, fallback_path: Path) -> Path | None:
     if explicit_path:
@@ -198,34 +197,26 @@ def main():
     level_path = str(inherited_level_path or DEFAULT_LEVEL_PATH)
     animation_asset_path = str(args.animation_asset_path or inherited_animation_asset_path or DEFAULT_ANIMATION_ASSET_PATH)
     result_path = output_root / "retarget_preflight_result.json"
-    host_payload = None
     host_result = {}
     host_invocation_error = None
     if not failed_requirements and target_package:
-        try:
-            host_payload = run_host_auto_ue_cli(
-                workspace_or_config=workspace,
-                mode=REQUIRED_MODE,
-                command="retarget-preflight",
-                params={
-                    "package_id": target_package["package_id"],
-                    "sample_id": target_package.get("sample_id"),
-                    "host_blueprint_asset_path": target_package["host_blueprint_asset_path"],
-                    "level_path": level_path,
-                    "location": FIXED_EXECUTION_PROFILE["spawn_location"],
-                    "rotation": FIXED_EXECUTION_PROFILE["spawn_rotation"],
-                    "settle_delay_seconds": FIXED_EXECUTION_PROFILE["settle_delay_seconds"],
-                    "animation_asset_path": animation_asset_path,
-                },
-                output_path=str(result_path.resolve()),
-                host_key=DEMO_HOST_KEY,
-            )
-            host_result = dict((host_payload.get("payload") or {}).get("result") or {})
-        except Exception as exc:
-            host_invocation_error = str(exc)
-            if result_path.exists():
-                payload = load_json(result_path)
-                host_result = dict(payload.get("result") or {})
+        host_result, host_invocation_error, result_path = run_host_command_result(
+            workspace=workspace,
+            mode=REQUIRED_MODE,
+            command="retarget-preflight",
+            params={
+                "package_id": target_package["package_id"],
+                "sample_id": target_package.get("sample_id"),
+                "host_blueprint_asset_path": target_package["host_blueprint_asset_path"],
+                "level_path": level_path,
+                "location": FIXED_EXECUTION_PROFILE["spawn_location"],
+                "rotation": FIXED_EXECUTION_PROFILE["spawn_rotation"],
+                "settle_delay_seconds": FIXED_EXECUTION_PROFILE["settle_delay_seconds"],
+                "animation_asset_path": animation_asset_path,
+            },
+            output_path=result_path,
+            host_key=DEMO_HOST_KEY,
+        )
 
     project_plugin_state = load_project_plugin_state(workspace, DEMO_HOST_KEY)
     compatibility = dict(host_result.get("animation_compatibility") or {})
