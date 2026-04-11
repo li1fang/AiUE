@@ -417,11 +417,17 @@ class DemoReviewPanel(QWidget):
         self.demo_review_replay_summary.setProperty("role", "muted")
         self.demo_review_replay_summary.setWordWrap(True)
 
+        self.demo_review_history_summary = QLabel("No review history yet")
+        self.demo_review_history_summary.setObjectName("demoReviewHistorySummaryLabel")
+        self.demo_review_history_summary.setProperty("role", "muted")
+        self.demo_review_history_summary.setWordWrap(True)
+
         layout = QVBoxLayout(self)
         layout.addWidget(self.demo_review_summary)
         layout.addWidget(self.demo_review_package_summary)
         layout.addLayout(button_row)
         layout.addWidget(self.demo_review_replay_summary)
+        layout.addWidget(self.demo_review_history_summary)
         layout.addWidget(self.demo_review_text)
 
     def bind_callbacks(
@@ -447,6 +453,8 @@ class DemoReviewPanel(QWidget):
         demo_review_focus: dict,
         demo_review_replay_state: dict,
         demo_review_replay_control: dict,
+        demo_review_history_state: dict,
+        demo_review_history_focus: dict,
         *,
         workspace_path: str,
         selected_package_id: str | None,
@@ -478,6 +486,8 @@ class DemoReviewPanel(QWidget):
                         "summary": summary,
                         "review_replay_state": demo_review_replay_state,
                         "review_replay_control": demo_review_replay_control,
+                        "review_history_state": demo_review_history_state,
+                        "review_history_focus": demo_review_history_focus,
                         "errors": demo_review_state.get("errors"),
                     },
                     ensure_ascii=False,
@@ -491,6 +501,7 @@ class DemoReviewPanel(QWidget):
             self.replay_action_button.setEnabled(False)
             self.replay_animation_button.setEnabled(False)
             self.demo_review_replay_summary.setText("Review Replay MISSING | Package none | Kinds none")
+            self.demo_review_history_summary.setText("Review History MISSING | Package none | Events 0")
             return
 
         package_summary_parts = [
@@ -512,6 +523,13 @@ class DemoReviewPanel(QWidget):
         if demo_review_replay_control:
             replay_parts.append(f"Control {str(demo_review_replay_control.get('status') or 'idle').upper()}")
         self.demo_review_replay_summary.setText(" | ".join(replay_parts))
+        history_parts = [
+            f"Review History {str(demo_review_history_state.get('status') or 'missing').upper()}",
+            f"Package {str(selected_review.get('package_id') or 'none')}",
+            f"Events {int(demo_review_history_focus.get('event_count') or 0)}",
+            f"Kinds {', '.join(list(demo_review_history_focus.get('replay_kinds') or [])) or 'none'}",
+        ]
+        self.demo_review_history_summary.setText(" | ".join(history_parts))
         self.demo_review_text.setPlainText(
             json.dumps(
                 {
@@ -521,6 +539,8 @@ class DemoReviewPanel(QWidget):
                     "focus": demo_review_focus,
                     "review_replay_state": demo_review_replay_state,
                     "review_replay_control": demo_review_replay_control,
+                    "review_history_state": demo_review_history_state,
+                    "review_history_focus": demo_review_history_focus,
                     "last_replays_for_selected_package": current_replays,
                     "selected_package_review": selected_review,
                     "errors": demo_review_state.get("errors"),

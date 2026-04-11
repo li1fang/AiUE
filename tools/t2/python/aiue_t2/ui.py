@@ -34,6 +34,11 @@ from aiue_t2.state import (
     load_workbench_state,
 )
 from aiue_t2.demo_control_state import load_demo_control_state, write_demo_control_run
+from aiue_t2.demo_review_history_state import (
+    build_demo_review_history_focus,
+    load_demo_review_history_state,
+    write_demo_review_history_event,
+)
 from aiue_t2.demo_review_state import build_demo_review_focus, build_demo_review_state, write_demo_review_state
 from aiue_t2.demo_review_replay_state import load_demo_review_replay_state, write_demo_review_replay_run
 from aiue_t2.demo_round_state import load_demo_round_state, write_demo_round_state
@@ -149,6 +154,8 @@ class WorkbenchWindow(QMainWindow):
         self.demo_review_state: dict = {"status": "missing", "package_reviews": [], "summary": {}}
         self.demo_review_focus: dict = {"status": "missing", "selected_package_id": ""}
         self.demo_review_replay_state: dict = {"status": "missing", "last_replays_by_package": {}, "package_replay_counts": {}}
+        self.demo_review_history_state: dict = {"status": "missing", "recent_events": [], "package_history_counts": {}}
+        self.demo_review_history_focus: dict = {"status": "missing", "selected_package_id": "", "event_count": 0}
         self.demo_review_replay_control: dict = {"status": "idle", "operation": "", "request_kind": "", "errors": []}
         self.demo_round_control: dict = {"status": "idle", "operation": "", "scope": "", "errors": []}
         self.demo_request_control = DemoRequestControlState(
@@ -281,6 +288,7 @@ class WorkbenchWindow(QMainWindow):
         self.replay_action_button = self.demo_review_panel.replay_action_button
         self.replay_animation_button = self.demo_review_panel.replay_animation_button
         self.demo_review_replay_summary = self.demo_review_panel.demo_review_replay_summary
+        self.demo_review_history_summary = self.demo_review_panel.demo_review_history_summary
         self.demo_review_panel.bind_callbacks(
             open_review_artifact=lambda: self.open_demo_review_artifact(),
             open_hero_before=lambda: self.open_demo_review_hero_before(),
@@ -325,6 +333,13 @@ class WorkbenchWindow(QMainWindow):
         )
         self.demo_review_replay_state = load_demo_review_replay_state(
             self.app_state.demo_session.session_manifest_path or self.current_session_manifest_path
+        )
+        self.demo_review_history_state = load_demo_review_history_state(
+            self.app_state.demo_session.session_manifest_path or self.current_session_manifest_path
+        )
+        self.demo_review_history_focus = build_demo_review_history_focus(
+            self.demo_review_history_state,
+            selected_package_id=self.view_state.selected_package_id,
         )
         self.demo_review_replay_control = {"status": "idle", "operation": "", "request_kind": "", "errors": []}
         self.demo_round_control = {"status": "idle", "operation": "", "scope": "", "errors": []}
@@ -373,6 +388,8 @@ class WorkbenchWindow(QMainWindow):
         payload["demo_review_state"] = dict(self.demo_review_state)
         payload["demo_review_focus"] = dict(self.demo_review_focus)
         payload["demo_review_replay_state"] = dict(self.demo_review_replay_state)
+        payload["demo_review_history_state"] = dict(self.demo_review_history_state)
+        payload["demo_review_history_focus"] = dict(self.demo_review_history_focus)
         payload["demo_review_replay_control"] = dict(self.demo_review_replay_control)
         payload["demo_round_control"] = dict(self.demo_round_control)
         payload["demo_request_control"] = self.demo_request_control.to_dump_dict()
@@ -493,6 +510,16 @@ class WorkbenchWindow(QMainWindow):
                 selected_animation_preset_id=selection.selected_animation_preset_id,
                 request_kind=selection.request_kind,
                 invocation=invocation,
+            )
+            package_replays = dict((self.demo_review_replay_state.get("last_replays_by_package") or {}).get(str(selection.selected_package_id or ""), {}) or {})
+            self.demo_review_history_state = write_demo_review_history_event(
+                session_manifest_path=self.app_state.demo_session.session_manifest_path or self.current_session_manifest_path,
+                source_review_state_path=str(self.demo_review_state.get("review_state_path") or ""),
+                source_replay_state_path=str(self.demo_review_replay_state.get("replay_state_path") or ""),
+                session_id=self.app_state.demo_session.session_id,
+                selected_package_id=selection.selected_package_id,
+                request_kind=selection.request_kind,
+                replay_run=dict(package_replays.get(selection.request_kind) or {}),
             )
             self._refresh_demo_review_state(write=False)
             result_status = str(invocation_result.get("status") or invocation_payload.get("status") or "")
@@ -885,11 +912,17 @@ class WorkbenchWindow(QMainWindow):
             self.demo_review_state,
             selected_package_id=self.view_state.selected_package_id,
         )
+        self.demo_review_history_focus = build_demo_review_history_focus(
+            self.demo_review_history_state,
+            selected_package_id=self.view_state.selected_package_id,
+        )
         self.demo_review_panel.render_review(
             dict(self.demo_review_state),
             dict(self.demo_review_focus),
             dict(self.demo_review_replay_state),
             dict(self.demo_review_replay_control),
+            dict(self.demo_review_history_state),
+            dict(self.demo_review_history_focus),
             workspace_path=str(self.current_workspace_config_path or "") if self.current_workspace_config_path and Path(self.current_workspace_config_path).exists() else "",
             selected_package_id=self.view_state.selected_package_id,
         )

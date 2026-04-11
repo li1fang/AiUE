@@ -404,6 +404,37 @@ What this eleventh slice still does **not** do:
 - it still does not provide a broader session playlist or choreography layer
 - it is native review replay, not yet richer review history or orchestration
 
+Current twelfth slice:
+
+- [latest_playable_demo_e2_review_history_report.json](C:/AiUE/Saved/verification/latest_playable_demo_e2_review_history_report.json)
+- [playable_demo_e2_review_history_state.json](C:/AiUE/Saved/demo/e2/latest/playable_demo_e2_review_history_state.json)
+- `T2 --latest --dump-state-json --exit-after-load` now exposes:
+  - `demo_review_history_state`
+  - `demo_review_history_focus`
+- the Windows native workbench `Demo Review` view now provides:
+  - a compact history summary for the focused package
+- `status = pass`
+- `resolved_package_count = 2`
+- `history_focus_package_count = 2`
+- `passing_packages = 2`
+- `packages_with_two_kinds = 2`
+- `packages_with_min_events = 2`
+
+What this twelfth slice proves:
+
+- the native review-replay seam now leaves behind a compact replay-history artifact rather than only latest replay state
+- `T2` can now focus the recent replay history onto the selected package and expose:
+  - event count
+  - replay kinds present
+  - latest event summary
+- the operator layer now has enough retained context to support review and replay without reopening ad-hoc files or relying on memory
+
+What this twelfth slice still does **not** do:
+
+- it still does not become a full history browser
+- it still does not compare replay events side by side
+- it is compact replay history, not full review-history analysis
+
 Not in scope yet:
 
 - complex game loop
@@ -453,18 +484,18 @@ Current judgment after `E2A credibility` and `E2 session roundtrip`:
 
 Recommended next route:
 
-1. `E2F`: add a compact native review history or replay-history layer on top of the current focused replay seam
-2. keep the review output evidence-first so `T1/T2` stay the source of truth
-3. only switch to `Q5C-lite` early if quality pressure rises above demo progress pressure
+1. repo-level default: pivot to `Q5C-lite` if the next question is now quality depth rather than demo operator fluency
+2. demo-line continuation only if needed: `E2G` as a compact comparison or history-browse slice
+3. keep the review output evidence-first so `T1/T2` stay the source of truth
 4. only pull governance forward if hotspot pressure escalates from `moderate` to `high`
 
-What `E2F` should answer:
+What `E2G` should answer if the demo line continues:
 
-- can the current replay seam retain a little more operator memory without becoming a full run-history browser
-- can `T2` help an operator compare the latest focused review and replay results more fluently while staying within the current evidence model
+- can the current compact history seam support a bounded compare-or-browse experience without turning into a full run-history browser
+- can `T2` help an operator compare recent replay events more fluently while staying within the current evidence model
 - can the next playable slice stay bounded without turning into a free-form operator console
 
-What should stay out of scope until after `E2F`:
+What should stay out of scope until after `E2G`:
 
 - packaged desktop demo distribution
 - generalized UE command consoles inside `T2`

@@ -36,6 +36,8 @@ def test_workbench_window_renders_fixture_pack(qtbot, tmp_path: Path):
     assert window.current_dump_payload()["demo_review_state"]["status"] == "missing"
     assert window.current_dump_payload()["demo_review_focus"]["status"] == "missing"
     assert window.current_dump_payload()["demo_review_replay_state"]["status"] == "missing"
+    assert window.current_dump_payload()["demo_review_history_state"]["status"] == "missing"
+    assert window.current_dump_payload()["demo_review_history_focus"]["status"] == "missing"
     assert "Review MISSING" in window.demo_review_summary.text()
     assert window.current_error_codes() == []
 
@@ -145,6 +147,7 @@ def test_workbench_window_demo_request_controls(qtbot, tmp_path: Path, monkeypat
     assert payload["demo_review_focus"]["status"] == "pass"
     assert payload["demo_review_focus"]["selected_package_id"] == "pkg_alpha"
     assert payload["demo_review_replay_state"]["status"] == "missing"
+    assert payload["demo_review_history_state"]["status"] == "missing"
     assert payload["demo_round_state"]["counts"]["package_count"] == 1
     assert payload["demo_round_state"]["counts"]["action_motion_verified"] == 1
     assert payload["demo_round_state"]["counts"]["animation_pose_verified"] == 1
@@ -317,4 +320,9 @@ def test_workbench_window_demo_review_replay_controls(qtbot, tmp_path: Path, mon
     assert payload["demo_review_replay_control"]["status"] == "pass"
     assert payload["demo_review_replay_control"]["request_kind"] == "animation_preview"
     assert payload["demo_review_replay_state"]["last_replays_by_package"]["pkg_alpha"]["animation_preview"]["credibility_summary"]["animation_pose_verified"] is True
+    assert payload["demo_review_history_state"]["status"] == "pass"
+    assert payload["demo_review_history_focus"]["status"] == "pass"
+    assert payload["demo_review_history_focus"]["event_count"] == 2
+    assert payload["demo_review_history_focus"]["replay_kinds"] == ["action_preview", "animation_preview"]
+    assert "Review History PASS" in window.demo_review_history_summary.text()
     assert "Review Replay PASS" in window.demo_review_replay_summary.text()

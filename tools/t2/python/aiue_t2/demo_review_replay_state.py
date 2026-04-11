@@ -79,9 +79,10 @@ def write_demo_review_replay_run(
         "source_review_state_path": str(source_review_state_path or ""),
         "last_replays_by_package": last_replays_by_package,
     }
+    normalized_payload = _normalize_replay_state_payload(payload, resolved_path)
     resolved_path.parent.mkdir(parents=True, exist_ok=True)
-    write_json(resolved_path, payload)
-    return _normalize_replay_state_payload(payload, resolved_path)
+    write_json(resolved_path, normalized_payload)
+    return normalized_payload
 
 
 def _missing_replay_state_payload(replay_state_path: Path | None) -> dict[str, Any]:
