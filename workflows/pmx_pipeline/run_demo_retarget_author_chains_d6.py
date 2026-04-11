@@ -1,29 +1,26 @@
 from __future__ import annotations
 
 import argparse
-from datetime import datetime, timezone
 from pathlib import Path
 
 from _bootstrap import ensure_aiue_paths
 
 REPO_ROOT = ensure_aiue_paths()
 
+from _demo_common import default_named_verification_report_path, resolve_report_path, run_host_command_result
+from _gate_common import (
+    build_discussion_signal,
+    default_latest_report_path,
+    default_output_root,
+    make_failed_requirement,
+    now_utc,
+)
 from aiue_core.report_writer import make_compatibility_block, with_report_envelope
 from aiue_core.schema_utils import load_json, load_workspace_config, write_json
-from aiue_unreal.host_bridge import run_host_auto_ue_cli
 
 GATE_ID = "demo_retarget_author_chains_d6"
 DEMO_HOST_KEY = "demo"
 REQUIRED_MODE = "editor_rendered"
-
-
-def now_utc() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-
-
-def run_stamp() -> str:
-    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run the AiUE D6 demo retarget chain authoring gate.")
@@ -33,76 +30,27 @@ def parse_args():
     parser.add_argument("--latest-report-path")
     return parser.parse_args()
 
-
-def repo_root_from_workspace(workspace: dict) -> Path:
-    return Path(workspace["paths"].get("aiue_repo_root") or REPO_ROOT).expanduser().resolve()
-
-
-def default_output_root(workspace: dict) -> Path:
-    return repo_root_from_workspace(workspace) / "Saved" / "verification" / f"{GATE_ID}_{run_stamp()}"
-
-
-def default_latest_report_path(workspace: dict) -> Path:
-    return repo_root_from_workspace(workspace) / "Saved" / "verification" / f"latest_{GATE_ID}_report.json"
-
-
 def default_latest_d5_report_path(workspace: dict) -> Path:
-    return repo_root_from_workspace(workspace) / "Saved" / "verification" / "latest_demo_retarget_bootstrap_d5_report.json"
-
-
-def make_failed_requirement(requirement_id: str, message: str, **details) -> dict:
-    payload = {
-        "id": requirement_id,
-        "message": message,
-    }
-    payload.update(details)
-    return payload
+    return default_named_verification_report_path(workspace, REPO_ROOT, "latest_demo_retarget_bootstrap_d5_report.json")
 
 
 def resolve_d5_report_path(workspace: dict, explicit_path: str | None) -> Path:
-    if explicit_path:
-        candidate = Path(explicit_path).expanduser().resolve()
-        if candidate.exists():
-            return candidate
-        raise FileNotFoundError(f"D5 report path does not exist: {candidate}")
-    candidate = default_latest_d5_report_path(workspace)
-    if candidate.exists():
-        return candidate
-    raise FileNotFoundError("No latest_demo_retarget_bootstrap_d5_report.json could be resolved for D6.")
-
-
-def build_discussion_signal(status: str, failed_requirements: list[dict], previous_report: dict | None, previous_report_path: Path | None) -> dict:
-    current_failed_ids = sorted({item.get("id") for item in failed_requirements if item.get("id")})
-    previous_failed_ids = sorted(
-        {
-            item.get("id")
-            for item in ((previous_report or {}).get("failed_requirements") or [])
-            if isinstance(item, dict) and item.get("id")
-        }
+    return resolve_report_path(
+        explicit_path,
+        default_latest_d5_report_path(workspace),
+        "No latest_demo_retarget_bootstrap_d5_report.json could be resolved for D6.",
     )
-    previous_status = (previous_report or {}).get("status")
-    payload = {
-        "should_discuss": False,
-        "reason": None,
-        "previous_report_path": str(previous_report_path) if previous_report_path else None,
-        "repeated_failed_requirement_ids": [],
-    }
-    if status == "pass" and previous_status != "pass":
-        payload["should_discuss"] = True
-        payload["reason"] = "d6_first_complete_pass"
-        return payload
-    if status != "pass" and current_failed_ids and previous_status != "pass" and current_failed_ids == previous_failed_ids:
-        payload["should_discuss"] = True
-        payload["reason"] = "same_failed_requirement_two_rounds"
-        payload["repeated_failed_requirement_ids"] = current_failed_ids
-    return payload
 
 
 def main():
     args = parse_args()
     workspace = load_workspace_config(args.workspace_config)
-    output_root = Path(args.output_root).expanduser().resolve() if args.output_root else default_output_root(workspace)
-    latest_report_path = Path(args.latest_report_path).expanduser().resolve() if args.latest_report_path else default_latest_report_path(workspace)
+    output_root = Path(args.output_root).expanduser().resolve() if args.output_root else default_output_root(workspace, REPO_ROOT, GATE_ID)
+    latest_report_path = (
+        Path(args.latest_report_path).expanduser().resolve()
+        if args.latest_report_path
+        else default_latest_report_path(workspace, REPO_ROOT, GATE_ID)
+    )
     output_root.mkdir(parents=True, exist_ok=True)
     previous_report = load_json(latest_report_path) if latest_report_path.exists() else None
     previous_report_path = latest_report_path if latest_report_path.exists() else None
@@ -126,26 +74,19 @@ def main():
     host_result = {}
     host_invocation_error = None
     if not failed_requirements:
-        try:
-            host_payload = run_host_auto_ue_cli(
-                workspace_or_config=workspace,
-                mode=REQUIRED_MODE,
-                command="retarget-author-chains",
-                params={
-                    "source_ik_rig_asset_path": engine_evidence.get("source_ik_rig_asset_path"),
-                    "retargeter_asset_path": engine_evidence.get("retargeter_asset_path"),
-                    "target_ik_rig_asset_path": engine_evidence.get("target_ik_rig_asset_path"),
-                    "clear_existing_chains": True,
-                },
-                output_path=str(result_path.resolve()),
-                host_key=DEMO_HOST_KEY,
-            )
-            host_result = dict((host_payload.get("payload") or {}).get("result") or {})
-        except Exception as exc:
-            host_invocation_error = str(exc)
-            if result_path.exists():
-                payload = load_json(result_path)
-                host_result = dict(payload.get("result") or {})
+        host_result, host_invocation_error, result_path = run_host_command_result(
+            workspace=workspace,
+            mode=REQUIRED_MODE,
+            command="retarget-author-chains",
+            params={
+                "source_ik_rig_asset_path": engine_evidence.get("source_ik_rig_asset_path"),
+                "retargeter_asset_path": engine_evidence.get("retargeter_asset_path"),
+                "target_ik_rig_asset_path": engine_evidence.get("target_ik_rig_asset_path"),
+                "clear_existing_chains": True,
+            },
+            output_path=result_path,
+            host_key=DEMO_HOST_KEY,
+        )
 
     if not failed_requirements:
         if host_result.get("status") != "pass":
@@ -169,7 +110,13 @@ def main():
             )
 
     status = "pass" if not failed_requirements else "fail"
-    discussion_signal = build_discussion_signal(status, failed_requirements, previous_report, previous_report_path)
+    discussion_signal = build_discussion_signal(
+        status,
+        failed_requirements,
+        previous_report,
+        previous_report_path,
+        first_pass_reason="d6_first_complete_pass",
+    )
     counts = {
         "source_bone_count": int(host_result.get("source_bone_count") or 0),
         "source_chain_count": int(host_result.get("source_ik_rig_profile", {}).get("chain_count") or 0),
