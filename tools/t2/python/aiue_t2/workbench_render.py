@@ -123,6 +123,8 @@ class WorkbenchRenderMixin:
             self.q5c_contrast_case_list.setVisible(False)
             self.q5c_contrast_triptych.render_cases([])
             self.q5c_contrast_triptych.setVisible(False)
+            self.q5c_contrast_compare_panel.render_compare_rows([])
+            self.q5c_contrast_compare_panel.setVisible(False)
             return
 
         selected_package_id = str(contrast_focus.get("selected_package_id") or "")
@@ -158,6 +160,11 @@ class WorkbenchRenderMixin:
         self.q5c_contrast_case_list.setVisible(self.q5c_contrast_case_list.count() > 0)
         self.q5c_contrast_triptych.render_cases(list(contrast_focus.get("cases") or []))
         self.q5c_contrast_triptych.setVisible(bool(list(contrast_focus.get("cases") or [])))
+        self.q5c_contrast_compare_panel.render_compare_rows(
+            list(contrast_focus.get("compare_rows") or []),
+            summary_text=str(contrast_focus.get("compare_summary_text") or ""),
+        )
+        self.q5c_contrast_compare_panel.setVisible(bool(list(contrast_focus.get("compare_rows") or [])))
 
     def _render_report_tree(self) -> None:
         self.report_tree.clear()

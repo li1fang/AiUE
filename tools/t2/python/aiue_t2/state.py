@@ -332,6 +332,7 @@ def _load_q5c_contrast_summary(
                 available_case_id_counts[case_id] = available_case_id_counts.get(case_id, 0) + 1
             debug_image_key = f"q5c_contrast_{package_id}_{case_id}" if package_id and case_id else ""
             preview_record = preview_by_key.get(debug_image_key)
+            analysis = dict(case.get("analysis") or {})
             case_rows.append(
                 {
                     "case_id": case_id,
@@ -342,6 +343,17 @@ def _load_q5c_contrast_summary(
                     "delta_z": float(case.get("delta_z") or 0.0),
                     "closest_margin_metric": str(case.get("closest_margin_metric") or ""),
                     "closest_margin_value": float(case.get("closest_margin_value") or 0.0),
+                    "quality_class": str(analysis.get("quality_class") or case.get("quality_class") or ""),
+                    "embedding_ratio": _optional_float(analysis.get("embedding_ratio"), fallback=case.get("embedding_ratio")),
+                    "floating_ratio": _optional_float(analysis.get("floating_ratio"), fallback=case.get("floating_ratio")),
+                    "penetration_ratio": _optional_float(
+                        analysis.get("penetration_ratio"),
+                        fallback=case.get("penetration_ratio"),
+                    ),
+                    "local_fit_volume": _optional_float(
+                        analysis.get("local_fit_volume"),
+                        fallback=case.get("local_fit_volume"),
+                    ),
                     "debug_image_key": debug_image_key,
                     "debug_image_path": str(preview_record.image_path if preview_record else ""),
                     "debug_image_source_path": str(preview_record.source_path if preview_record else ""),
@@ -370,6 +382,110 @@ def _load_q5c_contrast_summary(
     }
 
 
+def _optional_float(value: Any, *, fallback: Any = None) -> float | None:
+    for candidate in (value, fallback):
+        if candidate is None:
+            continue
+        if isinstance(candidate, str) and not candidate.strip():
+            continue
+        try:
+            return float(candidate)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _metric_delta(from_case: dict[str, Any], to_case: dict[str, Any], metric_name: str) -> float | None:
+    from_value = _optional_float(from_case.get(metric_name))
+    to_value = _optional_float(to_case.get(metric_name))
+    if from_value is None or to_value is None:
+        return None
+    return to_value - from_value
+
+
+def _format_delta(value: float | None, *, precision: int = 4) -> str:
+    if value is None:
+        return "n/a"
+    return f"{value:+.{precision}f}"
+
+
+def _build_q5c_contrast_compare_rows(cases: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    case_map = {
+        str(case.get("case_id") or ""): dict(case)
+        for case in cases
+        if str(case.get("case_id") or "")
+    }
+    ordered_pairs = [
+        ("baseline_current", "best_pass_reference"),
+        ("baseline_current", "closest_fail_reference"),
+        ("best_pass_reference", "closest_fail_reference"),
+    ]
+    compare_rows: list[dict[str, Any]] = []
+    for from_case_id, to_case_id in ordered_pairs:
+        from_case = case_map.get(from_case_id)
+        to_case = case_map.get(to_case_id)
+        if not from_case or not to_case:
+            continue
+        delta_z_change = _metric_delta(from_case, to_case, "delta_z")
+        closest_margin_change = _metric_delta(from_case, to_case, "closest_margin_value")
+        embedding_ratio_change = _metric_delta(from_case, to_case, "embedding_ratio")
+        floating_ratio_change = _metric_delta(from_case, to_case, "floating_ratio")
+        penetration_ratio_change = _metric_delta(from_case, to_case, "penetration_ratio")
+        local_fit_volume_change = _metric_delta(from_case, to_case, "local_fit_volume")
+        status_transition = f"{str(from_case.get('status') or 'unknown')} -> {str(to_case.get('status') or 'unknown')}"
+        risk_transition = (
+            f"{str(from_case.get('risk_band') or 'unknown')} -> {str(to_case.get('risk_band') or 'unknown')}"
+        )
+        diagnostic_transition = (
+            f"{str(from_case.get('fit_diagnostic_class') or 'unknown')} -> "
+            f"{str(to_case.get('fit_diagnostic_class') or 'unknown')}"
+        )
+        key_delta_parts = []
+        if floating_ratio_change is not None:
+            key_delta_parts.append(f"floating {_format_delta(floating_ratio_change)}")
+        if penetration_ratio_change is not None:
+            key_delta_parts.append(f"penetration {_format_delta(penetration_ratio_change)}")
+        if embedding_ratio_change is not None:
+            key_delta_parts.append(f"embedding {_format_delta(embedding_ratio_change)}")
+        if local_fit_volume_change is not None:
+            key_delta_parts.append(f"fit_volume {_format_delta(local_fit_volume_change, precision=1)}")
+        if not key_delta_parts and closest_margin_change is not None:
+            key_delta_parts.append(f"margin {_format_delta(closest_margin_change)}")
+        if not key_delta_parts and delta_z_change is not None:
+            key_delta_parts.append(f"delta_z {_format_delta(delta_z_change, precision=1)}")
+        summary_parts = [
+            f"{from_case_id} -> {to_case_id}",
+            f"status {status_transition}",
+            f"risk {risk_transition}",
+        ]
+        if delta_z_change is not None:
+            summary_parts.append(f"delta_z {_format_delta(delta_z_change, precision=1)}")
+        if closest_margin_change is not None:
+            summary_parts.append(f"margin {_format_delta(closest_margin_change)}")
+        if key_delta_parts:
+            summary_parts.append("; ".join(key_delta_parts))
+        compare_rows.append(
+            {
+                "pair_id": f"{from_case_id}_to_{to_case_id}",
+                "pair_label": f"{from_case_id} -> {to_case_id}",
+                "from_case_id": from_case_id,
+                "to_case_id": to_case_id,
+                "status_transition": status_transition,
+                "risk_transition": risk_transition,
+                "diagnostic_transition": diagnostic_transition,
+                "delta_z_change": delta_z_change,
+                "closest_margin_change": closest_margin_change,
+                "embedding_ratio_change": embedding_ratio_change,
+                "floating_ratio_change": floating_ratio_change,
+                "penetration_ratio_change": penetration_ratio_change,
+                "local_fit_volume_change": local_fit_volume_change,
+                "key_delta_text": ", ".join(key_delta_parts) if key_delta_parts else "n/a",
+                "summary_text": " | ".join(summary_parts),
+            }
+        )
+    return compare_rows
+
+
 def build_q5c_contrast_focus(
     quality_summaries: dict[str, Any],
     *,
@@ -384,6 +500,9 @@ def build_q5c_contrast_focus(
             "case_count": 0,
             "case_ids": [],
             "recommended_preview_image_key": None,
+            "compare_mode_status": "missing",
+            "compare_summary_text": "",
+            "compare_rows": [],
             "cases": [],
         }
 
@@ -402,6 +521,9 @@ def build_q5c_contrast_focus(
             "case_count": 0,
             "case_ids": [],
             "recommended_preview_image_key": None,
+            "compare_mode_status": "missing",
+            "compare_summary_text": "",
+            "compare_rows": [],
             "cases": [],
         }
 
@@ -423,6 +545,16 @@ def build_q5c_contrast_focus(
         ),
         "",
     ) or None
+    compare_rows = _build_q5c_contrast_compare_rows(cases)
+    preferred_compare_row = next(
+        (
+            row
+            for row in compare_rows
+            if str(row.get("from_case_id") or "") == "baseline_current"
+            and str(row.get("to_case_id") or "") == "closest_fail_reference"
+        ),
+        compare_rows[0] if compare_rows else None,
+    )
     resolved_package_id = str(selected_package.get("package_id") or "") or selected_package_id
     return {
         "status": str(summary.get("status") or "unknown"),
@@ -432,6 +564,9 @@ def build_q5c_contrast_focus(
         "case_ids": [str(item.get("case_id") or "") for item in cases if str(item.get("case_id") or "")],
         "required_case_ids": [str(item) for item in list(summary.get("required_case_ids") or []) if str(item)],
         "recommended_preview_image_key": recommended_preview_image_key,
+        "compare_mode_status": "pass" if compare_rows else "missing",
+        "compare_summary_text": str((preferred_compare_row or {}).get("summary_text") or ""),
+        "compare_rows": compare_rows,
         "cases": cases,
     }
 

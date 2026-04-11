@@ -290,3 +290,53 @@ class ContrastTriptychPanel(QWidget):
                 minimum_width=240,
                 minimum_height=180,
             )
+
+
+class ContrastComparePanel(QWidget):
+    def __init__(self) -> None:
+        super().__init__()
+        self.summary_label = QLabel("")
+        self.summary_label.setObjectName("q5cContrastCompareSummary")
+        self.summary_label.setProperty("role", "muted")
+        self.summary_label.setWordWrap(True)
+
+        self.compare_table = QTableWidget(0, 6)
+        self.compare_table.setObjectName("q5cContrastCompareTable")
+        self.compare_table.setHorizontalHeaderLabels(
+            [
+                "Pair",
+                "Status",
+                "Risk",
+                "Diagnostic",
+                "Delta Z / Margin",
+                "Key Deltas",
+            ]
+        )
+        self.compare_table.horizontalHeader().setStretchLastSection(True)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(self.summary_label)
+        layout.addWidget(self.compare_table)
+
+    def render_compare_rows(self, rows: list[dict], *, summary_text: str = "") -> None:
+        self.summary_label.setText(summary_text or "No contrast compare summary available.")
+        self.compare_table.setRowCount(len(rows))
+        for row_index, row in enumerate(rows):
+            delta_parts = []
+            delta_z_change = row.get("delta_z_change")
+            closest_margin_change = row.get("closest_margin_change")
+            if delta_z_change is not None:
+                delta_parts.append(f"dz {float(delta_z_change):+.1f}")
+            if closest_margin_change is not None:
+                delta_parts.append(f"margin {float(closest_margin_change):+.4f}")
+            delta_text = " | ".join(delta_parts) if delta_parts else "n/a"
+            values = [
+                str(row.get("pair_label") or ""),
+                str(row.get("status_transition") or ""),
+                str(row.get("risk_transition") or ""),
+                str(row.get("diagnostic_transition") or ""),
+                delta_text,
+                str(row.get("key_delta_text") or "n/a"),
+            ]
+            for column_index, value in enumerate(values):
+                self.compare_table.setItem(row_index, column_index, QTableWidgetItem(value))

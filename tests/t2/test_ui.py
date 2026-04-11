@@ -47,6 +47,7 @@ def test_workbench_window_renders_fixture_pack(qtbot, tmp_path: Path):
     assert window.q5c_contrast_summary.isVisible() is False
     assert window.q5c_contrast_case_list.isVisible() is False
     assert window.q5c_contrast_triptych.isVisible() is False
+    assert window.q5c_contrast_compare_panel.isVisible() is False
 
 
 def test_workbench_window_shows_q5c_quality_summary(qtbot, tmp_path: Path):
@@ -64,6 +65,7 @@ def test_workbench_window_shows_q5c_quality_summary(qtbot, tmp_path: Path):
     assert "Q5C contrast PASS | package pkg_alpha" in window.q5c_contrast_summary.text()
     assert window.q5c_contrast_case_list.isVisible() is True
     assert window.q5c_contrast_triptych.isVisible() is True
+    assert window.q5c_contrast_compare_panel.isVisible() is True
     assert window.q5c_contrast_case_list.count() == 3
     assert window.q5c_contrast_case_list.item(0).text().startswith("baseline_current | PASS")
     assert window.current_dump_payload()["q5c_contrast_focus"]["recommended_preview_image_key"] == "q5c_contrast_pkg_alpha_baseline_current"
@@ -73,6 +75,11 @@ def test_workbench_window_shows_q5c_quality_summary(qtbot, tmp_path: Path):
     assert window.q5c_contrast_triptych.case_title_labels["closest_fail_reference"].text().startswith("Closest Fail | FAIL")
     assert window.q5c_contrast_triptych.case_image_labels["baseline_current"].pixmap() is not None
     assert not window.q5c_contrast_triptych.case_image_labels["baseline_current"].pixmap().isNull()
+    assert "baseline_current -> closest_fail_reference" in window.q5c_contrast_compare_panel.summary_label.text()
+    assert window.q5c_contrast_compare_panel.compare_table.rowCount() == 3
+    assert window.q5c_contrast_compare_panel.compare_table.item(1, 0).text() == "baseline_current -> closest_fail_reference"
+    assert window.q5c_contrast_compare_panel.compare_table.item(1, 1).text() == "pass -> fail"
+    assert "floating +0.0407" in window.q5c_contrast_compare_panel.compare_table.item(1, 5).text()
     window.q5c_contrast_case_list.setCurrentRow(2)
     qtbot.waitUntil(
         lambda: window.current_dump_payload()["selected_default_image"] == "q5c_contrast_pkg_alpha_closest_fail_reference"

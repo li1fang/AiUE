@@ -40,7 +40,14 @@ from aiue_t2.demo_review_replay_state import load_demo_review_replay_state
 from aiue_t2.demo_round_state import load_demo_round_state
 from aiue_t2.demo_request_runner import export_demo_request, invoke_demo_request, load_demo_request_selection
 from aiue_t2.ui_demo import DemoRequestControlState, DemoRequestPanel, DemoReviewPanel, DemoSessionPanel
-from aiue_t2.ui_sections import ContrastTriptychPanel, DetailsPanel, ImagesPanel, SlotDebuggerPanel, SummaryCard
+from aiue_t2.ui_sections import (
+    ContrastComparePanel,
+    ContrastTriptychPanel,
+    DetailsPanel,
+    ImagesPanel,
+    SlotDebuggerPanel,
+    SummaryCard,
+)
 from aiue_t2.workbench_demo_ops import WorkbenchDemoOpsMixin
 from aiue_t2.workbench_render import WorkbenchRenderMixin
 
@@ -250,6 +257,11 @@ class WorkbenchWindow(WorkbenchRenderMixin, WorkbenchDemoOpsMixin, QMainWindow):
         self.q5c_contrast_triptych.setObjectName("q5cContrastTriptych")
         self.q5c_contrast_triptych.setVisible(False)
         root_layout.addWidget(self.q5c_contrast_triptych)
+
+        self.q5c_contrast_compare_panel = ContrastComparePanel()
+        self.q5c_contrast_compare_panel.setObjectName("q5cContrastComparePanel")
+        self.q5c_contrast_compare_panel.setVisible(False)
+        root_layout.addWidget(self.q5c_contrast_compare_panel)
 
         content_splitter = QSplitter()
 

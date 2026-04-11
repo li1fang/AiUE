@@ -164,6 +164,11 @@ def test_workbench_cli_reads_q5c_quality_summary(tmp_path: Path):
         "closest_fail_reference",
     ]
     assert payload["q5c_contrast_focus"]["recommended_preview_image_key"] == "q5c_contrast_pkg_alpha_baseline_current"
+    assert payload["q5c_contrast_focus"]["compare_mode_status"] == "pass"
+    assert len(payload["q5c_contrast_focus"]["compare_rows"]) == 3
+    assert payload["q5c_contrast_focus"]["compare_summary_text"].startswith(
+        "baseline_current -> closest_fail_reference | status pass -> fail"
+    )
 
 
 def test_workbench_cli_review_compare_index_fixture(tmp_path: Path):

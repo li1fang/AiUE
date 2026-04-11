@@ -125,6 +125,13 @@ def write_fixture_q5c_contrast_report(verification_root: Path) -> Path:
                             "delta_z": 0.0,
                             "closest_margin_metric": "penetration_ratio_margin_to_failure",
                             "closest_margin_value": 0.02,
+                            "analysis": {
+                                "quality_class": "watch",
+                                "embedding_ratio": 0.48,
+                                "floating_ratio": 0.02,
+                                "penetration_ratio": 0.0,
+                                "local_fit_volume": 1200.0,
+                            },
                             "artifacts": {
                                 "debug_image_path": baseline_image_path,
                             },
@@ -138,6 +145,13 @@ def write_fixture_q5c_contrast_report(verification_root: Path) -> Path:
                             "delta_z": -30.0,
                             "closest_margin_metric": "penetration_ratio_margin_to_failure",
                             "closest_margin_value": 0.02,
+                            "analysis": {
+                                "quality_class": "watch",
+                                "embedding_ratio": 0.52,
+                                "floating_ratio": 0.01,
+                                "penetration_ratio": 0.0,
+                                "local_fit_volume": 1260.0,
+                            },
                             "artifacts": {
                                 "debug_image_path": best_pass_image_path,
                             },
@@ -151,6 +165,13 @@ def write_fixture_q5c_contrast_report(verification_root: Path) -> Path:
                             "delta_z": 20.0,
                             "closest_margin_metric": "floating_ratio_margin_to_failure",
                             "closest_margin_value": -0.0407,
+                            "analysis": {
+                                "quality_class": "fail",
+                                "embedding_ratio": 0.31,
+                                "floating_ratio": 0.0607,
+                                "penetration_ratio": 0.01,
+                                "local_fit_volume": 980.0,
+                            },
                             "artifacts": {
                                 "debug_image_path": closest_fail_image_path,
                             },

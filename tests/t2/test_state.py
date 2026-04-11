@@ -140,3 +140,17 @@ def test_load_workbench_state_reads_q5c_contrast_focus(tmp_path: Path):
     ]
     assert contrast_focus["recommended_preview_image_key"] == "q5c_contrast_pkg_alpha_baseline_current"
     assert contrast_focus["cases"][0]["debug_image_path"].endswith("q5c_contrast_pkg_alpha_baseline_current.ppm")
+    assert contrast_focus["compare_mode_status"] == "pass"
+    assert len(contrast_focus["compare_rows"]) == 3
+    assert contrast_focus["compare_summary_text"].startswith(
+        "baseline_current -> closest_fail_reference | status pass -> fail"
+    )
+    fail_compare = next(
+        row for row in contrast_focus["compare_rows"] if row["pair_label"] == "baseline_current -> closest_fail_reference"
+    )
+    assert fail_compare["status_transition"] == "pass -> fail"
+    assert fail_compare["risk_transition"] == "watch -> fail"
+    assert fail_compare["delta_z_change"] == 20.0
+    assert round(float(fail_compare["closest_margin_change"]), 4) == -0.0607
+    assert round(float(fail_compare["floating_ratio_change"]), 4) == 0.0407
+    assert "floating +0.0407" in fail_compare["key_delta_text"]
