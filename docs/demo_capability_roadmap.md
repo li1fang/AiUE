@@ -55,6 +55,7 @@ Output shape:
 Current state:
 
 - [latest_showcase_demo_e1_report.json](C:/AiUE/Saved/verification/latest_showcase_demo_e1_report.json)
+- [latest_showcase_demo_e1_stability_report.json](C:/AiUE/Saved/verification/latest_showcase_demo_e1_stability_report.json)
 - `status = pass`
 - `required_package_count = 2`
 - `passing_packages = 2`
@@ -62,12 +63,20 @@ Current state:
 - `captured_after_images = 6`
 - `hero_shots_passed = 2`
 - `motion_pass_shots = 6`
+- `E1 stability = pass`
+- `stable_reruns = 2/2`
+- `T2 latest consumption = pass`
 
 Gate trigger for moving on:
 
 - `E1` first full pass
 - plus `2` consecutive stable reruns
 - plus `T2` stable consumption of the latest `E1` evidence
+
+Current judgment:
+
+- the `E1 -> E2` entry condition is now satisfied
+- `E2` can become a dedicated work item without weakening the evidence-first sequencing
 
 ### E2: Playable Demo
 

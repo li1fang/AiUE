@@ -35,6 +35,9 @@ The line is gated by capability thresholds rather than dates.
 - `E1` has `2` stable reruns
 - `T2` can read the latest `E1` evidence reliably
 
+This entry condition is operationalized through the internal `showcase_demo_e1_stability` gate,
+which reruns `E1` twice, refreshes `T1`, and verifies `T2 --latest` consumption.
+
 ## Consequences
 
 Positive:
@@ -53,3 +56,4 @@ Tradeoff:
 - keep `E1` as the current demo milestone
 - treat playable demo work as `E2`, not as silent scope creep inside `E1`
 - let `T1/T2` remain the evidence surfaces for both platform and demo lines
+- use `showcase_demo_e1_stability` as the concrete threshold check before opening `E2`
