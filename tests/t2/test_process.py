@@ -25,6 +25,8 @@ def test_workbench_cli_seven_open_cycles(tmp_path: Path):
         assert payload["governance_balance"]["status"] == "attention"
         assert payload["demo_session"]["status"] == "pass"
         assert payload["demo_session"]["package_ids"] == ["pkg_alpha"]
+        assert payload["demo_control_state"]["status"] == "missing"
+        assert payload["demo_round_state"]["status"] == "missing"
         assert sorted(payload["demo_request"]["request_kinds"]) == ["action_preview", "animation_preview"]
         assert set(payload["report_categories"]) == {"active_line", "platform_line", "governance_line", "historical_other"}
 
@@ -68,6 +70,9 @@ def test_workbench_cli_demo_request_export_fixture(tmp_path: Path):
     completed, payload = run_workbench_process(
         manifest_path=pack["manifest_path"],
         session_manifest_path=pack["session_manifest_path"],
+        package_id="pkg_alpha",
+        action_preset_id="showcase_root_translate_and_turn",
+        animation_preset_id="MM_Attack_01",
         demo_request_export=True,
         demo_request_kind="animation_preview",
     )
@@ -76,6 +81,9 @@ def test_workbench_cli_demo_request_export_fixture(tmp_path: Path):
     assert payload["demo_request_control"]["status"] == "pass"
     assert payload["demo_request_control"]["operation"] == "export"
     assert payload["demo_request_control"]["request_kind"] == "animation_preview"
+    assert payload["selected_default_package"] == "pkg_alpha"
+    assert payload["selected_default_action_preset"] == "showcase_root_translate_and_turn"
+    assert payload["selected_default_animation_preset"] == "MM_Attack_01"
     assert Path(payload["demo_request_control"]["request_json_path"]).exists()
 
 

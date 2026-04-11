@@ -4,9 +4,13 @@ param(
     [string]$Manifest = "",
     [string]$SessionManifest = "",
     [string]$WorkspaceConfig = "",
+    [string]$PackageId = "",
+    [string]$ActionPresetId = "",
+    [string]$AnimationPresetId = "",
     [switch]$DemoRequestExport,
     [switch]$DemoRequestDryRun,
     [switch]$DemoRequestInvoke,
+    [switch]$DemoSessionRoundInvoke,
     [ValidateSet("action_preview", "animation_preview")]
     [string]$DemoRequestKind = "action_preview",
     [switch]$DumpStateJson,
@@ -39,6 +43,15 @@ if ($SessionManifest) {
 if ($WorkspaceConfig) {
     $args += @("--workspace-config", $WorkspaceConfig)
 }
+if ($PackageId) {
+    $args += @("--package-id", $PackageId)
+}
+if ($ActionPresetId) {
+    $args += @("--action-preset-id", $ActionPresetId)
+}
+if ($AnimationPresetId) {
+    $args += @("--animation-preset-id", $AnimationPresetId)
+}
 if ($DemoRequestExport) {
     $args += "--demo-request-export"
 }
@@ -47,6 +60,9 @@ if ($DemoRequestDryRun) {
 }
 if ($DemoRequestInvoke) {
     $args += "--demo-request-invoke"
+}
+if ($DemoSessionRoundInvoke) {
+    $args += "--demo-session-round-invoke"
 }
 if ($DemoRequestKind) {
     $args += @("--demo-request-kind", $DemoRequestKind)

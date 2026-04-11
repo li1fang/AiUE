@@ -15,6 +15,7 @@ REPORT_FIXTURES = FIXTURE_ROOT / "reports"
 WORKBENCH_SCRIPT = REPO_ROOT / "tools" / "run_t2_workbench.ps1"
 DEMO_REQUEST_SCRIPT = REPO_ROOT / "tools" / "run_e2_demo_request.ps1"
 DEFAULT_E2_SESSION_NAME = "playable_demo_e2_session.json"
+DEFAULT_E2_CONTROL_STATE_NAME = "playable_demo_e2_control_state.json"
 
 
 def materialize_report_fixtures(target_root: Path, *, include_governance: bool = True) -> Path:
@@ -137,6 +138,61 @@ def build_fixture_e2_session(tmp_path: Path) -> Path:
     return session_manifest_path
 
 
+def write_fixture_demo_control_state(
+    tmp_path: Path,
+    *,
+    package_id: str = "pkg_alpha",
+    action_preset_id: str = "showcase_root_translate_and_turn",
+    animation_preset_id: str = "MM_Attack_01",
+) -> Path:
+    session_root = tmp_path / "Saved" / "demo" / "e2" / "latest"
+    session_root.mkdir(parents=True, exist_ok=True)
+    control_state_path = session_root / DEFAULT_E2_CONTROL_STATE_NAME
+    image_path = str((FIXTURE_ROOT / "images" / "front.ppm").resolve())
+    write_json(
+        control_state_path,
+        {
+            "status": "pass",
+            "session_id": "playable_demo_e2_bootstrap",
+            "generated_at_utc": "2026-04-11T06:15:00+00:00",
+            "selected_package_id": package_id,
+            "selected_action_preset_id": action_preset_id,
+            "selected_animation_preset_id": animation_preset_id,
+            "last_runs_by_package": {
+                package_id: {
+                    "action_preview": {
+                        "request_kind": "action_preview",
+                        "operation": "invoke",
+                        "request_json_path": str((session_root / "action_request.json").resolve()),
+                        "result_json_path": str((session_root / "action_result.json").resolve()),
+                        "result_status": "pass",
+                        "host_key": "demo",
+                        "generated_at_utc": "2026-04-11T06:14:00+00:00",
+                        "selected_package_id": package_id,
+                        "selected_action_preset_id": action_preset_id,
+                        "selected_animation_preset_id": animation_preset_id,
+                        "key_image_paths": {
+                            "before": [image_path],
+                            "after": [image_path],
+                            "primary_before": image_path,
+                            "primary_after": image_path,
+                        },
+                        "credibility_summary": {
+                            "subject_visible": True,
+                            "before_image_present": True,
+                            "after_image_present": True,
+                            "action_motion_verified": True,
+                            "animation_pose_verified": False,
+                            "warning_flags": [],
+                        },
+                    }
+                }
+            },
+        },
+    )
+    return control_state_path
+
+
 def create_invalid_manifest(tmp_path: Path) -> Path:
     path = tmp_path / "invalid_manifest.json"
     path.write_text("{ invalid json", encoding="utf-8")
@@ -167,9 +223,13 @@ def run_workbench_process(
     latest: bool = False,
     session_manifest_path: Path | None = None,
     workspace_config_path: Path | None = None,
+    package_id: str | None = None,
+    action_preset_id: str | None = None,
+    animation_preset_id: str | None = None,
     demo_request_export: bool = False,
     demo_request_dry_run: bool = False,
     demo_request_invoke: bool = False,
+    demo_session_round_invoke: bool = False,
     demo_request_kind: str | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], dict]:
     command = [
@@ -190,12 +250,20 @@ def run_workbench_process(
         command += ["-SessionManifest", str(session_manifest_path)]
     if workspace_config_path is not None:
         command += ["-WorkspaceConfig", str(workspace_config_path)]
+    if package_id is not None:
+        command += ["-PackageId", str(package_id)]
+    if action_preset_id is not None:
+        command += ["-ActionPresetId", str(action_preset_id)]
+    if animation_preset_id is not None:
+        command += ["-AnimationPresetId", str(animation_preset_id)]
     if demo_request_export:
         command += ["-DemoRequestExport"]
     if demo_request_dry_run:
         command += ["-DemoRequestDryRun"]
     if demo_request_invoke:
         command += ["-DemoRequestInvoke"]
+    if demo_session_round_invoke:
+        command += ["-DemoSessionRoundInvoke"]
     if demo_request_kind is not None:
         command += ["-DemoRequestKind", str(demo_request_kind)]
     env = os.environ.copy()

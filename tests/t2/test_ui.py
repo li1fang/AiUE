@@ -27,9 +27,12 @@ def test_workbench_window_renders_fixture_pack(qtbot, tmp_path: Path):
     assert window.demo_animation_preset_list.count() == 1
     assert "playable_demo_e2_bootstrap" in window.demo_session_summary.text()
     assert "pkg_alpha" in window.demo_package_details.toPlainText()
+    assert window.invoke_session_round_button.text() == "Invoke Session Round"
     assert "ACTION_PREVIEW" in window.demo_request_summary.text().upper()
     assert '"action_preview"' in window.demo_request_text.toPlainText()
     assert '"animation_preview"' in window.demo_request_text.toPlainText()
+    assert window.current_dump_payload()["demo_control_state"]["status"] == "missing"
+    assert window.current_dump_payload()["demo_round_state"]["status"] == "missing"
     assert window.current_error_codes() == []
 
 
@@ -40,15 +43,53 @@ def test_workbench_window_demo_request_controls(qtbot, tmp_path: Path, monkeypat
     workspace_config_path.write_text("{}", encoding="utf-8")
 
     def fake_invoke(selection, *, workspace_config, result_json_path=None, dry_run=False):
+        request_json_path = tmp_path / f"{selection.request_kind}_request.json"
+        request_json_path.write_text("{}", encoding="utf-8")
+        resolved_result_path = Path(result_json_path or (tmp_path / "dry_run_result.json"))
+        resolved_result_path.write_text("{}", encoding="utf-8")
+        before_image = tmp_path / "before.png"
+        after_image = tmp_path / "after.png"
+        before_image.write_text("fixture", encoding="utf-8")
+        after_image.write_text("fixture", encoding="utf-8")
         return {
             "status": "pass",
             "request_kind": selection.request_kind,
             "dry_run": dry_run,
             "selected_package_id": selection.selected_package_id,
+            "selected_action_preset_id": selection.selected_action_preset_id,
+            "selected_animation_preset_id": selection.selected_animation_preset_id,
             "request_payload": selection.request_payload,
-            "result_json_path": str(tmp_path / "dry_run_result.json"),
+            "request_json_path": str(request_json_path),
+            "result_json_path": str(resolved_result_path),
             "host_key": "demo",
-            "payload": {"workspace_config": str(workspace_config)},
+            "payload": {
+                "status": "pass",
+                "generated_at_utc": "2026-04-11T07:10:00+00:00",
+                "result": {
+                    "status": "pass",
+                    "shots": [
+                        {
+                            "before": {
+                                "image_path": str(before_image.resolve()),
+                                "subject_screen_coverage": 0.08,
+                                "weapon_screen_coverage": 0.01,
+                                "line_of_sight_clear": True,
+                                "tracked_slot_coverages": {"fx": {"coverage_ratio": 0.005}},
+                            },
+                            "after": {
+                                "image_path": str(after_image.resolve()),
+                                "subject_screen_coverage": 0.07,
+                                "weapon_screen_coverage": 0.01,
+                                "line_of_sight_clear": True,
+                                "tracked_slot_coverages": {"fx": {"coverage_ratio": 0.004}},
+                            },
+                        }
+                    ],
+                    "transform_delta": {"distance_delta": 85.0, "yaw_delta": 24.0},
+                    "native_animation_pose_evaluation": {"pose_changed": True, "changed_bone_count": 12},
+                    "pose_probe_delta": {"moving_bone_count": 8, "max_location_delta": 321.0},
+                },
+            },
         }
 
     monkeypatch.setattr("aiue_t2.ui.invoke_demo_request", fake_invoke)
@@ -77,6 +118,9 @@ def test_workbench_window_demo_request_controls(qtbot, tmp_path: Path, monkeypat
     assert payload["demo_request_control"]["host_key"] == "demo"
     assert payload["demo_request_control"]["workspace_config_path"] == str(workspace_config_path.resolve())
     assert payload["demo_request_control"]["dry_run"] is True
+    assert payload["demo_control_state"]["status"] == "pass"
+    assert payload["demo_control_state"]["selected_package_id"] == "pkg_alpha"
+    assert payload["demo_control_state"]["last_runs_by_package"]["pkg_alpha"]["animation_preview"]["credibility_summary"]["animation_pose_verified"] is True
 
     qtbot.mouseClick(window.invoke_action_request_button, Qt.LeftButton)
     payload = window.current_dump_payload()
@@ -85,3 +129,15 @@ def test_workbench_window_demo_request_controls(qtbot, tmp_path: Path, monkeypat
     assert payload["demo_request_control"]["request_kind"] == "action_preview"
     assert payload["demo_request_control"]["host_key"] == "demo"
     assert payload["demo_request_control"]["dry_run"] is False
+    assert payload["demo_control_state"]["last_runs_by_package"]["pkg_alpha"]["action_preview"]["credibility_summary"]["action_motion_verified"] is True
+    assert "action_preview" in window.demo_control_state_text.toPlainText()
+
+    qtbot.mouseClick(window.invoke_session_round_button, Qt.LeftButton)
+    payload = window.current_dump_payload()
+    assert payload["demo_round_control"]["status"] == "pass"
+    assert payload["demo_round_control"]["operation"] == "invoke_session_round"
+    assert payload["demo_round_state"]["status"] == "pass"
+    assert payload["demo_round_state"]["counts"]["package_count"] == 1
+    assert payload["demo_round_state"]["counts"]["action_motion_verified"] == 1
+    assert payload["demo_round_state"]["counts"]["animation_pose_verified"] == 1
+    assert "round_state" in window.demo_control_state_text.toPlainText()

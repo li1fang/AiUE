@@ -33,6 +33,8 @@ from aiue_t2.state import (
     build_default_view_state,
     load_workbench_state,
 )
+from aiue_t2.demo_control_state import load_demo_control_state, write_demo_control_run
+from aiue_t2.demo_round_state import load_demo_round_state, write_demo_round_state
 from aiue_t2.demo_request_runner import export_demo_request, invoke_demo_request, load_demo_request_selection
 from aiue_t2.ui_demo import DemoRequestControlState, DemoRequestPanel, DemoSessionPanel
 from aiue_t2.ui_sections import DetailsPanel, ImagesPanel, SlotDebuggerPanel, SummaryCard
@@ -87,6 +89,9 @@ class WorkbenchWindow(QMainWindow):
         session_manifest_path: Path | None = None,
         repo_root: Path | None = None,
         workspace_config_path: Path | None = None,
+        selected_package_id: str | None = None,
+        selected_action_preset_id: str | None = None,
+        selected_animation_preset_id: str | None = None,
     ) -> None:
         super().__init__()
         self.setWindowTitle("AiUE T2 Windows Native Workbench")
@@ -98,6 +103,9 @@ class WorkbenchWindow(QMainWindow):
             Path(session_manifest_path).expanduser().resolve() if session_manifest_path is not None else None
         )
         self.current_workspace_config_path = self._resolve_workspace_config_path(workspace_config_path)
+        self.requested_selected_package_id = selected_package_id
+        self.requested_selected_action_preset_id = selected_action_preset_id
+        self.requested_selected_animation_preset_id = selected_animation_preset_id
         self.app_state = AppState(
             status="error",
             manifest_path=str(self.current_manifest_path),
@@ -134,6 +142,9 @@ class WorkbenchWindow(QMainWindow):
             default_animation_preset_id=None,
         )
         self.view_state = ViewState()
+        self.demo_control_state: dict = {"status": "missing", "last_runs_by_package": {}, "package_run_counts": {}}
+        self.demo_round_state: dict = {"status": "missing", "package_results": [], "counts": {}}
+        self.demo_round_control: dict = {"status": "idle", "operation": "", "scope": "", "errors": []}
         self.demo_request_control = DemoRequestControlState(
             workspace_config_path=str(self.current_workspace_config_path or ""),
         )
@@ -236,9 +247,12 @@ class WorkbenchWindow(QMainWindow):
         self.dry_run_animation_request_button = self.demo_request_panel.dry_run_animation_request_button
         self.invoke_action_request_button = self.demo_request_panel.invoke_action_request_button
         self.invoke_animation_request_button = self.demo_request_panel.invoke_animation_request_button
+        self.invoke_session_round_button = self.demo_request_panel.invoke_session_round_button
         self.demo_request_control_summary = self.demo_request_panel.demo_request_control_summary
+        self.demo_control_state_summary = self.demo_request_panel.demo_control_state_summary
         self.demo_request_text = self.demo_request_panel.demo_request_text
         self.demo_request_control_text = self.demo_request_panel.demo_request_control_text
+        self.demo_control_state_text = self.demo_request_panel.demo_control_state_text
         self.demo_request_panel.bind_callbacks(
             export_action=lambda: self.export_current_demo_request(request_kind="action_preview"),
             export_animation=lambda: self.export_current_demo_request(request_kind="animation_preview"),
@@ -246,6 +260,7 @@ class WorkbenchWindow(QMainWindow):
             dry_run_animation=lambda: self.dry_run_current_demo_request(request_kind="animation_preview"),
             invoke_action=lambda: self.invoke_current_demo_request(request_kind="action_preview"),
             invoke_animation=lambda: self.invoke_current_demo_request(request_kind="animation_preview"),
+            invoke_session_round=lambda: self.invoke_session_round(),
         )
         self.tabs.addTab(self.demo_request_panel, "Demo Request")
 
@@ -265,6 +280,14 @@ class WorkbenchWindow(QMainWindow):
             session_manifest_path=self.current_session_manifest_path,
         )
         self.view_state = build_default_view_state(self.app_state)
+        self._apply_requested_demo_selection()
+        self.demo_control_state = load_demo_control_state(
+            self.app_state.demo_session.session_manifest_path or self.current_session_manifest_path
+        )
+        self.demo_round_state = load_demo_round_state(
+            self.app_state.demo_session.session_manifest_path or self.current_session_manifest_path
+        )
+        self.demo_round_control = {"status": "idle", "operation": "", "scope": "", "errors": []}
         self.demo_request_control = DemoRequestControlState(
             workspace_config_path=str(self.current_workspace_config_path or ""),
         )
@@ -279,6 +302,20 @@ class WorkbenchWindow(QMainWindow):
     def refresh_from_manifest(self) -> None:
         self.load_manifest(self.current_manifest_path)
 
+    def _apply_requested_demo_selection(self) -> None:
+        package_ids = {record.package_id for record in self.app_state.demo_session.packages}
+        if self.requested_selected_package_id and self.requested_selected_package_id in package_ids:
+            self.view_state.selected_package_id = self.requested_selected_package_id
+        selected_package = self.app_state.demo_session.package_by_id(self.view_state.selected_package_id)
+        if selected_package is None:
+            return
+        action_preset_ids = {preset.preset_id for preset in selected_package.action_presets}
+        animation_preset_ids = {preset.preset_id for preset in selected_package.animation_presets}
+        if self.requested_selected_action_preset_id and self.requested_selected_action_preset_id in action_preset_ids:
+            self.view_state.selected_action_preset_id = self.requested_selected_action_preset_id
+        if self.requested_selected_animation_preset_id and self.requested_selected_animation_preset_id in animation_preset_ids:
+            self.view_state.selected_animation_preset_id = self.requested_selected_animation_preset_id
+
     def choose_manifest(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
             self,
@@ -291,6 +328,9 @@ class WorkbenchWindow(QMainWindow):
 
     def current_dump_payload(self) -> dict:
         payload = self.app_state.to_dump_payload(self.view_state)
+        payload["demo_control_state"] = dict(self.demo_control_state)
+        payload["demo_round_state"] = dict(self.demo_round_state)
+        payload["demo_round_control"] = dict(self.demo_round_control)
         payload["demo_request_control"] = self.demo_request_control.to_dump_dict()
         return payload
 
@@ -406,15 +446,27 @@ class WorkbenchWindow(QMainWindow):
             invocation_payload = dict(invocation.get("payload") or {})
             invocation_result = dict(invocation_payload.get("result") or {})
             invocation_meta = dict(invocation.get("invocation") or {})
+            self.demo_control_state = write_demo_control_run(
+                session_manifest_path=self.app_state.demo_session.session_manifest_path or self.current_session_manifest_path,
+                session_id=self.app_state.demo_session.session_id,
+                selected_package_id=selection.selected_package_id,
+                selected_action_preset_id=selection.selected_action_preset_id,
+                selected_animation_preset_id=selection.selected_animation_preset_id,
+                request_kind=selection.request_kind,
+                operation=operation_name,
+                invocation=invocation,
+            )
+            result_status = str(invocation_result.get("status") or invocation_payload.get("status") or "")
             self.demo_request_control = DemoRequestControlState(
-                status="pass",
+                status="pass" if result_status == "pass" else "error",
                 operation=operation_name,
                 request_kind=selection.request_kind,
                 dry_run=bool(dry_run),
                 workspace_config_path=str(resolved_workspace),
+                request_json_path=str(invocation.get("request_json_path") or ""),
                 result_json_path=str(invocation.get("result_json_path") or ""),
                 host_key=str(invocation.get("host_key") or ""),
-                result_status=str(invocation_result.get("status") or invocation_payload.get("status") or ""),
+                result_status=result_status,
                 invocation_returncode=invocation_meta.get("returncode"),
                 payload=invocation,
             )
@@ -452,6 +504,130 @@ class WorkbenchWindow(QMainWindow):
             dry_run=False,
             workspace_config_path=workspace_config_path,
         )
+
+    @staticmethod
+    def _first_preset_id(presets: list) -> str | None:
+        if not presets:
+            return None
+        return str(presets[0].preset_id or "") or None
+
+    def _build_round_package_result(self, package_id: str) -> dict:
+        package_runs = dict((self.demo_control_state.get("last_runs_by_package") or {}).get(package_id) or {})
+        action_invoke = dict(package_runs.get("action_preview") or {})
+        animation_invoke = dict(package_runs.get("animation_preview") or {})
+        errors: list[dict] = []
+        if not action_invoke:
+            errors.append({"id": "round_action_missing", "message": "The session round did not capture an action_preview run."})
+        if not animation_invoke:
+            errors.append({"id": "round_animation_missing", "message": "The session round did not capture an animation_preview run."})
+        if action_invoke and str(action_invoke.get("result_status") or "") != "pass":
+            errors.append({"id": "round_action_failed", "message": "The session round action_preview result did not pass."})
+        if animation_invoke and str(animation_invoke.get("result_status") or "") != "pass":
+            errors.append({"id": "round_animation_failed", "message": "The session round animation_preview result did not pass."})
+        action_credibility = dict(action_invoke.get("credibility_summary") or {})
+        animation_credibility = dict(animation_invoke.get("credibility_summary") or {})
+        if action_invoke and not bool(action_credibility.get("action_motion_verified")):
+            errors.append({"id": "round_action_motion_not_verified", "message": "The session round action_preview credibility check did not verify motion."})
+        if animation_invoke and not bool(animation_credibility.get("animation_pose_verified")):
+            errors.append({"id": "round_animation_pose_not_verified", "message": "The session round animation_preview credibility check did not verify pose change."})
+        return {
+            "package_id": package_id,
+            "selected_action_preset_id": action_invoke.get("selected_action_preset_id"),
+            "selected_animation_preset_id": animation_invoke.get("selected_animation_preset_id"),
+            "action_invoke": action_invoke,
+            "animation_invoke": animation_invoke,
+            "status": "pass" if not errors else "fail",
+            "errors": errors,
+        }
+
+    def invoke_session_round(self, *, workspace_config_path: Path | None = None) -> None:
+        resolved_workspace = (
+            Path(workspace_config_path).expanduser().resolve()
+            if workspace_config_path is not None
+            else (self.current_workspace_config_path or self._resolve_workspace_config_path(None))
+        )
+        if resolved_workspace is None or not resolved_workspace.exists():
+            self.demo_round_control = {
+                "status": "error",
+                "operation": "invoke_session_round",
+                "scope": "full_session",
+                "workspace_config_path": str(resolved_workspace or ""),
+                "errors": ["workspace_config_missing"],
+            }
+            self._render_demo_request()
+            return
+        self.current_workspace_config_path = resolved_workspace
+        previous_selection = (
+            self.view_state.selected_package_id,
+            self.view_state.selected_action_preset_id,
+            self.view_state.selected_animation_preset_id,
+        )
+        package_results: list[dict] = []
+        round_errors: list[str] = []
+        try:
+            for package in self.app_state.demo_session.packages:
+                action_preset_id = self._first_preset_id(package.action_presets)
+                animation_preset_id = self._first_preset_id(package.animation_presets)
+                if not action_preset_id or not animation_preset_id:
+                    round_errors.append(f"missing_presets:{package.package_id}")
+                    package_results.append(
+                        {
+                            "package_id": package.package_id,
+                            "selected_action_preset_id": action_preset_id,
+                            "selected_animation_preset_id": animation_preset_id,
+                            "action_invoke": {},
+                            "animation_invoke": {},
+                            "status": "fail",
+                            "errors": [{"id": "round_presets_missing", "message": "The package does not have both action and animation presets."}],
+                        }
+                    )
+                    continue
+                self.view_state.selected_package_id = package.package_id
+                self.view_state.selected_action_preset_id = action_preset_id
+                self.view_state.selected_animation_preset_id = animation_preset_id
+                self._render_demo_session_package_details()
+                self._execute_current_demo_request(
+                    request_kind="action_preview",
+                    dry_run=False,
+                    workspace_config_path=resolved_workspace,
+                )
+                self._execute_current_demo_request(
+                    request_kind="animation_preview",
+                    dry_run=False,
+                    workspace_config_path=resolved_workspace,
+                )
+                package_results.append(self._build_round_package_result(package.package_id))
+            self.demo_round_state = write_demo_round_state(
+                session_manifest_path=self.app_state.demo_session.session_manifest_path or self.current_session_manifest_path,
+                session_id=self.app_state.demo_session.session_id,
+                operation="invoke_session_round",
+                package_results=package_results,
+            )
+            round_status = "pass" if self.demo_round_state.get("status") == "pass" and not round_errors else "error"
+            self.demo_round_control = {
+                "status": round_status,
+                "operation": "invoke_session_round",
+                "scope": "full_session",
+                "workspace_config_path": str(resolved_workspace),
+                "package_count": len(package_results),
+                "round_state_path": self.demo_round_state.get("round_state_path"),
+                "errors": round_errors,
+            }
+        except Exception as exc:  # pragma: no cover - defensive UI boundary
+            self.demo_round_control = {
+                "status": "error",
+                "operation": "invoke_session_round",
+                "scope": "full_session",
+                "workspace_config_path": str(resolved_workspace),
+                "errors": [str(exc)],
+            }
+        finally:
+            (
+                self.view_state.selected_package_id,
+                self.view_state.selected_action_preset_id,
+                self.view_state.selected_animation_preset_id,
+            ) = previous_selection
+            self._render_demo_session_package_details()
 
     def _render_state(self) -> None:
         self._render_errors()
@@ -540,11 +716,17 @@ class WorkbenchWindow(QMainWindow):
         payload = self.current_dump_payload()
         demo_request = dict(payload.get("demo_request") or {})
         control_state = dict(payload.get("demo_request_control") or {})
+        demo_control_state = dict(payload.get("demo_control_state") or {})
+        demo_round_control = dict(payload.get("demo_round_control") or {})
+        demo_round_state = dict(payload.get("demo_round_state") or {})
         workspace_path = str(self.current_workspace_config_path or "")
         workspace_ready = bool(self.current_workspace_config_path and Path(self.current_workspace_config_path).exists())
         self.demo_request_panel.render_request(
             demo_request,
             control_state,
+            demo_control_state,
+            demo_round_control,
+            demo_round_state,
             workspace_path=workspace_path if workspace_ready else "",
         )
 

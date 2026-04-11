@@ -58,6 +58,7 @@ def test_demo_request_export_and_invoke_use_mocked_host_bridge(tmp_path: Path, m
     )
     assert result["status"] == "pass"
     assert result["dry_run"] is True
+    assert Path(result["request_json_path"]).exists()
     assert captured["command"] == "animation-preview"
     assert captured["dry_run"] is True
     assert captured["params"]["animation_asset_path"] == "/Game/RTG_MM_Attack_01_PMXPreview"

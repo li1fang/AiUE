@@ -251,6 +251,62 @@ What this sixth slice still does **not** do:
 - it still does not support free-form host commands beyond the current `E2` request surface
 - it is a cautious native invoke path, not a finished playable-demo shell
 
+Current seventh slice:
+
+- [latest_playable_demo_e2_credibility_report.json](C:/AiUE/Saved/verification/latest_playable_demo_e2_credibility_report.json)
+- [playable_demo_e2_control_state.json](C:/AiUE/Saved/demo/e2/latest/playable_demo_e2_control_state.json)
+- `status = pass`
+- `resolved_package_count = 2`
+- `invoke_count = 4`
+- `action_motion_verified = 2`
+- `animation_pose_verified = 2`
+- `2` reruns after the first full pass also remained `pass`
+
+What this seventh slice proves:
+
+- the native control path is now credible, not merely callable
+- `T2` can now:
+  - select a package
+  - select its action and animation presets
+  - invoke both through the native control seam
+  - read back machine-readable evidence into a latest control-state artifact
+- the current `2` ready bundles now have proof for:
+  - action motion credibility
+  - animation pose credibility
+  - artifact persistence
+  - `T2` readback
+
+What this seventh slice still does **not** do:
+
+- it still treats each invoke as a separate native action
+- it still does not provide session-level orchestration from a single native round control
+- it is a trusted native control loop, not yet a session roundtrip
+
+Current eighth slice:
+
+- [latest_playable_demo_e2_session_roundtrip_report.json](C:/AiUE/Saved/verification/latest_playable_demo_e2_session_roundtrip_report.json)
+- [playable_demo_e2_round_state.json](C:/AiUE/Saved/demo/e2/latest/playable_demo_e2_round_state.json)
+- `T2 --latest --demo-session-round-invoke --dump-state-json --exit-after-load` now exposes:
+  - `demo_round_control`
+  - `demo_round_state`
+- the Windows native workbench now provides:
+  - `Invoke Session Round`
+
+What this eighth slice proves:
+
+- `T2` can now orchestrate a full session-level round across the current `2` ready bundles
+- one native control action now drives:
+  - `2 x action_preview`
+  - `2 x animation_preview`
+- the result is persisted as a round-level latest artifact rather than only per-request latest artifacts
+- the session-level seam is now machine-readable enough for a dedicated `E2` gate to validate directly
+
+What this eighth slice still does **not** do:
+
+- it still does not provide a packaged playable shell
+- it still does not own free-form live session mutation inside UE
+- it is a native session roundtrip, not yet a richer playable loop
+
 Not in scope yet:
 
 - complex game loop

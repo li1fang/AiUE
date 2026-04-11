@@ -219,6 +219,9 @@ class DemoRequestPanel(QWidget):
         self.invoke_animation_request_button = QPushButton("Invoke Animation Request")
         self.invoke_animation_request_button.setObjectName("invokeAnimationRequestButton")
 
+        self.invoke_session_round_button = QPushButton("Invoke Session Round")
+        self.invoke_session_round_button.setObjectName("invokeSessionRoundButton")
+
         button_row = QHBoxLayout()
         button_row.addWidget(self.export_action_request_button)
         button_row.addWidget(self.export_animation_request_button)
@@ -226,11 +229,17 @@ class DemoRequestPanel(QWidget):
         button_row.addWidget(self.dry_run_animation_request_button)
         button_row.addWidget(self.invoke_action_request_button)
         button_row.addWidget(self.invoke_animation_request_button)
+        button_row.addWidget(self.invoke_session_round_button)
 
         self.demo_request_control_summary = QLabel("No demo request control operation yet")
         self.demo_request_control_summary.setObjectName("demoRequestControlSummaryLabel")
         self.demo_request_control_summary.setProperty("role", "muted")
         self.demo_request_control_summary.setWordWrap(True)
+
+        self.demo_control_state_summary = QLabel("No controlled demo runs yet")
+        self.demo_control_state_summary.setObjectName("demoControlStateSummaryLabel")
+        self.demo_control_state_summary.setProperty("role", "muted")
+        self.demo_control_state_summary.setWordWrap(True)
 
         self.demo_request_text = QPlainTextEdit()
         self.demo_request_text.setObjectName("demoRequestText")
@@ -240,17 +249,24 @@ class DemoRequestPanel(QWidget):
         self.demo_request_control_text.setObjectName("demoRequestControlText")
         self.demo_request_control_text.setReadOnly(True)
 
+        self.demo_control_state_text = QPlainTextEdit()
+        self.demo_control_state_text.setObjectName("demoControlStateText")
+        self.demo_control_state_text.setReadOnly(True)
+
         request_splitter = QSplitter(Qt.Vertical)
         request_splitter.addWidget(self.demo_request_text)
         request_splitter.addWidget(self.demo_request_control_text)
+        request_splitter.addWidget(self.demo_control_state_text)
         request_splitter.setStretchFactor(0, 2)
         request_splitter.setStretchFactor(1, 1)
+        request_splitter.setStretchFactor(2, 1)
 
         layout = QVBoxLayout(self)
         layout.addWidget(self.demo_request_summary)
         layout.addWidget(self.demo_request_workspace)
         layout.addLayout(button_row)
         layout.addWidget(self.demo_request_control_summary)
+        layout.addWidget(self.demo_control_state_summary)
         layout.addWidget(request_splitter)
 
     def bind_callbacks(
@@ -262,6 +278,7 @@ class DemoRequestPanel(QWidget):
         dry_run_animation,
         invoke_action,
         invoke_animation,
+        invoke_session_round,
     ) -> None:
         self.export_action_request_button.clicked.connect(export_action)
         self.export_animation_request_button.clicked.connect(export_animation)
@@ -269,11 +286,15 @@ class DemoRequestPanel(QWidget):
         self.dry_run_animation_request_button.clicked.connect(dry_run_animation)
         self.invoke_action_request_button.clicked.connect(invoke_action)
         self.invoke_animation_request_button.clicked.connect(invoke_animation)
+        self.invoke_session_round_button.clicked.connect(invoke_session_round)
 
     def render_request(
         self,
         demo_request: dict,
         control_state: dict,
+        demo_control_state: dict,
+        demo_round_control: dict,
+        demo_round_state: dict,
         *,
         workspace_path: str,
     ) -> None:
@@ -305,6 +326,36 @@ class DemoRequestPanel(QWidget):
         self.demo_request_control_summary.setText(" | ".join(control_parts))
         self.demo_request_control_text.setPlainText(json.dumps(control_state, ensure_ascii=False, indent=2))
 
+        selected_package_id = str(demo_request.get("selected_package_id") or "")
+        last_runs_by_package = dict(demo_control_state.get("last_runs_by_package") or {})
+        current_package_runs = dict(last_runs_by_package.get(selected_package_id) or {})
+        state_parts = [
+            f"Last Controlled Runs {str(demo_control_state.get('status') or 'missing').upper()}",
+            f"Package {selected_package_id or 'none'}",
+            f"Run Kinds {', '.join(sorted(current_package_runs)) if current_package_runs else 'none'}",
+        ]
+        if demo_round_control:
+            state_parts.append(f"Round {str(demo_round_control.get('status') or 'idle').upper()}")
+        self.demo_control_state_summary.setText(" | ".join(state_parts))
+        self.demo_control_state_text.setPlainText(
+            json.dumps(
+                {
+                    "status": demo_control_state.get("status"),
+                    "selected_package_id": demo_control_state.get("selected_package_id"),
+                    "selected_action_preset_id": demo_control_state.get("selected_action_preset_id"),
+                    "selected_animation_preset_id": demo_control_state.get("selected_animation_preset_id"),
+                    "package_run_counts": demo_control_state.get("package_run_counts"),
+                    "last_runs_for_selected_package": current_package_runs,
+                    "control_state_path": demo_control_state.get("control_state_path"),
+                    "round_control": demo_round_control,
+                    "round_state": demo_round_state,
+                    "errors": demo_control_state.get("errors"),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+
         request_kind_set = set(request_kinds)
         workspace_ready = bool(workspace_path)
         self.export_action_request_button.setEnabled("action_preview" in request_kind_set)
@@ -313,3 +364,6 @@ class DemoRequestPanel(QWidget):
         self.dry_run_animation_request_button.setEnabled("animation_preview" in request_kind_set and workspace_ready)
         self.invoke_action_request_button.setEnabled("action_preview" in request_kind_set and workspace_ready)
         self.invoke_animation_request_button.setEnabled("animation_preview" in request_kind_set and workspace_ready)
+        self.invoke_session_round_button.setEnabled(
+            "action_preview" in request_kind_set and "animation_preview" in request_kind_set and workspace_ready
+        )

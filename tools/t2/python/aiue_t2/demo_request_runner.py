@@ -152,6 +152,7 @@ def invoke_demo_request(
     result_json_path: str | Path | None = None,
     dry_run: bool = False,
 ) -> dict[str, Any]:
+    resolved_request_path = export_demo_request(selection)
     resolved_result_path = Path(result_json_path).expanduser().resolve() if result_json_path else default_result_json_path(selection, dry_run=dry_run)
     resolved_result_path.parent.mkdir(parents=True, exist_ok=True)
     request_payload = dict(selection.request_payload)
@@ -165,17 +166,21 @@ def invoke_demo_request(
         host_key=str(request_payload.get("host_key") or ""),
         dry_run=dry_run,
     )
+    host_payload = dict(invocation.get("payload") or {})
+    result_payload = dict(host_payload.get("result") or {})
+    result_status = str(result_payload.get("status") or host_payload.get("status") or "")
     return {
-        "status": "pass",
+        "status": "pass" if result_status == "pass" else "error",
         "request_kind": selection.request_kind,
         "dry_run": bool(dry_run),
         "selected_package_id": selection.selected_package_id,
         "selected_action_preset_id": selection.selected_action_preset_id,
         "selected_animation_preset_id": selection.selected_animation_preset_id,
         "request_payload": request_payload,
+        "request_json_path": str(resolved_request_path),
         "result_json_path": str(resolved_result_path),
         "host_key": invocation.get("host_key"),
-        "payload": invocation.get("payload"),
+        "payload": host_payload,
         "invocation": invocation.get("invocation"),
     }
 
