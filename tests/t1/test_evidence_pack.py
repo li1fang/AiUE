@@ -105,7 +105,7 @@ def test_build_evidence_pack_generates_static_bundle(tmp_path: Path):
     assert (latest_root / "index.html").exists()
     assert not (latest_root / "stale.txt").exists()
     assert manifest["slot_debugger"]["package_count"] == 1
-    assert manifest["report_index"]["counts"]["governance_line_reports"] == 1
+    assert manifest["report_index"]["counts"]["governance_line_reports"] == 2
     assert len(manifest["artifacts"]["preview_images"]) >= 4
     assert any(str(item.get("key") or "").startswith("q5c_") for item in list(manifest["artifacts"]["preview_images"] or []))
     assert any(str(item.get("key") or "").startswith("q5c_contrast_") for item in list(manifest["artifacts"]["preview_images"] or []))
@@ -120,3 +120,6 @@ def test_build_evidence_pack_generates_static_bundle(tmp_path: Path):
     assert q5c_summary["focus_package_id"]
     assert q5c_summary["focus_metric"]
     assert any(str(item.get("artifact_image_relative_path") or "").startswith("images/q5c_") for item in list(q5c_summary.get("packages") or []))
+    index_html = (output_root / "index.html").read_text(encoding="utf-8")
+    assert "Test Governance" in index_html
+    assert "manual_playable_demo_validation" in index_html

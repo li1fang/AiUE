@@ -208,6 +208,30 @@ class GovernanceBalanceRecord:
 
 
 @dataclass
+class TestGovernanceRecord:
+    status: str
+    checkpoint_ready: bool = False
+    required_lane_ids: list[str] = field(default_factory=list)
+    executed_lane_ids: list[str] = field(default_factory=list)
+    failed_lane_ids: list[str] = field(default_factory=list)
+    high_priority_blind_spot_ids: list[str] = field(default_factory=list)
+    report_gate_id: str = ""
+    report_source_path: str = ""
+
+    def to_dump_dict(self) -> dict[str, Any]:
+        return {
+            "status": self.status,
+            "checkpoint_ready": bool(self.checkpoint_ready),
+            "required_lane_ids": list(self.required_lane_ids),
+            "executed_lane_ids": list(self.executed_lane_ids),
+            "failed_lane_ids": list(self.failed_lane_ids),
+            "high_priority_blind_spot_ids": list(self.high_priority_blind_spot_ids),
+            "report_gate_id": self.report_gate_id,
+            "report_source_path": self.report_source_path,
+        }
+
+
+@dataclass
 class AppState:
     status: str
     manifest_path: str
@@ -221,6 +245,7 @@ class AppState:
     quality_summaries: dict[str, Any]
     slot_debugger: dict[str, Any]
     governance_balance: GovernanceBalanceRecord
+    test_governance: TestGovernanceRecord
     demo_session: DemoSessionRecord
     demo_request: DemoRequestRecord
     errors: list[ErrorRecord]
@@ -267,6 +292,7 @@ class AppState:
                 "package_ids": [str(item.get("package_id") or "") for item in slot_packages],
             },
             "governance_balance": self.governance_balance.to_dump_dict(),
+            "test_governance": self.test_governance.to_dump_dict(),
             "q5c_contrast_focus": build_q5c_contrast_focus(
                 self.quality_summaries,
                 selected_package_id=selected_package,

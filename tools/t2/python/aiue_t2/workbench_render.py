@@ -53,6 +53,7 @@ class WorkbenchRenderMixin:
         self.summary_cards["platform"].set_value(int(counts.get("platform_line_reports") or 0))
         self.summary_cards["governance"].set_value(int(counts.get("governance_line_reports") or 0))
         self.summary_cards["passing"].set_value(int(counts.get("passing_reports") or 0))
+        self._render_test_governance_summary()
         self._render_quality_summaries()
         self._render_report_tree()
         self._render_details()
@@ -71,6 +72,27 @@ class WorkbenchRenderMixin:
         lines = [f"[{error.code}] {error.message}" for error in self.app_state.errors]
         self.error_banner.setText("\n".join(lines))
         self.error_banner.setVisible(True)
+
+    def _render_test_governance_summary(self) -> None:
+        summary = self.app_state.test_governance
+        if summary.status == "missing":
+            self.test_governance_summary.setVisible(False)
+            self.test_governance_summary.setText("")
+            return
+        required_text = ", ".join(summary.required_lane_ids) if summary.required_lane_ids else "none"
+        blind_spot_text = (
+            ", ".join(summary.high_priority_blind_spot_ids)
+            if summary.high_priority_blind_spot_ids
+            else "none"
+        )
+        failed_text = ", ".join(summary.failed_lane_ids) if summary.failed_lane_ids else "none"
+        self.test_governance_summary.setText(
+            "Test Governance "
+            f"{summary.status.upper()} | checkpoint_ready {summary.checkpoint_ready} | "
+            f"required {required_text} | failed {failed_text} | "
+            f"high-priority blind spots {blind_spot_text}"
+        )
+        self.test_governance_summary.setVisible(True)
 
     def _render_quality_summaries(self) -> None:
         q5c_summary = dict((self.app_state.quality_summaries or {}).get("q5c_lite") or {})

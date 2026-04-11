@@ -31,6 +31,7 @@ PLATFORM_LINE_GATE_IDS = [
 
 GOVERNANCE_LINE_GATE_IDS = [
     "dynamic_balance_governance_progress",
+    "test_governance_round1",
 ]
 
 

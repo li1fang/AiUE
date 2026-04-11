@@ -13,15 +13,20 @@ def test_workbench_window_renders_fixture_pack(qtbot, tmp_path: Path):
     window = WorkbenchWindow(manifest_path=pack["manifest_path"])
     qtbot.addWidget(window)
     window.show()
-    qtbot.waitUntil(lambda: window.current_dump_payload()["summary_counts"]["reports"] == 8)
-    assert window.summary_cards["reports"].value_label.text() == "8"
-    assert window.summary_cards["governance"].value_label.text() == "1"
+    qtbot.waitUntil(lambda: window.current_dump_payload()["summary_counts"]["reports"] == 9)
+    assert window.summary_cards["reports"].value_label.text() == "9"
+    assert window.summary_cards["governance"].value_label.text() == "2"
     assert window.report_tree.topLevelItemCount() == 4
     assert window.metrics_table.rowCount() >= 1
     assert window.slot_table.rowCount() >= 3
     assert "visual_proof_v1" in window.details_text.toPlainText()
     assert "dynamic_balance_governance_progress" in window.current_dump_payload()["report_categories"]["governance_line"]
+    assert "test_governance_round1" in window.current_dump_payload()["report_categories"]["governance_line"]
     assert window.current_dump_payload()["governance_balance"]["status"] == "attention"
+    assert window.current_dump_payload()["test_governance"]["status"] == "attention"
+    assert window.test_governance_summary.isVisible() is True
+    assert "Test Governance ATTENTION" in window.test_governance_summary.text()
+    assert "manual_playable_demo_validation" in window.test_governance_summary.text()
     assert window.demo_session_package_list.count() == 1
     assert window.demo_action_preset_list.count() == 1
     assert window.demo_animation_preset_list.count() == 1

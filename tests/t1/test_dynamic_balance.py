@@ -71,13 +71,14 @@ def test_dynamic_balance_detects_pressure_and_recommendation():
             "generic_slot_abstraction_p1": {"status": "pass"},
             "clothing_vertical_slice_p2": {"status": "pass"},
             "visible_conflict_inspection_q5a": {"status": "pass"},
-            "volumetric_fit_inspection_q5b": {"status": "pass"},
-            "volumetric_fit_spatial_evidence_q5bx": {"status": "pass"},
-            "volumetric_inspection_q5c_lite": {"status": "pass"},
-            "fx_vertical_slice_p3": {"status": "pass"},
-            "multi_slot_composition_p4": {"status": "pass"},
-            "real_fx_item_kind_r2": {"status": "pass"},
-            "live_fx_visual_quality_r3": {"status": "pass"},
+                "volumetric_fit_inspection_q5b": {"status": "pass"},
+                "volumetric_fit_spatial_evidence_q5bx": {"status": "pass"},
+                "volumetric_inspection_q5c_lite": {"status": "pass"},
+                "q5c_lite_contrast_lab": {"status": "pass"},
+                "fx_vertical_slice_p3": {"status": "pass"},
+                "multi_slot_composition_p4": {"status": "pass"},
+                "real_fx_item_kind_r2": {"status": "pass"},
+                "live_fx_visual_quality_r3": {"status": "pass"},
         }
     }
     line_health = build_line_health(report_index)

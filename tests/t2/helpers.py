@@ -22,7 +22,10 @@ def materialize_report_fixtures(target_root: Path, *, include_governance: bool =
     target_root.mkdir(parents=True, exist_ok=True)
     placeholder_root = str(FIXTURE_ROOT).replace("\\", "/")
     for report_path in REPORT_FIXTURES.glob("*.json"):
-        if not include_governance and report_path.name == "latest_dynamic_balance_governance_progress_report.json":
+        if not include_governance and report_path.name in {
+            "latest_dynamic_balance_governance_progress_report.json",
+            "latest_test_governance_round1_report.json",
+        }:
             continue
         payload = load_json(report_path)
         serialized = json.dumps(payload)

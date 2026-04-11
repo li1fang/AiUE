@@ -1,0 +1,101 @@
+{
+  "ledger_id": "test_coverage_ledger_round1",
+  "version": 1,
+  "generated_policy": "manual_repo_truth",
+  "description": "Round-1 machine-readable coverage ledger for AiUE test governance.",
+  "coverage_axes": [
+    {
+      "axis_id": "kernel_host_minimum_visual",
+      "status": "covered",
+      "summary": "Kernel host minimum visual proof is covered by the current V1 latest report.",
+      "evidence_gate_ids": [
+        "visual_proof_v1"
+      ]
+    },
+    {
+      "axis_id": "demo_host_native_control",
+      "status": "covered",
+      "summary": "Demo host native control roundtrip is covered by the current E2/T2 request surface and latest demo evidence.",
+      "evidence_gate_ids": [
+        "playable_demo_e2_bootstrap",
+        "playable_demo_e2_credibility"
+      ]
+    },
+    {
+      "axis_id": "ready_bundle_count",
+      "status": "partial",
+      "summary": "Current verification focuses on the two known ready bundles, not arbitrary bundle scale.",
+      "evidence_gate_ids": [
+        "demo_cross_bundle_regression_d12",
+        "showcase_demo_e1"
+      ]
+    },
+    {
+      "axis_id": "character_variant_diversity",
+      "status": "partial",
+      "summary": "Two ready bundles are exercised, but broad character diversity is not yet established.",
+      "evidence_gate_ids": [
+        "demo_cross_bundle_regression_d12",
+        "showcase_demo_e1"
+      ]
+    },
+    {
+      "axis_id": "weapon_variant_diversity",
+      "status": "partial",
+      "summary": "Weapon flow is proven on the current ready path, but not across a wider asset variety.",
+      "evidence_gate_ids": [
+        "generic_slot_abstraction_p1",
+        "multi_slot_composition_p4"
+      ]
+    },
+    {
+      "axis_id": "clothing_fixture_diversity",
+      "status": "partial",
+      "summary": "Clothing coverage exists, but it is still centered on the current hair fixture path.",
+      "evidence_gate_ids": [
+        "clothing_vertical_slice_p2",
+        "visible_conflict_inspection_q5a",
+        "volumetric_fit_inspection_q5b"
+      ]
+    },
+    {
+      "axis_id": "fx_fixture_diversity",
+      "status": "partial",
+      "summary": "FX coverage exists, but only on the current controlled fixture path.",
+      "evidence_gate_ids": [
+        "fx_vertical_slice_p3",
+        "live_fx_visual_quality_r3"
+      ]
+    },
+    {
+      "axis_id": "material_texture_loading",
+      "status": "missing",
+      "summary": "Material and texture loading have not yet been promoted into the primary verified path.",
+      "evidence_gate_ids": []
+    },
+    {
+      "axis_id": "manual_playable_demo_validation",
+      "status": "missing",
+      "summary": "The playable demo path is exercised through tests, but has not yet been manually validated as a played demo.",
+      "evidence_gate_ids": []
+    },
+    {
+      "axis_id": "action_variation",
+      "status": "partial",
+      "summary": "Action preview is proven on a fixed verified path, but broader action variation is not yet covered.",
+      "evidence_gate_ids": [
+        "playable_demo_e2_credibility",
+        "showcase_demo_e1"
+      ]
+    },
+    {
+      "axis_id": "animation_variation",
+      "status": "partial",
+      "summary": "Animation preview is proven on selected presets, not across a wider animation family surface.",
+      "evidence_gate_ids": [
+        "demo_retargeted_animation_preview_d8",
+        "showcase_demo_e1"
+      ]
+    }
+  ]
+}

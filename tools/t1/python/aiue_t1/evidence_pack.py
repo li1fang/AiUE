@@ -22,7 +22,7 @@ a { color: #93c5fd; }
 .card { background: #111827; border: 1px solid #334155; border-radius: 12px; padding: 16px; }
 .status-pass { color: #86efac; }
 .status-fail { color: #fca5a5; }
-.status-unknown, .status-error { color: #fcd34d; }
+.status-unknown, .status-error, .status-attention { color: #fcd34d; }
 .artifact-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
 .artifact { background: #111827; border: 1px solid #334155; border-radius: 12px; padding: 12px; }
 .artifact img { width: 100%; border-radius: 8px; background: #020617; }
@@ -406,6 +406,69 @@ def _render_balance_card(report_index: dict) -> str:
     )
 
 
+def _render_test_governance_card(report_index: dict) -> str:
+    governance_report = dict((dict(report_index.get("reports_by_gate_id") or {}).get("test_governance_round1") or {}).get("report") or {})
+    if not governance_report:
+        return "<p class=\"muted\">No test governance report was available.</p>"
+    checkpoint_readiness = dict(governance_report.get("checkpoint_readiness") or {})
+    required_lane_ids = [str(item) for item in list(governance_report.get("required_lane_ids") or []) if str(item)]
+    high_priority_blind_spot_ids = [
+        str(item)
+        for item in list(checkpoint_readiness.get("high_priority_blind_spot_ids") or [])
+        if str(item)
+    ]
+    return (
+        "<article class=\"card\">"
+        f"<h3>Test Governance</h3>"
+        f"<p><strong>Status:</strong> {html.escape(str(governance_report.get('status') or 'unknown'))}</p>"
+        f"<p><strong>Checkpoint Ready:</strong> {html.escape(str(bool(checkpoint_readiness.get('ready'))))}</p>"
+        f"<p><strong>Required Lanes:</strong> {html.escape(', '.join(required_lane_ids) if required_lane_ids else 'none')}</p>"
+        f"<p><strong>High-Priority Blind Spots:</strong> {html.escape(', '.join(high_priority_blind_spot_ids) if high_priority_blind_spot_ids else 'none')}</p>"
+        "</article>"
+    )
+
+
+def _render_test_governance_summary(report_index: dict) -> str:
+    governance_report = dict((dict(report_index.get("reports_by_gate_id") or {}).get("test_governance_round1") or {}).get("report") or {})
+    if not governance_report:
+        return "<p class=\"muted\">No test governance blind-spot summary was available.</p>"
+    coverage_summary = dict(governance_report.get("coverage_summary") or {})
+    checkpoint_readiness = dict(governance_report.get("checkpoint_readiness") or {})
+    executed_lane_results = list(governance_report.get("executed_lane_results") or [])
+    known_blind_spots = list(governance_report.get("known_blind_spots") or [])
+    lane_rows = "".join(
+        "<tr>"
+        f"<td><code>{html.escape(str(item.get('lane_id') or ''))}</code></td>"
+        f"<td>{html.escape(str(item.get('status') or 'unknown'))}</td>"
+        f"<td>{html.escape(str(item.get('returncode') if item.get('returncode') is not None else 'n/a'))}</td>"
+        "</tr>"
+        for item in executed_lane_results
+    ) or "<tr><td colspan=\"3\" class=\"muted\">No lanes were executed.</td></tr>"
+    blind_spot_rows = "".join(
+        "<tr>"
+        f"<td><code>{html.escape(str(item.get('axis_id') or ''))}</code></td>"
+        f"<td>{html.escape(str(item.get('status') or 'unknown'))}</td>"
+        f"<td>{html.escape(str(item.get('priority') or 'normal'))}</td>"
+        "</tr>"
+        for item in known_blind_spots
+    ) or "<tr><td colspan=\"3\" class=\"muted\">No blind spots were recorded.</td></tr>"
+    return (
+        "<article class=\"card\">"
+        f"<p><strong>Blind Spots:</strong> {int(coverage_summary.get('blind_spot_count') or 0)} | "
+        f"<strong>High-Priority Missing:</strong> {int(coverage_summary.get('high_priority_missing_count') or 0)} | "
+        f"<strong>Checkpoint Ready:</strong> {html.escape(str(bool(checkpoint_readiness.get('ready'))))}</p>"
+        "<h3>Required Lane Results</h3>"
+        "<table><thead><tr><th>Lane</th><th>Status</th><th>Return Code</th></tr></thead><tbody>"
+        f"{lane_rows}"
+        "</tbody></table>"
+        "<h3>Known Blind Spots</h3>"
+        "<table><thead><tr><th>Axis</th><th>Status</th><th>Priority</th></tr></thead><tbody>"
+        f"{blind_spot_rows}"
+        "</tbody></table>"
+        "</article>"
+    )
+
+
 def _render_slot_debugger(slot_debugger: dict) -> str:
     blocks = []
     for package in list(slot_debugger.get("packages") or []):
@@ -474,8 +537,8 @@ def _render_q5c_quality_summary(quality_summaries: dict) -> str:
     )
 
 
-def _render_html(manifest: dict) -> str:
-    report_index = dict(manifest.get("report_index") or {})
+def _render_html(manifest: dict, *, report_index: dict | None = None) -> str:
+    report_index = dict(report_index or manifest.get("report_index") or {})
     categories = dict(report_index.get("categories") or {})
     preview_artifacts = list(manifest.get("artifacts", {}).get("preview_images") or [])
     slot_debugger = dict(manifest.get("slot_debugger") or {})
@@ -488,7 +551,8 @@ def _render_html(manifest: dict) -> str:
 <h1>AiUE T1 Evidence Pack</h1>
 <p class="muted">Generated at {html.escape(str(manifest.get('generated_at_utc') or ''))}</p>
 <section class="section"><h2>Summary</h2><div class="grid cards"><article class="card"><h3>Reports</h3><p>{int(counts.get('reports') or 0)}</p></article><article class="card"><h3>Active Line</h3><p>{int(counts.get('active_line_reports') or 0)}</p></article><article class="card"><h3>Platform Line</h3><p>{int(counts.get('platform_line_reports') or 0)}</p></article><article class="card"><h3>Governance Line</h3><p>{int(counts.get('governance_line_reports') or 0)}</p></article><article class="card"><h3>Passing Reports</h3><p>{int(counts.get('passing_reports') or 0)}</p></article></div></section>
-<section class="section"><h2>Balance</h2>{_render_balance_card(report_index)}</section>
+<section class="section"><h2>Governance</h2><div class="grid cards">{_render_balance_card(report_index)}{_render_test_governance_card(report_index)}</div></section>
+<section class="section"><h2>Test Coverage / Blind Spots</h2>{_render_test_governance_summary(report_index)}</section>
 <section class="section"><h2>Active Line Reports</h2><div class="grid cards">{_render_report_cards(list(categories.get('active_line') or []))}</div></section>
 <section class="section"><h2>Platform Line Reports</h2><div class="grid cards">{_render_report_cards(list(categories.get('platform_line') or []))}</div></section>
 <section class="section"><h2>Governance Line Reports</h2><div class="grid cards">{_render_report_cards(list(categories.get('governance_line') or []))}</div></section>
@@ -541,7 +605,7 @@ def build_evidence_pack(*, verification_root: Path, output_root: Path | None, la
     }
 
     (assets_dir / "style.css").write_text(STYLE_CSS.strip() + "\n", encoding="utf-8")
-    (run_root / "index.html").write_text(_render_html(manifest), encoding="utf-8")
+    (run_root / "index.html").write_text(_render_html(manifest, report_index=report_index), encoding="utf-8")
     write_json(run_root / "manifest.json", manifest)
 
     _refresh_latest_root(run_root=run_root, latest_root=latest_root)

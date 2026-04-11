@@ -1,0 +1,126 @@
+{
+  "gate_id": "test_governance_round1",
+  "status": "attention",
+  "generated_at_utc": "2026-04-12T02:30:00+00:00",
+  "workflow_pack": "tooling",
+  "compatibility": {
+    "schema_family": "aiue_test_governance_report",
+    "channel": "alpha"
+  },
+  "repo_state": {
+    "repo_root": "C:\\AiUE",
+    "branch": "codex/q5-quality-stack",
+    "head_commit": "fixture",
+    "head_subject": "feat(governance): add test governance fixture",
+    "status_short": "## codex/q5-quality-stack",
+    "dirty": false,
+    "change_source": "worktree",
+    "changed_paths": [
+      "tools/t2/python/aiue_t2/state.py",
+      "tests/t2/test_state.py"
+    ]
+  },
+  "coverage_summary": {
+    "covered_count": 2,
+    "partial_count": 7,
+    "missing_count": 2,
+    "blind_spot_count": 9,
+    "high_priority_missing_count": 2
+  },
+  "coverage_axes": [
+    {
+      "axis_id": "kernel_host_minimum_visual",
+      "status": "covered",
+      "summary": "Kernel minimum visual coverage is established."
+    },
+    {
+      "axis_id": "demo_host_native_control",
+      "status": "covered",
+      "summary": "Demo host native control is established."
+    },
+    {
+      "axis_id": "material_texture_loading",
+      "status": "missing",
+      "summary": "Material and texture loading are not yet part of the main verified path."
+    },
+    {
+      "axis_id": "manual_playable_demo_validation",
+      "status": "missing",
+      "summary": "Playable demo has not yet been manually validated."
+    }
+  ],
+  "known_blind_spots": [
+    {
+      "axis_id": "material_texture_loading",
+      "status": "missing",
+      "priority": "high"
+    },
+    {
+      "axis_id": "manual_playable_demo_validation",
+      "status": "missing",
+      "priority": "high"
+    },
+    {
+      "axis_id": "weapon_variant_diversity",
+      "status": "partial",
+      "priority": "normal"
+    }
+  ],
+  "lane_policy": {
+    "change_source_default": "worktree",
+    "required_base_lane_ids": [
+      "repo_surface",
+      "schema_contracts"
+    ],
+    "recommended_t2_default_paths": [
+      "tools/t2/python/aiue_t2/state.py",
+      "tools/t2/python/aiue_t2/ui.py",
+      "tools/t2/python/aiue_t2/ui_demo.py",
+      "tools/t2/python/aiue_t2/workbench_demo_ops.py"
+    ]
+  },
+  "required_lane_ids": [
+    "repo_surface",
+    "schema_contracts",
+    "t2_smoke"
+  ],
+  "recommended_lane_ids": [
+    "t2_default"
+  ],
+  "executed_lane_results": [
+    {
+      "lane_id": "repo_surface",
+      "status": "pass",
+      "returncode": 0
+    },
+    {
+      "lane_id": "schema_contracts",
+      "status": "pass",
+      "returncode": 0
+    },
+    {
+      "lane_id": "t2_smoke",
+      "status": "pass",
+      "returncode": 0
+    }
+  ],
+  "checkpoint_readiness": {
+    "ready": false,
+    "failed_required_lane_ids": [],
+    "high_priority_blind_spot_ids": [
+      "material_texture_loading",
+      "manual_playable_demo_validation"
+    ],
+    "reasons": [
+      "high_priority_blind_spots_missing"
+    ]
+  },
+  "discussion_signal": {
+    "should_discuss": true,
+    "reason": "high_priority_blind_spots_missing"
+  },
+  "artifacts": {
+    "report_path": "C:\\AiUE\\Saved\\verification\\test_governance_round1_fixture\\test_governance_round1_report.json",
+    "latest_report_path": "C:\\AiUE\\Saved\\verification\\latest_test_governance_round1_report.json"
+  }
+}

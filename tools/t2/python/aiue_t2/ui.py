@@ -25,6 +25,7 @@ from aiue_t2.state import (
     DemoRequestRecord,
     DemoSessionRecord,
     GovernanceBalanceRecord,
+    TestGovernanceRecord,
     ViewState,
     build_default_view_state,
     load_workbench_state,
@@ -140,6 +141,7 @@ class WorkbenchWindow(WorkbenchRenderMixin, WorkbenchDemoOpsMixin, QMainWindow):
             },
             slot_debugger={"package_count": 0, "packages": []},
             governance_balance=GovernanceBalanceRecord(status="missing"),
+            test_governance=TestGovernanceRecord(status="missing"),
             demo_session=DemoSessionRecord(
                 status="missing",
                 session_manifest_path="",
@@ -229,6 +231,14 @@ class WorkbenchWindow(WorkbenchRenderMixin, WorkbenchDemoOpsMixin, QMainWindow):
         for card in self.summary_cards.values():
             summary_layout.addWidget(card)
         root_layout.addLayout(summary_layout)
+
+        self.test_governance_summary = QLabel("")
+        self.test_governance_summary.setObjectName("testGovernanceSummary")
+        self.test_governance_summary.setWordWrap(True)
+        self.test_governance_summary.setProperty("role", "muted")
+        self.test_governance_summary.setStyleSheet("padding: 0 2px 6px 2px;")
+        self.test_governance_summary.setVisible(False)
+        root_layout.addWidget(self.test_governance_summary)
 
         self.q5c_quality_summary = QLabel("")
         self.q5c_quality_summary.setObjectName("q5cQualitySummary")

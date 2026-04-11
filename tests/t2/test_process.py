@@ -51,12 +51,14 @@ def test_workbench_cli_seven_open_cycles(tmp_path: Path):
         completed, payload = run_workbench_process(manifest_path=pack["manifest_path"])
         assert completed.returncode == 0, completed.stderr
         assert payload["status"] == "pass"
-        assert payload["summary_counts"]["reports"] == 8
+        assert payload["summary_counts"]["reports"] == 9
         assert payload["summary_counts"]["active_line_reports"] == 4
         assert payload["summary_counts"]["platform_line_reports"] == 3
-        assert payload["summary_counts"]["governance_line_reports"] == 1
+        assert payload["summary_counts"]["governance_line_reports"] == 2
         assert payload["slot_debugger"]["package_count"] == 1
         assert payload["governance_balance"]["status"] == "attention"
+        assert payload["test_governance"]["status"] == "attention"
+        assert payload["test_governance"]["checkpoint_ready"] is False
         assert payload["quality_summaries"]["q5c_lite"]["status"] == "missing"
         assert payload["demo_session"]["status"] == "pass"
         assert payload["demo_session"]["package_ids"] == ["pkg_alpha"]
@@ -103,6 +105,7 @@ def test_workbench_cli_reads_latest_manifest_smoke():
     assert payload["summary_counts"]["governance_line_reports"] >= 0
     assert payload["slot_debugger"]["package_count"] >= 1
     assert payload["governance_balance"]["status"] in {"pass", "attention", "missing"}
+    assert payload["test_governance"]["status"] in {"pass", "attention", "missing"}
     assert payload["demo_session"]["status"] in {"pass", "missing"}
     assert payload["demo_request"]["status"] in {"pass", "missing", "error"}
     assert payload["demo_review_replay_state"]["status"] in {"pass", "missing", "error"}
@@ -139,6 +142,7 @@ def test_workbench_cli_handles_missing_governance_report(tmp_path: Path):
     assert payload["status"] == "pass"
     assert payload["summary_counts"]["governance_line_reports"] == 0
     assert payload["governance_balance"]["status"] == "missing"
+    assert payload["test_governance"]["status"] == "missing"
 
 
 def test_workbench_cli_reads_q5c_quality_summary(tmp_path: Path):
