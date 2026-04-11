@@ -6,6 +6,7 @@ param(
     [string]$WorkspaceConfig = "",
     [switch]$DemoRequestExport,
     [switch]$DemoRequestDryRun,
+    [switch]$DemoRequestInvoke,
     [ValidateSet("action_preview", "animation_preview")]
     [string]$DemoRequestKind = "action_preview",
     [switch]$DumpStateJson,
@@ -43,6 +44,9 @@ if ($DemoRequestExport) {
 }
 if ($DemoRequestDryRun) {
     $args += "--demo-request-dry-run"
+}
+if ($DemoRequestInvoke) {
+    $args += "--demo-request-invoke"
 }
 if ($DemoRequestKind) {
     $args += @("--demo-request-kind", $DemoRequestKind)

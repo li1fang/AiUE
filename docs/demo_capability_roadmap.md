@@ -219,6 +219,38 @@ What this fifth slice still does **not** do:
 - it still does not provide general-purpose UE operation controls
 - it is a native control surface for `export + dry-run`, not a complete playable shell
 
+Current sixth slice:
+
+- `T2` now extends the same native control surface from `export + dry-run` to explicit `invoke`
+- the Windows native workbench now provides:
+  - `Invoke Action Request`
+  - `Invoke Animation Request`
+- `T2 --dump-state-json --exit-after-load` can now also surface invoke results when called with:
+  - `--demo-request-invoke`
+  - `--demo-request-kind action_preview|animation_preview`
+- `demo_request_control` now carries additional execution fields:
+  - `dry_run`
+  - `result_status`
+  - `invocation_returncode`
+
+What this sixth slice proves:
+
+- the native workbench can now issue the currently selected playable-demo request through the same stateful control seam it already used for export and dry-run
+- the request path remains deterministic and testable because:
+  - request lowering is unchanged
+  - invocation still routes through the existing repo-local runner path
+  - the control result still lands in the same machine-readable state surface
+- `T2` is now able to expose all three control stages:
+  - request export
+  - request dry-run
+  - request invoke
+
+What this sixth slice still does **not** do:
+
+- it still does not provide full session orchestration
+- it still does not support free-form host commands beyond the current `E2` request surface
+- it is a cautious native invoke path, not a finished playable-demo shell
+
 Not in scope yet:
 
 - complex game loop

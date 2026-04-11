@@ -73,3 +73,12 @@ def test_workbench_window_demo_request_controls(qtbot, tmp_path: Path, monkeypat
     assert payload["demo_request_control"]["request_kind"] == "animation_preview"
     assert payload["demo_request_control"]["host_key"] == "demo"
     assert payload["demo_request_control"]["workspace_config_path"] == str(workspace_config_path.resolve())
+    assert payload["demo_request_control"]["dry_run"] is True
+
+    qtbot.mouseClick(window.invoke_action_request_button, Qt.LeftButton)
+    payload = window.current_dump_payload()
+    assert payload["demo_request_control"]["status"] == "pass"
+    assert payload["demo_request_control"]["operation"] == "invoke"
+    assert payload["demo_request_control"]["request_kind"] == "action_preview"
+    assert payload["demo_request_control"]["host_key"] == "demo"
+    assert payload["demo_request_control"]["dry_run"] is False

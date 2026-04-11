@@ -167,6 +167,7 @@ def run_workbench_process(
     workspace_config_path: Path | None = None,
     demo_request_export: bool = False,
     demo_request_dry_run: bool = False,
+    demo_request_invoke: bool = False,
     demo_request_kind: str | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], dict]:
     command = [
@@ -191,6 +192,8 @@ def run_workbench_process(
         command += ["-DemoRequestExport"]
     if demo_request_dry_run:
         command += ["-DemoRequestDryRun"]
+    if demo_request_invoke:
+        command += ["-DemoRequestInvoke"]
     if demo_request_kind is not None:
         command += ["-DemoRequestKind", str(demo_request_kind)]
     env = os.environ.copy()

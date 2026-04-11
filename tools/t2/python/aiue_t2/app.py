@@ -22,6 +22,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--workspace-config", help="Workspace config path for controlled demo request dry-runs.")
     parser.add_argument("--demo-request-export", action="store_true", help="Export the currently selected E2 demo request.")
     parser.add_argument("--demo-request-dry-run", action="store_true", help="Dry-run the currently selected E2 demo request.")
+    parser.add_argument("--demo-request-invoke", action="store_true", help="Invoke the currently selected E2 demo request.")
     parser.add_argument(
         "--demo-request-kind",
         choices=["action_preview", "animation_preview"],
@@ -59,6 +60,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.demo_request_dry_run:
         operation_requested = True
         window.dry_run_current_demo_request(
+            request_kind=args.demo_request_kind,
+            workspace_config_path=Path(args.workspace_config).expanduser().resolve() if args.workspace_config else None,
+        )
+        app.processEvents()
+    if args.demo_request_invoke:
+        operation_requested = True
+        window.invoke_current_demo_request(
             request_kind=args.demo_request_kind,
             workspace_config_path=Path(args.workspace_config).expanduser().resolve() if args.workspace_config else None,
         )
