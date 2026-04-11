@@ -34,12 +34,14 @@ def test_q5c_lite_passes_for_local_fit_fixture():
 
     assert result["status"] == "pass"
     assert result["quality_class"] == "pass"
+    assert result["fit_diagnostic_class"] == "pass_stable"
     assert result["embedding_ratio"] >= 0.82
     assert result["floating_ratio"] <= 0.18
     assert result["penetration_clusters"] == []
     assert result["body_bounds_world"]["source"] == "fixture_body"
     assert result["local_fit_intersection"]["volume"] > 0.0
     assert result["penetration_intersection"]["volume"] == 0.0
+    assert result["diagnostic_signals"]["penetration_ratio_exceeded"] is False
 
 
 def test_q5c_lite_detects_penetration_cluster():
@@ -51,6 +53,11 @@ def test_q5c_lite_detects_penetration_cluster():
     assert result["status"] == "fail"
     assert result["quality_class"] == "fail"
     assert result["penetration_clusters"]
+    assert result["fit_diagnostic_class"] == "mixed_penetration_and_floating"
+    assert result["diagnostic_signals"]["penetration_ratio_exceeded"] is True
+    assert result["diagnostic_signals"]["floating_ratio_exceeded"] is True
+    assert result["penetration_clusters"][0]["cluster_class"] == "body_keepout_overlap"
+    assert result["penetration_clusters"][0]["excess_ratio"] > 0.0
 
 
 def test_q5c_lite_detects_floating_fit():
@@ -60,4 +67,17 @@ def test_q5c_lite_detects_floating_fit():
     result = analyze_q5c_lite(host_result=host_result)
 
     assert result["status"] == "fail"
+    assert result["fit_diagnostic_class"] == "floating_fit_out_of_range"
+    assert result["diagnostic_signals"]["penetration_ratio_exceeded"] is False
     assert "fit_envelope_mismatch" in result["failed_requirements"] or "floating_ratio_exceeded" in result["failed_requirements"]
+
+
+def test_q5c_lite_detects_input_invalid():
+    host_result = _host_result_fixture()
+    host_result["slot_component"]["attach"] = {}
+
+    result = analyze_q5c_lite(host_result=host_result)
+
+    assert result["status"] == "fail"
+    assert result["fit_diagnostic_class"] == "input_invalid"
+    assert "anchor_frame_missing" in result["failed_requirements"]

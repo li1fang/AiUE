@@ -28,6 +28,58 @@ DEFAULT_THRESHOLDS = {
 }
 
 
+def _threshold_deltas(*, embedding_ratio: float, floating_ratio: float, penetration_ratio: float, thresholds: dict) -> dict:
+    return {
+        "embedding_ratio_delta_to_min": float(embedding_ratio - float(thresholds["min_embedding_ratio"])),
+        "floating_ratio_delta_to_max": float(floating_ratio - float(thresholds["max_floating_ratio"])),
+        "penetration_ratio_delta_to_max": float(penetration_ratio - float(thresholds["max_penetration_ratio"])),
+    }
+
+
+def _diagnostic_signals(
+    *,
+    embedding_ratio: float,
+    floating_ratio: float,
+    penetration_ratio: float,
+    thresholds: dict,
+) -> dict:
+    embedding_ratio_below_threshold = bool(embedding_ratio < float(thresholds["min_embedding_ratio"]))
+    floating_ratio_exceeded = bool(floating_ratio > float(thresholds["max_floating_ratio"]))
+    penetration_ratio_exceeded = bool(penetration_ratio > float(thresholds["max_penetration_ratio"]))
+    borderline_fit = bool(
+        not embedding_ratio_below_threshold
+        and not floating_ratio_exceeded
+        and not penetration_ratio_exceeded
+        and (
+            embedding_ratio < float(thresholds["min_embedding_ratio"]) + 0.05
+            or floating_ratio > float(thresholds["max_floating_ratio"]) * 0.75
+        )
+    )
+    return {
+        "embedding_ratio_below_threshold": embedding_ratio_below_threshold,
+        "floating_ratio_exceeded": floating_ratio_exceeded,
+        "penetration_ratio_exceeded": penetration_ratio_exceeded,
+        "borderline_fit": borderline_fit,
+    }
+
+
+def _fit_diagnostic_class(*, input_invalid: bool, diagnostic_signals: dict) -> str:
+    if input_invalid:
+        return "input_invalid"
+    if bool(diagnostic_signals.get("penetration_ratio_exceeded")) and (
+        bool(diagnostic_signals.get("floating_ratio_exceeded"))
+        or bool(diagnostic_signals.get("embedding_ratio_below_threshold"))
+    ):
+        return "mixed_penetration_and_floating"
+    if bool(diagnostic_signals.get("penetration_ratio_exceeded")):
+        return "penetration_keepout_overlap"
+    if bool(diagnostic_signals.get("floating_ratio_exceeded")) or bool(diagnostic_signals.get("embedding_ratio_below_threshold")):
+        return "floating_fit_out_of_range"
+    if bool(diagnostic_signals.get("borderline_fit")):
+        return "pass_borderline"
+    return "pass_stable"
+
+
 def analyze_q5c_lite(*, host_result: dict, thresholds: dict | None = None) -> dict:
     cfg = dict(DEFAULT_THRESHOLDS)
     cfg.update(dict(thresholds or {}))
@@ -50,6 +102,18 @@ def analyze_q5c_lite(*, host_result: dict, thresholds: dict | None = None) -> di
         return {
             "status": "fail",
             "failed_requirements": sorted(set(failed_requirements)),
+            "fit_diagnostic_class": _fit_diagnostic_class(input_invalid=True, diagnostic_signals={}),
+            "diagnostic_signals": {
+                "embedding_ratio_below_threshold": False,
+                "floating_ratio_exceeded": True,
+                "penetration_ratio_exceeded": False,
+                "borderline_fit": False,
+            },
+            "threshold_deltas": {
+                "embedding_ratio_delta_to_min": float(0.0 - float(cfg["min_embedding_ratio"])),
+                "floating_ratio_delta_to_max": float(1.0 - float(cfg["max_floating_ratio"])),
+                "penetration_ratio_delta_to_max": float(0.0 - float(cfg["max_penetration_ratio"])),
+            },
             "embedding_ratio": 0.0,
             "floating_ratio": 1.0,
             "penetration_clusters": [],
@@ -103,27 +167,49 @@ def analyze_q5c_lite(*, host_result: dict, thresholds: dict | None = None) -> di
     embedding_ratio = clamp01(float(local_fit_intersection["volume"]) / slot_volume)
     floating_ratio = clamp01(1.0 - embedding_ratio)
     penetration_ratio = clamp01(float(penetration_intersection["volume"]) / slot_volume)
+    diagnostic_signals = _diagnostic_signals(
+        embedding_ratio=embedding_ratio,
+        floating_ratio=floating_ratio,
+        penetration_ratio=penetration_ratio,
+        thresholds=cfg,
+    )
+    threshold_deltas = _threshold_deltas(
+        embedding_ratio=embedding_ratio,
+        floating_ratio=floating_ratio,
+        penetration_ratio=penetration_ratio,
+        thresholds=cfg,
+    )
     penetration_clusters = []
-    if penetration_ratio > float(cfg["max_penetration_ratio"]):
+    if bool(diagnostic_signals["penetration_ratio_exceeded"]):
         penetration_clusters.append(
             {
                 "cluster_id": "body_top_keepout_overlap",
+                "cluster_class": "body_keepout_overlap",
+                "source_envelope": "q5c_body_keepout_envelope",
                 "severity": "fail",
                 "volume_ratio": float(penetration_ratio),
                 "overlap_volume": float(penetration_intersection["volume"]),
+                "threshold_ratio": float(cfg["max_penetration_ratio"]),
+                "excess_ratio": float(max(penetration_ratio - float(cfg["max_penetration_ratio"]), 0.0)),
+                "intersection": penetration_intersection,
             }
         )
 
-    if embedding_ratio < float(cfg["min_embedding_ratio"]):
+    if bool(diagnostic_signals["embedding_ratio_below_threshold"]):
         failed_requirements.append("fit_envelope_mismatch")
-    if floating_ratio > float(cfg["max_floating_ratio"]):
+    if bool(diagnostic_signals["floating_ratio_exceeded"]):
         failed_requirements.append("floating_ratio_exceeded")
     if penetration_clusters:
         failed_requirements.append("penetration_clusters_present")
 
+    fit_diagnostic_class = _fit_diagnostic_class(
+        input_invalid=False,
+        diagnostic_signals=diagnostic_signals,
+    )
+
     if failed_requirements:
         quality_class = "fail"
-    elif embedding_ratio < float(cfg["min_embedding_ratio"]) + 0.05 or floating_ratio > float(cfg["max_floating_ratio"]) * 0.75:
+    elif bool(diagnostic_signals["borderline_fit"]):
         quality_class = "warn"
     else:
         quality_class = "pass"
@@ -131,6 +217,9 @@ def analyze_q5c_lite(*, host_result: dict, thresholds: dict | None = None) -> di
     return {
         "status": "pass" if not failed_requirements else "fail",
         "failed_requirements": sorted(set(failed_requirements)),
+        "fit_diagnostic_class": fit_diagnostic_class,
+        "diagnostic_signals": diagnostic_signals,
+        "threshold_deltas": threshold_deltas,
         "embedding_ratio": float(embedding_ratio),
         "floating_ratio": float(floating_ratio),
         "penetration_clusters": penetration_clusters,

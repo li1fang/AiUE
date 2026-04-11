@@ -147,6 +147,7 @@ def render_q5c_lite_debug_image(
     summary_lines = [
         f"Status: {str(analysis.get('status') or 'unknown').upper()}",
         f"Quality: {quality_class.upper()}",
+        f"Diagnostic: {str(analysis.get('fit_diagnostic_class') or 'unknown')}",
         f"Embedding: {float(analysis.get('embedding_ratio') or 0.0):.3f}",
         f"Floating: {float(analysis.get('floating_ratio') or 0.0):.3f}",
         f"Penetration: {float(analysis.get('penetration_ratio') or 0.0):.3f}",

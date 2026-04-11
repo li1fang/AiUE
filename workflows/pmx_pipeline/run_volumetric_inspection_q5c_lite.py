@@ -74,6 +74,7 @@ def evaluate_package(package_result: dict, *, output_root: Path) -> tuple[dict, 
                 "host_blueprint_asset": package_result.get("host_blueprint_asset"),
                 "status": "fail",
                 "quality_class": "fail",
+                "fit_diagnostic_class": "input_invalid",
                 "failed_requirements": failed_requirements,
                 "artifacts": {"q5a_host_result_path": host_result_path},
             },
@@ -107,6 +108,7 @@ def evaluate_package(package_result: dict, *, output_root: Path) -> tuple[dict, 
                 "Q5C-lite detected a local volumetric fit issue for the fixed hair fixture.",
                 package_id=package_id,
                 quality_class=analysis.get("quality_class"),
+                fit_diagnostic_class=analysis.get("fit_diagnostic_class"),
             )
         )
 
@@ -119,6 +121,9 @@ def evaluate_package(package_result: dict, *, output_root: Path) -> tuple[dict, 
             "clothing_attach_state": dict(package_result.get("clothing_attach_state") or {}),
             "status": "pass" if not failed_requirements else "fail",
             "quality_class": str(analysis.get("quality_class") or "fail"),
+            "fit_diagnostic_class": str(analysis.get("fit_diagnostic_class") or "unknown"),
+            "diagnostic_signals": dict(analysis.get("diagnostic_signals") or {}),
+            "threshold_deltas": dict(analysis.get("threshold_deltas") or {}),
             "embedding_ratio": float(analysis.get("embedding_ratio") or 0.0),
             "floating_ratio": float(analysis.get("floating_ratio") or 0.0),
             "local_fit_volume": float(analysis.get("local_fit_volume") or 0.0),
@@ -188,6 +193,10 @@ def main():
         "packages": len(per_package_results),
         "passing_packages": sum(1 for item in per_package_results if item.get("status") == "pass"),
         "packages_without_penetration_clusters": sum(1 for item in per_package_results if not list(item.get("penetration_clusters") or [])),
+        "packages_with_borderline_fit": sum(1 for item in per_package_results if item.get("fit_diagnostic_class") == "pass_borderline"),
+        "packages_with_floating_failures": sum(1 for item in per_package_results if item.get("fit_diagnostic_class") == "floating_fit_out_of_range"),
+        "packages_with_penetration_failures": sum(1 for item in per_package_results if item.get("fit_diagnostic_class") == "penetration_keepout_overlap"),
+        "packages_with_mixed_failures": sum(1 for item in per_package_results if item.get("fit_diagnostic_class") == "mixed_penetration_and_floating"),
     }
     status = "pass" if not failed_requirements and counts["packages"] == counts["passing_packages"] == int(FIXED_EXECUTION_PROFILE["required_package_count"]) else "fail"
     discussion_signal = build_discussion_signal(
