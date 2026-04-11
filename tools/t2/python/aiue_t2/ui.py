@@ -2,26 +2,17 @@ from __future__ import annotations
 
 import json
 import subprocess
-from dataclasses import dataclass, field
 from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction, QPixmap
+from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QFileDialog,
-    QFrame,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
-    QListWidget,
-    QListWidgetItem,
     QMainWindow,
-    QPlainTextEdit,
-    QPushButton,
     QSplitter,
     QTabWidget,
-    QTableWidget,
-    QTableWidgetItem,
     QToolBar,
     QTreeWidget,
     QTreeWidgetItem,
@@ -34,18 +25,17 @@ from aiue_t2.state import (
     CATEGORY_ORDER,
     AppState,
     DemoPackageRecord,
-    DemoPresetRecord,
     DemoRequestRecord,
     DemoSessionRecord,
     GovernanceBalanceRecord,
-    PreviewImageRecord,
     ReportRecord,
     ViewState,
     build_default_view_state,
     load_workbench_state,
-    report_payload_to_text,
 )
 from aiue_t2.demo_request_runner import export_demo_request, invoke_demo_request, load_demo_request_selection
+from aiue_t2.ui_demo import DemoRequestControlState, DemoRequestPanel, DemoSessionPanel
+from aiue_t2.ui_sections import DetailsPanel, ImagesPanel, SlotDebuggerPanel, SummaryCard
 
 
 APP_STYLESHEET = """
@@ -88,58 +78,6 @@ QFrame[card="true"] {
     border-radius: 12px;
 }
 """
-
-
-@dataclass
-class DemoRequestControlState:
-    status: str = "idle"
-    operation: str = ""
-    request_kind: str = ""
-    dry_run: bool = False
-    workspace_config_path: str = ""
-    request_json_path: str = ""
-    result_json_path: str = ""
-    host_key: str = ""
-    result_status: str = ""
-    invocation_returncode: int | None = None
-    errors: list[str] = field(default_factory=list)
-    payload: dict = field(default_factory=dict)
-
-    def to_dump_dict(self) -> dict:
-        return {
-            "status": self.status,
-            "operation": self.operation,
-            "request_kind": self.request_kind,
-            "dry_run": self.dry_run,
-            "workspace_config_path": self.workspace_config_path,
-            "request_json_path": self.request_json_path,
-            "result_json_path": self.result_json_path,
-            "host_key": self.host_key,
-            "result_status": self.result_status,
-            "invocation_returncode": self.invocation_returncode,
-            "errors": list(self.errors),
-            "payload": dict(self.payload),
-        }
-
-
-class SummaryCard(QFrame):
-    def __init__(self, *, title: str, object_name: str) -> None:
-        super().__init__()
-        self.setObjectName(object_name)
-        self.setProperty("card", True)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(14, 12, 14, 12)
-        title_label = QLabel(title)
-        title_label.setProperty("role", "muted")
-        self.value_label = QLabel("0")
-        self.value_label.setObjectName(f"{object_name}Value")
-        self.value_label.setStyleSheet("font-size: 24px; font-weight: 600;")
-        layout.addWidget(title_label)
-        layout.addWidget(self.value_label)
-
-    def set_value(self, value: int) -> None:
-        self.value_label.setText(str(value))
-
 
 class WorkbenchWindow(QMainWindow):
     def __init__(
@@ -200,7 +138,6 @@ class WorkbenchWindow(QMainWindow):
             workspace_config_path=str(self.current_workspace_config_path or ""),
         )
         self.report_items_by_gate_id: dict[str, QTreeWidgetItem] = {}
-        self.preview_records_by_key: dict[str, PreviewImageRecord] = {}
         self._build_ui()
         self.load_manifest(self.current_manifest_path, session_manifest_path=self.current_session_manifest_path)
 
@@ -263,203 +200,54 @@ class WorkbenchWindow(QMainWindow):
         self.tabs = QTabWidget()
         self.tabs.setObjectName("contentTabs")
 
-        self.details_header = QLabel("No report selected")
-        self.details_header.setProperty("role", "muted")
-        self.details_text = QPlainTextEdit()
-        self.details_text.setObjectName("detailsJsonText")
-        self.details_text.setReadOnly(True)
-        details_root = QWidget()
-        details_layout = QVBoxLayout(details_root)
-        details_layout.addWidget(self.details_header)
-        details_layout.addWidget(self.details_text)
-        self.tabs.addTab(details_root, "Details")
+        self.details_panel = DetailsPanel()
+        self.details_header = self.details_panel.details_header
+        self.details_text = self.details_panel.details_text
+        self.tabs.addTab(self.details_panel, "Details")
 
-        self.preview_list = QListWidget()
-        self.preview_list.setObjectName("previewImageList")
+        self.images_panel = ImagesPanel()
+        self.preview_list = self.images_panel.preview_list
         self.preview_list.currentItemChanged.connect(self._on_preview_selection_changed)
-        self.preview_label = QLabel("No preview image selected")
-        self.preview_label.setObjectName("previewImageLabel")
-        self.preview_label.setAlignment(Qt.AlignCenter)
-        self.preview_label.setMinimumHeight(320)
-        self.preview_label.setWordWrap(True)
-        self.preview_label.setStyleSheet("border: 1px solid #334155; border-radius: 8px;")
+        self.preview_label = self.images_panel.preview_label
+        self.metrics_table = self.images_panel.metrics_table
+        self.tabs.addTab(self.images_panel, "Images")
 
-        preview_splitter = QSplitter()
-        preview_splitter.addWidget(self.preview_list)
-        preview_splitter.addWidget(self.preview_label)
+        self.slot_debugger_panel = SlotDebuggerPanel()
+        self.slot_table = self.slot_debugger_panel.slot_table
+        self.tabs.addTab(self.slot_debugger_panel, "Slot Debugger")
 
-        self.metrics_table = QTableWidget(0, 7)
-        self.metrics_table.setObjectName("r3MetricsTable")
-        self.metrics_table.setHorizontalHeaderLabels(
-            [
-                "Package",
-                "Shot",
-                "Status",
-                "Crop Hist L1",
-                "Crop Mean Delta",
-                "Full Hist L1",
-                "Full Mean Delta",
-            ]
-        )
-        self.metrics_table.horizontalHeader().setStretchLastSection(True)
-
-        images_root = QWidget()
-        images_layout = QVBoxLayout(images_root)
-        images_layout.addWidget(preview_splitter)
-        metrics_box = QGroupBox("Before / After Metrics")
-        metrics_layout = QVBoxLayout(metrics_box)
-        metrics_layout.addWidget(self.metrics_table)
-        images_layout.addWidget(metrics_box)
-        self.tabs.addTab(images_root, "Images")
-
-        self.slot_table = QTableWidget(0, 8)
-        self.slot_table.setObjectName("slotDebuggerTable")
-        self.slot_table.setHorizontalHeaderLabels(
-            [
-                "Package",
-                "Slot",
-                "Kind",
-                "Component",
-                "Socket",
-                "Coverages",
-                "Conflicts",
-                "Superseded",
-            ]
-        )
-        self.slot_table.horizontalHeader().setStretchLastSection(True)
-        slot_root = QWidget()
-        slot_layout = QVBoxLayout(slot_root)
-        slot_layout.addWidget(self.slot_table)
-        self.tabs.addTab(slot_root, "Slot Debugger")
-
-        self.demo_session_summary = QLabel("No E2 session loaded")
-        self.demo_session_summary.setObjectName("demoSessionSummaryLabel")
-        self.demo_session_summary.setProperty("role", "muted")
-        self.demo_session_summary.setWordWrap(True)
-
-        self.demo_session_package_list = QListWidget()
-        self.demo_session_package_list.setObjectName("demoSessionPackageList")
+        self.demo_session_panel = DemoSessionPanel()
+        self.demo_session_summary = self.demo_session_panel.demo_session_summary
+        self.demo_session_package_list = self.demo_session_panel.demo_session_package_list
         self.demo_session_package_list.currentItemChanged.connect(self._on_demo_session_package_changed)
-
-        self.demo_action_preset_list = QListWidget()
-        self.demo_action_preset_list.setObjectName("demoActionPresetList")
+        self.demo_action_preset_list = self.demo_session_panel.demo_action_preset_list
         self.demo_action_preset_list.currentItemChanged.connect(self._on_demo_action_preset_changed)
-
-        self.demo_animation_preset_list = QListWidget()
-        self.demo_animation_preset_list.setObjectName("demoAnimationPresetList")
+        self.demo_animation_preset_list = self.demo_session_panel.demo_animation_preset_list
         self.demo_animation_preset_list.currentItemChanged.connect(self._on_demo_animation_preset_changed)
+        self.demo_package_details = self.demo_session_panel.demo_package_details
+        self.tabs.addTab(self.demo_session_panel, "Demo Session")
 
-        self.demo_package_details = QPlainTextEdit()
-        self.demo_package_details.setObjectName("demoPackageDetailsText")
-        self.demo_package_details.setReadOnly(True)
-
-        action_box = QGroupBox("Action Presets")
-        action_box_layout = QVBoxLayout(action_box)
-        action_box_layout.addWidget(self.demo_action_preset_list)
-
-        animation_box = QGroupBox("Animation Presets")
-        animation_box_layout = QVBoxLayout(animation_box)
-        animation_box_layout.addWidget(self.demo_animation_preset_list)
-
-        session_right = QWidget()
-        session_right_layout = QVBoxLayout(session_right)
-        session_right_layout.addWidget(self.demo_session_summary)
-        session_right_layout.addWidget(action_box)
-        session_right_layout.addWidget(animation_box)
-        session_right_layout.addWidget(self.demo_package_details)
-
-        session_splitter = QSplitter()
-        session_splitter.addWidget(self.demo_session_package_list)
-        session_splitter.addWidget(session_right)
-        session_splitter.setStretchFactor(0, 0)
-        session_splitter.setStretchFactor(1, 1)
-
-        demo_root = QWidget()
-        demo_layout = QVBoxLayout(demo_root)
-        demo_layout.addWidget(session_splitter)
-        self.tabs.addTab(demo_root, "Demo Session")
-
-        self.demo_request_summary = QLabel("No demo request selected")
-        self.demo_request_summary.setObjectName("demoRequestSummaryLabel")
-        self.demo_request_summary.setProperty("role", "muted")
-        self.demo_request_summary.setWordWrap(True)
-
-        self.demo_request_workspace = QLabel("Workspace config: not configured")
-        self.demo_request_workspace.setObjectName("demoRequestWorkspaceLabel")
-        self.demo_request_workspace.setProperty("role", "muted")
-        self.demo_request_workspace.setWordWrap(True)
-
-        self.export_action_request_button = QPushButton("Export Action Request")
-        self.export_action_request_button.setObjectName("exportActionRequestButton")
-        self.export_action_request_button.clicked.connect(
-            lambda: self.export_current_demo_request(request_kind="action_preview")
+        self.demo_request_panel = DemoRequestPanel()
+        self.demo_request_summary = self.demo_request_panel.demo_request_summary
+        self.demo_request_workspace = self.demo_request_panel.demo_request_workspace
+        self.export_action_request_button = self.demo_request_panel.export_action_request_button
+        self.export_animation_request_button = self.demo_request_panel.export_animation_request_button
+        self.dry_run_action_request_button = self.demo_request_panel.dry_run_action_request_button
+        self.dry_run_animation_request_button = self.demo_request_panel.dry_run_animation_request_button
+        self.invoke_action_request_button = self.demo_request_panel.invoke_action_request_button
+        self.invoke_animation_request_button = self.demo_request_panel.invoke_animation_request_button
+        self.demo_request_control_summary = self.demo_request_panel.demo_request_control_summary
+        self.demo_request_text = self.demo_request_panel.demo_request_text
+        self.demo_request_control_text = self.demo_request_panel.demo_request_control_text
+        self.demo_request_panel.bind_callbacks(
+            export_action=lambda: self.export_current_demo_request(request_kind="action_preview"),
+            export_animation=lambda: self.export_current_demo_request(request_kind="animation_preview"),
+            dry_run_action=lambda: self.dry_run_current_demo_request(request_kind="action_preview"),
+            dry_run_animation=lambda: self.dry_run_current_demo_request(request_kind="animation_preview"),
+            invoke_action=lambda: self.invoke_current_demo_request(request_kind="action_preview"),
+            invoke_animation=lambda: self.invoke_current_demo_request(request_kind="animation_preview"),
         )
-
-        self.export_animation_request_button = QPushButton("Export Animation Request")
-        self.export_animation_request_button.setObjectName("exportAnimationRequestButton")
-        self.export_animation_request_button.clicked.connect(
-            lambda: self.export_current_demo_request(request_kind="animation_preview")
-        )
-
-        self.dry_run_action_request_button = QPushButton("Dry Run Action Request")
-        self.dry_run_action_request_button.setObjectName("dryRunActionRequestButton")
-        self.dry_run_action_request_button.clicked.connect(
-            lambda: self.dry_run_current_demo_request(request_kind="action_preview")
-        )
-
-        self.dry_run_animation_request_button = QPushButton("Dry Run Animation Request")
-        self.dry_run_animation_request_button.setObjectName("dryRunAnimationRequestButton")
-        self.dry_run_animation_request_button.clicked.connect(
-            lambda: self.dry_run_current_demo_request(request_kind="animation_preview")
-        )
-
-        self.invoke_action_request_button = QPushButton("Invoke Action Request")
-        self.invoke_action_request_button.setObjectName("invokeActionRequestButton")
-        self.invoke_action_request_button.clicked.connect(
-            lambda: self.invoke_current_demo_request(request_kind="action_preview")
-        )
-
-        self.invoke_animation_request_button = QPushButton("Invoke Animation Request")
-        self.invoke_animation_request_button.setObjectName("invokeAnimationRequestButton")
-        self.invoke_animation_request_button.clicked.connect(
-            lambda: self.invoke_current_demo_request(request_kind="animation_preview")
-        )
-
-        button_row = QHBoxLayout()
-        button_row.addWidget(self.export_action_request_button)
-        button_row.addWidget(self.export_animation_request_button)
-        button_row.addWidget(self.dry_run_action_request_button)
-        button_row.addWidget(self.dry_run_animation_request_button)
-        button_row.addWidget(self.invoke_action_request_button)
-        button_row.addWidget(self.invoke_animation_request_button)
-
-        self.demo_request_control_summary = QLabel("No demo request control operation yet")
-        self.demo_request_control_summary.setObjectName("demoRequestControlSummaryLabel")
-        self.demo_request_control_summary.setProperty("role", "muted")
-        self.demo_request_control_summary.setWordWrap(True)
-
-        self.demo_request_text = QPlainTextEdit()
-        self.demo_request_text.setObjectName("demoRequestText")
-        self.demo_request_text.setReadOnly(True)
-
-        self.demo_request_control_text = QPlainTextEdit()
-        self.demo_request_control_text.setObjectName("demoRequestControlText")
-        self.demo_request_control_text.setReadOnly(True)
-
-        request_splitter = QSplitter(Qt.Vertical)
-        request_splitter.addWidget(self.demo_request_text)
-        request_splitter.addWidget(self.demo_request_control_text)
-        request_splitter.setStretchFactor(0, 2)
-        request_splitter.setStretchFactor(1, 1)
-
-        request_root = QWidget()
-        request_layout = QVBoxLayout(request_root)
-        request_layout.addWidget(self.demo_request_summary)
-        request_layout.addWidget(self.demo_request_workspace)
-        request_layout.addLayout(button_row)
-        request_layout.addWidget(self.demo_request_control_summary)
-        request_layout.addWidget(request_splitter)
-        self.tabs.addTab(request_root, "Demo Request")
+        self.tabs.addTab(self.demo_request_panel, "Demo Request")
 
         content_splitter.addWidget(self.tabs)
         content_splitter.setStretchFactor(1, 1)
@@ -710,141 +498,30 @@ class WorkbenchWindow(QMainWindow):
             self._select_report(self.view_state.selected_report_gate_id)
 
     def _render_details(self) -> None:
-        report = self._selected_report_record()
-        if report is None:
-            self.details_header.setText("No report selected")
-            self.details_text.setPlainText("{}")
-            return
-        self.details_header.setText(
-            f"{report.gate_id or report.name} | {report.status.upper()} | {report.generated_at_utc or 'unknown time'}"
-        )
-        self.details_text.setPlainText(report_payload_to_text(report))
+        self.details_panel.render_report(self._selected_report_record())
 
     def _render_preview_images(self) -> None:
-        self.preview_list.clear()
-        self.preview_records_by_key.clear()
-        for record in self.app_state.preview_images:
-            item = QListWidgetItem(f"{record.section} | {record.title}")
-            item.setData(Qt.UserRole, record.key)
-            self.preview_list.addItem(item)
-            self.preview_records_by_key[record.key] = record
-        if self.view_state.selected_image_key:
-            for index in range(self.preview_list.count()):
-                item = self.preview_list.item(index)
-                if item.data(Qt.UserRole) == self.view_state.selected_image_key:
-                    self.preview_list.setCurrentItem(item)
-                    break
-        if self.preview_list.currentItem() is None and self.preview_list.count():
-            self.preview_list.setCurrentRow(0)
+        self.images_panel.set_preview_records(
+            list(self.app_state.preview_images),
+            self.view_state.selected_image_key,
+        )
         self._render_preview_image()
 
     def _render_preview_image(self) -> None:
-        preview = self._selected_preview_record()
-        if not preview:
-            self.preview_label.setText("No preview image selected")
-            self.preview_label.setPixmap(QPixmap())
-            return
-        pixmap = QPixmap(preview.image_path)
-        if pixmap.isNull():
-            self.preview_label.setText(f"Preview not available:\n{preview.image_path}")
-            self.preview_label.setPixmap(QPixmap())
-            return
-        scaled = pixmap.scaled(
-            max(self.preview_label.width(), 640),
-            max(self.preview_label.height(), 360),
-            Qt.KeepAspectRatio,
-            Qt.SmoothTransformation,
-        )
-        self.preview_label.setPixmap(scaled)
-        self.preview_label.setText("")
+        self.images_panel.render_selected_image(self._selected_preview_record())
 
     def _render_metrics(self) -> None:
-        rows = list(self.app_state.r3_metrics)
-        self.metrics_table.setRowCount(len(rows))
-        for row_index, row in enumerate(rows):
-            values = [
-                row.get("package_id") or "",
-                row.get("shot_id") or "",
-                row.get("status") or "",
-                f"{float(row.get('crop_histogram_l1') or 0.0):.6f}",
-                f"{float(row.get('crop_mean_abs_pixel_delta') or 0.0):.6f}",
-                f"{float(row.get('full_histogram_l1') or 0.0):.6f}",
-                f"{float(row.get('full_mean_abs_pixel_delta') or 0.0):.6f}",
-            ]
-            for column_index, value in enumerate(values):
-                self.metrics_table.setItem(row_index, column_index, QTableWidgetItem(str(value)))
+        self.images_panel.render_metrics(list(self.app_state.r3_metrics))
 
     def _render_slot_table(self) -> None:
-        packages = list(self.app_state.slot_debugger.get("packages") or [])
-        rows: list[list[str]] = []
-        for package in packages:
-            package_id = str(package.get("package_id") or "")
-            for slot in list(package.get("slots") or []):
-                attach_state = dict(slot.get("attach_state") or {})
-                component = dict(slot.get("managed_component") or {})
-                binding = dict(slot.get("binding") or {})
-                coverages = ", ".join(
-                    f"{item.get('shot_id')}:{float(item.get('coverage_ratio') or 0.0):.4f}"
-                    for item in list(slot.get("tracked_coverages") or [])
-                )
-                rows.append(
-                    [
-                        package_id,
-                        str(slot.get("slot_name") or ""),
-                        str(binding.get("item_kind") or ""),
-                        str(component.get("component_name") or ""),
-                        str(
-                            attach_state.get("resolved_attach_socket_name")
-                            or attach_state.get("requested_attach_socket_name")
-                            or ""
-                        ),
-                        coverages,
-                        str(len(list(slot.get("slot_conflicts") or []))),
-                        str(len(list(slot.get("superseded_bindings") or []))),
-                    ]
-                )
-        self.slot_table.setRowCount(len(rows))
-        for row_index, row in enumerate(rows):
-            for column_index, value in enumerate(row):
-                self.slot_table.setItem(row_index, column_index, QTableWidgetItem(value))
+        self.slot_debugger_panel.render_slot_packages(list(self.app_state.slot_debugger.get("packages") or []))
 
     def _render_demo_session(self) -> None:
         session = self.app_state.demo_session
-        self.demo_session_package_list.clear()
-        self.demo_action_preset_list.clear()
-        self.demo_animation_preset_list.clear()
-
-        if session.status != "pass":
-            session_path = session.session_manifest_path or "(auto-discovery found no session yet)"
-            self.demo_session_summary.setText(f"E2 session status: {session.status.upper()} | {session_path}")
-            self.demo_package_details.setPlainText("{}")
-            return
-
-        self.demo_session_summary.setText(
-            " | ".join(
-                [
-                    f"Session {session.session_id or 'unknown'}",
-                    f"Type {session.session_type or 'unknown'}",
-                    f"Packages {len(session.packages)}",
-                    f"Host {session.host_key or 'unknown'}",
-                    f"Mode {session.mode or 'unknown'}",
-                ]
-            )
+        self.demo_session_panel.render_session(
+            session,
+            self.view_state.selected_package_id or session.default_package_id,
         )
-        for record in session.packages:
-            item = QListWidgetItem(record.package_id)
-            item.setData(Qt.UserRole, record.package_id)
-            self.demo_session_package_list.addItem(item)
-
-        selected_package_id = self.view_state.selected_package_id or session.default_package_id
-        if selected_package_id:
-            for index in range(self.demo_session_package_list.count()):
-                item = self.demo_session_package_list.item(index)
-                if item.data(Qt.UserRole) == selected_package_id:
-                    self.demo_session_package_list.setCurrentItem(item)
-                    break
-        if self.demo_session_package_list.currentItem() is None and self.demo_session_package_list.count():
-            self.demo_session_package_list.setCurrentRow(0)
         self._render_demo_session_package_details()
 
     def _selected_demo_package_record(self) -> DemoPackageRecord | None:
@@ -852,93 +529,24 @@ class WorkbenchWindow(QMainWindow):
 
     def _render_demo_session_package_details(self) -> None:
         package = self._selected_demo_package_record()
-        if package is None:
-            self.demo_package_details.setPlainText("{}")
-            return
-        self._render_demo_preset_lists(package)
-        self.demo_package_details.setPlainText(json.dumps(package.payload or {}, ensure_ascii=False, indent=2))
+        self.demo_session_panel.render_package_details(
+            package,
+            selected_action_preset_id=self.view_state.selected_action_preset_id,
+            selected_animation_preset_id=self.view_state.selected_animation_preset_id,
+        )
         self._render_demo_request()
-
-    def _render_demo_preset_lists(self, package: DemoPackageRecord) -> None:
-        self.demo_action_preset_list.clear()
-        for preset in package.action_presets:
-            item = QListWidgetItem(self._demo_preset_label(preset))
-            item.setData(Qt.UserRole, preset.preset_id)
-            self.demo_action_preset_list.addItem(item)
-        selected_action_preset_id = self.view_state.selected_action_preset_id
-        if selected_action_preset_id:
-            for index in range(self.demo_action_preset_list.count()):
-                item = self.demo_action_preset_list.item(index)
-                if item.data(Qt.UserRole) == selected_action_preset_id:
-                    self.demo_action_preset_list.setCurrentItem(item)
-                    break
-        if self.demo_action_preset_list.currentItem() is None and self.demo_action_preset_list.count():
-            self.demo_action_preset_list.setCurrentRow(0)
-
-        self.demo_animation_preset_list.clear()
-        for preset in package.animation_presets:
-            item = QListWidgetItem(self._demo_preset_label(preset))
-            item.setData(Qt.UserRole, preset.preset_id)
-            self.demo_animation_preset_list.addItem(item)
-        selected_animation_preset_id = self.view_state.selected_animation_preset_id
-        if selected_animation_preset_id:
-            for index in range(self.demo_animation_preset_list.count()):
-                item = self.demo_animation_preset_list.item(index)
-                if item.data(Qt.UserRole) == selected_animation_preset_id:
-                    self.demo_animation_preset_list.setCurrentItem(item)
-                    break
-        if self.demo_animation_preset_list.currentItem() is None and self.demo_animation_preset_list.count():
-            self.demo_animation_preset_list.setCurrentRow(0)
-
-    @staticmethod
-    def _demo_preset_label(preset: DemoPresetRecord) -> str:
-        parts = [preset.preset_id or "preset", preset.preset_kind]
-        if preset.family:
-            parts.append(preset.family)
-        if preset.status:
-            parts.append(preset.status)
-        return " | ".join(parts)
 
     def _render_demo_request(self) -> None:
         payload = self.current_dump_payload()
         demo_request = dict(payload.get("demo_request") or {})
         control_state = dict(payload.get("demo_request_control") or {})
-        summary_parts = [
-            f"Status {str(demo_request.get('status') or 'unknown').upper()}",
-            f"Package {str(demo_request.get('selected_package_id') or 'none')}",
-        ]
-        request_kinds = list(demo_request.get("request_kinds") or [])
-        if request_kinds:
-            summary_parts.append(f"Kinds {', '.join(request_kinds)}")
-        self.demo_request_summary.setText(" | ".join(summary_parts))
         workspace_path = str(self.current_workspace_config_path or "")
-        self.demo_request_workspace.setText(
-            f"Workspace config: {workspace_path if workspace_path else 'not configured'}"
-        )
-        self.demo_request_text.setPlainText(json.dumps(demo_request, ensure_ascii=False, indent=2))
-        control_parts = [
-            f"Control {str(control_state.get('status') or 'idle').upper()}",
-            f"Op {str(control_state.get('operation') or 'none')}",
-        ]
-        if control_state.get("request_kind"):
-            control_parts.append(f"Kind {control_state['request_kind']}")
-        if control_state.get("result_status"):
-            control_parts.append(f"Result {control_state['result_status']}")
-        if control_state.get("result_json_path"):
-            control_parts.append(f"Result {control_state['result_json_path']}")
-        elif control_state.get("request_json_path"):
-            control_parts.append(f"Request {control_state['request_json_path']}")
-        self.demo_request_control_summary.setText(" | ".join(control_parts))
-        self.demo_request_control_text.setPlainText(json.dumps(control_state, ensure_ascii=False, indent=2))
-
-        request_kind_set = set(request_kinds)
-        self.export_action_request_button.setEnabled("action_preview" in request_kind_set)
-        self.export_animation_request_button.setEnabled("animation_preview" in request_kind_set)
         workspace_ready = bool(self.current_workspace_config_path and Path(self.current_workspace_config_path).exists())
-        self.dry_run_action_request_button.setEnabled("action_preview" in request_kind_set and workspace_ready)
-        self.dry_run_animation_request_button.setEnabled("animation_preview" in request_kind_set and workspace_ready)
-        self.invoke_action_request_button.setEnabled("action_preview" in request_kind_set and workspace_ready)
-        self.invoke_animation_request_button.setEnabled("animation_preview" in request_kind_set and workspace_ready)
+        self.demo_request_panel.render_request(
+            demo_request,
+            control_state,
+            workspace_path=workspace_path if workspace_ready else "",
+        )
 
     def _selected_report_record(self) -> ReportRecord | None:
         gate_id = self.view_state.selected_report_gate_id
@@ -948,9 +556,7 @@ class WorkbenchWindow(QMainWindow):
 
     def _selected_preview_record(self) -> PreviewImageRecord | None:
         image_key = self.view_state.selected_image_key
-        if not image_key:
-            return None
-        return self.preview_records_by_key.get(image_key)
+        return self.images_panel.preview_record(image_key)
 
     def _on_report_selection_changed(self) -> None:
         selected_items = self.report_tree.selectedItems()
