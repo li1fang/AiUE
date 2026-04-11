@@ -7,6 +7,7 @@ from aiue_t1.dynamic_balance import (
     build_recent_rounds_from_commit_records,
     build_recommendation,
     classify_round_kind,
+    parse_checkpoint_commit_records,
     scan_first_party_hotspots,
     summarize_pressures,
 )
@@ -32,6 +33,28 @@ def test_dynamic_balance_scans_hotspots(tmp_path: Path):
     assert hotspots
     assert hotspots[0]["relative_path"] == "adapters/unreal/host_project/runtime/common.py"
     assert hotspots[0]["severity"] == "critical"
+
+
+def test_dynamic_balance_parses_git_log_with_name_only_records():
+    raw_output = (
+        "4a17aa2\x1ffeat(tooling): add dynamic balance foundation\n\n"
+        "docs/checkpoints/dynamic_balance_foundation_checkpoint.md\n"
+        "2d32ad0\x1ffeat(tooling): add e2 native invoke path\n\n"
+        "docs/checkpoints/e2_native_invoke_path_checkpoint.md\n"
+    )
+    records = parse_checkpoint_commit_records(raw_output)
+    assert records == [
+        {
+            "commit_hash": "4a17aa2",
+            "subject": "feat(tooling): add dynamic balance foundation",
+            "checkpoint_paths": ["docs/checkpoints/dynamic_balance_foundation_checkpoint.md"],
+        },
+        {
+            "commit_hash": "2d32ad0",
+            "subject": "feat(tooling): add e2 native invoke path",
+            "checkpoint_paths": ["docs/checkpoints/e2_native_invoke_path_checkpoint.md"],
+        },
+    ]
 
 
 def test_dynamic_balance_detects_pressure_and_recommendation():

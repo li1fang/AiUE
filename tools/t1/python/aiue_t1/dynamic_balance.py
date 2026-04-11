@@ -64,24 +64,27 @@ def classify_round_kind(subject: str, checkpoint_paths: list[str]) -> str:
 
 def parse_checkpoint_commit_records(raw_output: str) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
-    for chunk in raw_output.split("\x1e"):
-        chunk = chunk.strip()
-        if not chunk:
+    current_record: dict[str, Any] | None = None
+    for raw_line in raw_output.splitlines():
+        line = raw_line.rstrip("\r")
+        if not line.strip():
             continue
-        lines = [line.rstrip() for line in chunk.splitlines()]
-        if not lines:
-            continue
-        header = lines[0].split("\x1f", 1)
-        commit_hash = header[0].strip()
-        subject = header[1].strip() if len(header) > 1 else ""
-        checkpoint_paths = [line.strip() for line in lines[1:] if line.strip()]
-        records.append(
-            {
+        if "\x1f" in line:
+            header = line.split("\x1f", 1)
+            commit_hash = header[0].strip()
+            subject = header[1].replace("\x1e", "").strip() if len(header) > 1 else ""
+            current_record = {
                 "commit_hash": commit_hash,
                 "subject": subject,
-                "checkpoint_paths": checkpoint_paths,
+                "checkpoint_paths": [],
             }
-        )
+            records.append(current_record)
+            continue
+        if current_record is None:
+            continue
+        cleaned_path = line.replace("\x1e", "").strip()
+        if cleaned_path:
+            current_record.setdefault("checkpoint_paths", []).append(cleaned_path)
     return records
 
 
@@ -367,7 +370,7 @@ def discover_checkpoint_rounds(repo_root: Path, *, recent_round_window: int) -> 
         repo_root,
         "log",
         f"-n{recent_round_window}",
-        "--format=%H%x1f%s%x1e",
+        "--format=%H%x1f%s",
         "--name-only",
         "--",
         "docs/checkpoints",
