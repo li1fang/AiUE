@@ -344,10 +344,32 @@ Likely ingredients:
 
 ## Near-Term Follow-Up
 
-After the current `c -> e -> E1 -> a -> d` route:
+Current judgment after `E2A credibility` and `E2 session roundtrip`:
 
-1. stabilize `E1` with repeat passes
-2. keep `playable_demo_e2_bootstrap` as the controlled `E2` entry slice
-3. keep `E2 session explorer` and `E2 request surface` as the native control foundation
-4. decide when the next `E2` slice should execute the generated requests rather than only expose them
-5. keep the demo line connected to `Q5` evidence rather than drifting into pure presentation work
+1. the `E2` line is no longer blocked on trust questions
+2. the repo now has:
+   - native selection
+   - native invoke
+   - native session-round orchestration
+   - machine-readable latest control and round state
+3. `Dynamic Balance` remains `pass` with `recommended_next_round_kind = flexible`
+
+Recommended next route:
+
+1. `E2C`: add a curated native demo review layer on top of the current roundtrip seam
+2. keep the review output evidence-first so `T1/T2` stay the source of truth
+3. only switch to `Q5C-lite` early if quality pressure rises above demo progress pressure
+4. only pull governance forward if hotspot pressure escalates from `moderate` to `high`
+
+What `E2C` should answer:
+
+- can the current session-round control seam produce a package-focused demo review artifact that is easy for a human operator to trust and reuse
+- can `T2` surface the latest per-package action and animation outcomes without needing ad-hoc log diving
+- can the next playable slice stay bounded without turning into a free-form operator console
+
+What should stay out of scope until after `E2C`:
+
+- packaged desktop demo distribution
+- generalized UE command consoles inside `T2`
+- richer live session mutation without evidence persistence
+- replacing quality gates with presentation-only flows
