@@ -85,6 +85,41 @@ Purpose:
 - add user-facing interaction only after the evidence-first line is stable
 - turn the current showcase assets and staging into a simple controlled demo experience
 
+Current first slice:
+
+- [latest_playable_demo_e2_bootstrap_report.json](C:/AiUE/Saved/verification/latest_playable_demo_e2_bootstrap_report.json)
+- [playable_demo_e2_session.json](C:/AiUE/Saved/demo/e2/latest/playable_demo_e2_session.json)
+- `status = pass`
+- `required_package_count = 2`
+- `resolved_package_count = 2`
+- `session_entries = 2`
+- `packages_with_animation_presets = 2`
+- `session_smoke_passed_packages = 2 / 2`
+- `discussion_signal.reason = first_complete_playable_demo_e2_bootstrap_pass`
+
+What this slice proves:
+
+- the current `2` ready bundles can be normalized into a reusable playable-session manifest
+- each package now carries:
+  - host blueprint identity
+  - slot bindings for `weapon / clothing / fx`
+  - one action preset
+  - at least one validated animation preset
+  - hero-shot evidence links
+- each session entry survives a one-shot full-stack `action-preview` smoke inside `demo host`
+
+What this slice does **not** prove yet:
+
+- no player-facing in-editor UI
+- no runtime bundle switcher widget
+- no packaged playable flow
+- no claim that `E2` is feature-complete
+
+Interpretation:
+
+- `playable_demo_e2_bootstrap` is the first `E2` checkpoint
+- it opens the path for future interactive work, but it is still evidence-backed bootstrap work rather than a finished playable demo
+
 Not in scope yet:
 
 - complex game loop
@@ -125,5 +160,6 @@ Likely ingredients:
 After the current `c -> e -> E1 -> a -> d` route:
 
 1. stabilize `E1` with repeat passes
-2. decide when `E2` should become a dedicated work item
-3. keep the demo line connected to `Q5` evidence rather than drifting into pure presentation work
+2. keep `playable_demo_e2_bootstrap` as the controlled `E2` entry slice
+3. decide when the next `E2` slice should add real interaction rather than more bootstrap metadata
+4. keep the demo line connected to `Q5` evidence rather than drifting into pure presentation work

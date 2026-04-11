@@ -57,3 +57,5 @@ Tradeoff:
 - treat playable demo work as `E2`, not as silent scope creep inside `E1`
 - let `T1/T2` remain the evidence surfaces for both platform and demo lines
 - use `showcase_demo_e1_stability` as the concrete threshold check before opening `E2`
+- after the threshold is crossed, start `E2` with a controlled bootstrap layer before adding interactive UI
+- the first `E2` slice is `playable_demo_e2_bootstrap`, which generates a reusable session manifest and requires a one-shot full-stack smoke pass per package
