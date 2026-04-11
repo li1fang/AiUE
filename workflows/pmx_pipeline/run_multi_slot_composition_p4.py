@@ -7,7 +7,7 @@ from _bootstrap import ensure_aiue_paths
 
 REPO_ROOT = ensure_aiue_paths()
 
-from _demo_common import resolve_report_path
+from _demo_common import resolve_report_path, run_host_command_result
 from _gate_common import (
     build_discussion_signal,
     default_latest_report_path,
@@ -19,7 +19,6 @@ from _gate_common import (
 
 from aiue_core.report_writer import make_compatibility_block, with_report_envelope
 from aiue_core.schema_utils import load_json, load_workspace_config
-from aiue_unreal.host_bridge import run_host_auto_ue_cli
 
 GATE_ID = "multi_slot_composition_p4"
 DEFAULT_CLOTHING_FIXTURE_ASSET = "/Game/Characters/Echo/Meshes/SKM_Echo_Hair.SKM_Echo_Hair"
@@ -115,27 +114,22 @@ def inspect_runtime(
 ) -> tuple[dict, Path]:
     result_path = output_root / "runtime_checks" / f"{package['package_id']}.json"
     result_path.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        host_payload = run_host_auto_ue_cli(
-            workspace_or_config=workspace,
-            mode="editor_rendered",
-            command="inspect-slot-runtime",
-            params={
-                "package_id": package["package_id"],
-                "sample_id": package["sample_id"],
-                "host_blueprint_asset_path": package["host_blueprint_asset_path"],
-                "level_path": level_path,
-                "required_slots": ["weapon", *[binding["slot_name"] for binding in bindings]],
-                "slot_binding_overrides": list(bindings),
-            },
-            output_path=str(result_path.resolve()),
-            host_key=host_key,
-        )
-        return dict((host_payload.get("payload") or {}).get("result") or {}), result_path
-    except Exception:
-        if result_path.exists():
-            return dict((load_json(result_path).get("result") or {})), result_path
-        raise
+    result, _, resolved_result_path = run_host_command_result(
+        workspace=workspace,
+        mode="editor_rendered",
+        command="inspect-slot-runtime",
+        params={
+            "package_id": package["package_id"],
+            "sample_id": package["sample_id"],
+            "host_blueprint_asset_path": package["host_blueprint_asset_path"],
+            "level_path": level_path,
+            "required_slots": ["weapon", *[binding["slot_name"] for binding in bindings]],
+            "slot_binding_overrides": list(bindings),
+        },
+        output_path=result_path,
+        host_key=host_key,
+    )
+    return result, resolved_result_path
 
 
 def inspect_visual(
@@ -150,28 +144,23 @@ def inspect_visual(
     capture_root = output_root / "visual_checks" / package["package_id"] / "captures"
     result_path.parent.mkdir(parents=True, exist_ok=True)
     capture_root.mkdir(parents=True, exist_ok=True)
-    try:
-        host_payload = run_host_auto_ue_cli(
-            workspace_or_config=workspace,
-            mode="editor_rendered",
-            command="inspect-host-visual",
-            params={
-                "package_id": package["package_id"],
-                "sample_id": package["sample_id"],
-                "host_blueprint_asset_path": package["host_blueprint_asset_path"],
-                "level_path": level_path,
-                "output_root": str(capture_root.resolve()),
-                "slot_binding_overrides": list(bindings),
-                "tracked_slots": [binding["slot_name"] for binding in bindings],
-            },
-            output_path=str(result_path.resolve()),
-            host_key=host_key,
-        )
-        return dict((host_payload.get("payload") or {}).get("result") or {}), result_path
-    except Exception:
-        if result_path.exists():
-            return dict((load_json(result_path).get("result") or {})), result_path
-        raise
+    result, _, resolved_result_path = run_host_command_result(
+        workspace=workspace,
+        mode="editor_rendered",
+        command="inspect-host-visual",
+        params={
+            "package_id": package["package_id"],
+            "sample_id": package["sample_id"],
+            "host_blueprint_asset_path": package["host_blueprint_asset_path"],
+            "level_path": level_path,
+            "output_root": str(capture_root.resolve()),
+            "slot_binding_overrides": list(bindings),
+            "tracked_slots": [binding["slot_name"] for binding in bindings],
+        },
+        output_path=result_path,
+        host_key=host_key,
+    )
+    return result, resolved_result_path
 
 
 def find_slot_binding(slot_bindings: list[dict], slot_name: str) -> dict:

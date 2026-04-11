@@ -15,6 +15,37 @@ def default_named_verification_report_path(workspace: dict, repo_root_fallback: 
     return verification_named_report_path(workspace, repo_root_fallback, report_name)
 
 
+def run_host_command_result(
+    *,
+    workspace: dict,
+    mode: str,
+    command: str,
+    params: dict,
+    output_path: Path,
+    host_key: str,
+) -> tuple[dict, str | None, Path]:
+    result_path = Path(output_path).expanduser().resolve()
+    result = {}
+    invocation_error = None
+    try:
+        host_payload = run_host_auto_ue_cli(
+            workspace_or_config=workspace,
+            mode=mode,
+            command=command,
+            params=dict(params),
+            output_path=str(result_path),
+            host_key=host_key,
+        )
+        result = dict((host_payload.get("payload") or {}).get("result") or {})
+    except Exception as exc:
+        invocation_error = str(exc)
+        if result_path.exists():
+            result = dict((load_json(result_path).get("result") or {}))
+        else:
+            raise
+    return result, invocation_error, result_path
+
+
 def resolve_report_path(explicit_path: str | None, fallback_path: Path, missing_message: str) -> Path:
     if explicit_path:
         candidate = Path(explicit_path).expanduser().resolve()
@@ -228,48 +259,38 @@ def run_animation_preview(
     animation_dir = output_root / f"{len(list(output_root.glob('*'))) + 1:03d}_{animation_label(animation_asset_path)}"
     animation_dir.mkdir(parents=True, exist_ok=True)
     result_path = animation_dir / result_name
-    host_result = {}
-    host_invocation_error = None
-    try:
-        host_payload = run_host_auto_ue_cli(
-            workspace_or_config=workspace,
-            mode=mode,
-            command="animation-preview",
-            params={
-                "package_id": d8_report.get("package_id"),
-                "sample_id": d8_report.get("sample_id"),
-                "host_blueprint_asset_path": d8_report.get("host_blueprint_asset"),
-                "level_path": str(d8_report.get("level_path") or fixed_execution_profile["level_path"]),
-                "location": dict(spawn_location),
-                "rotation": dict(spawn_rotation),
-                "output_root": str((animation_dir / "captures").resolve()),
-                "shot_order": list(fixed_execution_profile["shot_order"]),
-                "capture_width": fixed_execution_profile["capture_width"],
-                "capture_height": fixed_execution_profile["capture_height"],
-                "capture_delay_seconds": fixed_execution_profile["capture_delay_seconds"],
-                "subject_min_screen_coverage": fixed_execution_profile["subject_min_screen_coverage"],
-                "weapon_min_screen_coverage": fixed_execution_profile["weapon_min_screen_coverage"],
-                "animation_asset_path": animation_asset_path,
-                "animation_sample_time_seconds": fixed_execution_profile["animation_sample_time_seconds"],
-                "animation_settle_seconds": fixed_execution_profile["animation_settle_seconds"],
-                "retarget_if_needed": True,
-                "retarget_source_ik_rig_asset_path": fixed_execution_profile["retarget_source_ik_rig_asset_path"],
-                "retarget_target_ik_rig_asset_path": fixed_execution_profile["retarget_target_ik_rig_asset_path"],
-                "retarget_source_mesh_asset_path": fixed_execution_profile["retarget_source_mesh_asset_path"],
-                "retarget_target_mesh_asset_path": fixed_execution_profile["retarget_target_mesh_asset_path"],
-                "pose_probe_bone_names": list(fixed_execution_profile["pose_probe_bone_names"]),
-                **dict(extra_params or {}),
-            },
-            output_path=str(result_path.resolve()),
-            host_key=host_key,
-        )
-        host_result = dict((host_payload.get("payload") or {}).get("result") or {})
-    except Exception as exc:
-        host_invocation_error = str(exc)
-        if result_path.exists():
-            payload = load_json(result_path)
-            host_result = dict(payload.get("result") or {})
-    return host_result, host_invocation_error, result_path
+    return run_host_command_result(
+        workspace=workspace,
+        mode=mode,
+        command="animation-preview",
+        params={
+            "package_id": d8_report.get("package_id"),
+            "sample_id": d8_report.get("sample_id"),
+            "host_blueprint_asset_path": d8_report.get("host_blueprint_asset"),
+            "level_path": str(d8_report.get("level_path") or fixed_execution_profile["level_path"]),
+            "location": dict(spawn_location),
+            "rotation": dict(spawn_rotation),
+            "output_root": str((animation_dir / "captures").resolve()),
+            "shot_order": list(fixed_execution_profile["shot_order"]),
+            "capture_width": fixed_execution_profile["capture_width"],
+            "capture_height": fixed_execution_profile["capture_height"],
+            "capture_delay_seconds": fixed_execution_profile["capture_delay_seconds"],
+            "subject_min_screen_coverage": fixed_execution_profile["subject_min_screen_coverage"],
+            "weapon_min_screen_coverage": fixed_execution_profile["weapon_min_screen_coverage"],
+            "animation_asset_path": animation_asset_path,
+            "animation_sample_time_seconds": fixed_execution_profile["animation_sample_time_seconds"],
+            "animation_settle_seconds": fixed_execution_profile["animation_settle_seconds"],
+            "retarget_if_needed": True,
+            "retarget_source_ik_rig_asset_path": fixed_execution_profile["retarget_source_ik_rig_asset_path"],
+            "retarget_target_ik_rig_asset_path": fixed_execution_profile["retarget_target_ik_rig_asset_path"],
+            "retarget_source_mesh_asset_path": fixed_execution_profile["retarget_source_mesh_asset_path"],
+            "retarget_target_mesh_asset_path": fixed_execution_profile["retarget_target_mesh_asset_path"],
+            "pose_probe_bone_names": list(fixed_execution_profile["pose_probe_bone_names"]),
+            **dict(extra_params or {}),
+        },
+        output_path=result_path,
+        host_key=host_key,
+    )
 
 
 def evaluate_animation_result(

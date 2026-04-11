@@ -8,7 +8,7 @@ from _bootstrap import ensure_aiue_paths
 
 REPO_ROOT = ensure_aiue_paths()
 
-from _demo_common import default_named_verification_report_path, resolve_report_path, subprocess_compare_image_motion
+from _demo_common import default_named_verification_report_path, resolve_report_path, run_host_command_result, subprocess_compare_image_motion
 from _gate_common import (
     build_discussion_signal,
     default_latest_report_path,
@@ -20,7 +20,6 @@ from _gate_common import (
 
 from aiue_core.report_writer import make_compatibility_block, with_report_envelope
 from aiue_core.schema_utils import load_json, load_workspace_config
-from aiue_unreal.host_bridge import run_host_auto_ue_cli
 
 GATE_ID = "live_fx_visual_quality_r3"
 DEFAULT_R2_LATEST_NAME = "latest_real_fx_item_kind_r2_report.json"
@@ -158,23 +157,16 @@ def inspect_visual(
             params["scene_capture_source"] = str(args.scene_capture_source).strip()
         params["scene_capture_warmup_count"] = int(args.scene_capture_warmup_count)
         params["scene_capture_warmup_delay_seconds"] = float(args.scene_capture_warmup_delay_seconds)
-        try:
-            host_payload = run_host_auto_ue_cli(
-                workspace_or_config=workspace,
-                mode="editor_rendered",
-                command="inspect-host-visual",
-                params=params,
-                output_path=str(shot_result_path.resolve()),
-                host_key=host_key,
-            )
-            shot_results.append(dict((host_payload.get("payload") or {}).get("result") or {}))
-            raw_result_files.append(str(shot_result_path.resolve()))
-        except Exception:
-            if shot_result_path.exists():
-                shot_results.append(dict((load_json(shot_result_path).get("result") or {})))
-                raw_result_files.append(str(shot_result_path.resolve()))
-                continue
-            raise
+        shot_result, _, resolved_result_path = run_host_command_result(
+            workspace=workspace,
+            mode="editor_rendered",
+            command="inspect-host-visual",
+            params=params,
+            output_path=shot_result_path,
+            host_key=host_key,
+        )
+        shot_results.append(shot_result)
+        raw_result_files.append(str(resolved_result_path.resolve()))
 
     merged = dict(shot_results[0] if shot_results else {})
     merged["shots"] = [
@@ -221,23 +213,15 @@ def inspect_visual_pair(
         params["scene_capture_source"] = str(args.scene_capture_source).strip()
     params["scene_capture_warmup_count"] = int(args.scene_capture_warmup_count)
     params["scene_capture_warmup_delay_seconds"] = float(args.scene_capture_warmup_delay_seconds)
-
-    try:
-        host_payload = run_host_auto_ue_cli(
-            workspace_or_config=workspace,
-            mode="editor_rendered",
-            command="inspect-live-fx-visual-pair",
-            params=params,
-            output_path=str(result_path.resolve()),
-            host_key=host_key,
-        )
-        result = dict((host_payload.get("payload") or {}).get("result") or {})
-    except Exception:
-        if result_path.exists():
-            result = dict((load_json(result_path).get("result") or {}))
-        else:
-            raise
-    return result, result_path
+    result, _, resolved_result_path = run_host_command_result(
+        workspace=workspace,
+        mode="editor_rendered",
+        command="inspect-live-fx-visual-pair",
+        params=params,
+        output_path=result_path,
+        host_key=host_key,
+    )
+    return result, resolved_result_path
 
 
 def shot_lookup(report: dict) -> dict[str, dict]:

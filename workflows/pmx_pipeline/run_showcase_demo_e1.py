@@ -8,12 +8,11 @@ from _bootstrap import ensure_aiue_paths
 
 REPO_ROOT = ensure_aiue_paths()
 
-from _demo_common import default_named_verification_report_path, evaluate_external_motion, resolve_report_path
+from _demo_common import default_named_verification_report_path, evaluate_external_motion, resolve_report_path, run_host_command_result
 from _gate_common import build_discussion_signal, default_latest_report_path, default_output_root, make_failed_requirement, now_utc, write_report_pair
 
 from aiue_core.report_writer import make_compatibility_block, with_report_envelope
 from aiue_core.schema_utils import load_json, load_workspace_config
-from aiue_unreal.host_bridge import run_host_auto_ue_cli
 
 GATE_ID = "showcase_demo_e1"
 DEFAULT_Q4_LATEST_NAME = "latest_multi_slot_quality_gate_q4_report.json"
@@ -171,58 +170,49 @@ def is_hero_phase(phase: dict) -> bool:
 
 def run_action_preview_for_package(workspace: dict, output_root: Path, package_id: str, q4_package: dict, r3_package: dict, shot_plans: list[dict]) -> tuple[dict, str | None, Path]:
     result_path = output_root / f"{package_id}_showcase_action_preview_result.json"
-    host_result = {}
-    host_invocation_error = None
-    try:
-        host_payload = run_host_auto_ue_cli(
-            workspace_or_config=workspace,
-            mode=str(FIXED_EXECUTION_PROFILE["mode"]),
-            command="action-preview",
-            params={
-                "package_id": package_id,
-                "sample_id": q4_package.get("sample_id"),
-                "host_blueprint_asset_path": q4_package.get("host_blueprint_asset"),
-                "level_path": str(FIXED_EXECUTION_PROFILE["level_path"]),
-                "location": dict(FIXED_EXECUTION_PROFILE["spawn_location"]),
-                "rotation": dict(FIXED_EXECUTION_PROFILE["spawn_rotation"]),
-                "output_root": str((output_root / package_id / "captures").resolve()),
-                "shot_order": list(FIXED_EXECUTION_PROFILE["shot_order"]),
-                "shot_plans": shot_plans,
-                "capture_width": int(FIXED_EXECUTION_PROFILE["capture_width"]),
-                "capture_height": int(FIXED_EXECUTION_PROFILE["capture_height"]),
-                "capture_delay_seconds": float(FIXED_EXECUTION_PROFILE["capture_delay_seconds"]),
-                "subject_min_screen_coverage": float(FIXED_EXECUTION_PROFILE["subject_min_screen_coverage"]),
-                "weapon_min_screen_coverage": float(FIXED_EXECUTION_PROFILE["weapon_min_screen_coverage"]),
-                "action_kind": str(FIXED_EXECUTION_PROFILE["action_kind"]),
-                "action_distance": float(FIXED_EXECUTION_PROFILE["action_distance"]),
-                "action_yaw_delta": float(FIXED_EXECUTION_PROFILE["action_yaw_delta"]),
-                "action_settle_seconds": float(FIXED_EXECUTION_PROFILE["action_settle_seconds"]),
-                "min_distance_delta": float(FIXED_EXECUTION_PROFILE["min_distance_delta"]),
-                "min_yaw_delta": float(FIXED_EXECUTION_PROFILE["min_yaw_delta"]),
-                "slot_binding_overrides": [
-                    dict(q4_package.get("clothing_binding") or {}),
-                    dict(r3_package.get("fx_binding") or {}),
-                ],
-                "tracked_slots": ["clothing", "fx"],
-                "scene_capture_source": str(FIXED_EXECUTION_PROFILE["scene_capture_source"]),
-                "scene_capture_warmup_count": int(FIXED_EXECUTION_PROFILE["scene_capture_warmup_count"]),
-                "scene_capture_warmup_delay_seconds": float(FIXED_EXECUTION_PROFILE["scene_capture_warmup_delay_seconds"]),
-                "prime_niagara_before_capture": True,
-                "niagara_desired_age_seconds": float(FIXED_EXECUTION_PROFILE["niagara_desired_age_seconds"]),
-                "niagara_seek_delta_seconds": float(FIXED_EXECUTION_PROFILE["niagara_seek_delta_seconds"]),
-                "niagara_advance_step_count": int(FIXED_EXECUTION_PROFILE["niagara_advance_step_count"]),
-                "niagara_advance_step_delta_seconds": float(FIXED_EXECUTION_PROFILE["niagara_advance_step_delta_seconds"]),
-                "niagara_flush_world": True,
-            },
-            output_path=str(result_path.resolve()),
-            host_key=str(FIXED_EXECUTION_PROFILE["host_key"]),
-        )
-        host_result = dict((host_payload.get("payload") or {}).get("result") or {})
-    except Exception as exc:
-        host_invocation_error = str(exc)
-        if result_path.exists():
-            host_result = dict((load_json(result_path).get("result") or {}))
-    return host_result, host_invocation_error, result_path
+    return run_host_command_result(
+        workspace=workspace,
+        mode=str(FIXED_EXECUTION_PROFILE["mode"]),
+        command="action-preview",
+        params={
+            "package_id": package_id,
+            "sample_id": q4_package.get("sample_id"),
+            "host_blueprint_asset_path": q4_package.get("host_blueprint_asset"),
+            "level_path": str(FIXED_EXECUTION_PROFILE["level_path"]),
+            "location": dict(FIXED_EXECUTION_PROFILE["spawn_location"]),
+            "rotation": dict(FIXED_EXECUTION_PROFILE["spawn_rotation"]),
+            "output_root": str((output_root / package_id / "captures").resolve()),
+            "shot_order": list(FIXED_EXECUTION_PROFILE["shot_order"]),
+            "shot_plans": shot_plans,
+            "capture_width": int(FIXED_EXECUTION_PROFILE["capture_width"]),
+            "capture_height": int(FIXED_EXECUTION_PROFILE["capture_height"]),
+            "capture_delay_seconds": float(FIXED_EXECUTION_PROFILE["capture_delay_seconds"]),
+            "subject_min_screen_coverage": float(FIXED_EXECUTION_PROFILE["subject_min_screen_coverage"]),
+            "weapon_min_screen_coverage": float(FIXED_EXECUTION_PROFILE["weapon_min_screen_coverage"]),
+            "action_kind": str(FIXED_EXECUTION_PROFILE["action_kind"]),
+            "action_distance": float(FIXED_EXECUTION_PROFILE["action_distance"]),
+            "action_yaw_delta": float(FIXED_EXECUTION_PROFILE["action_yaw_delta"]),
+            "action_settle_seconds": float(FIXED_EXECUTION_PROFILE["action_settle_seconds"]),
+            "min_distance_delta": float(FIXED_EXECUTION_PROFILE["min_distance_delta"]),
+            "min_yaw_delta": float(FIXED_EXECUTION_PROFILE["min_yaw_delta"]),
+            "slot_binding_overrides": [
+                dict(q4_package.get("clothing_binding") or {}),
+                dict(r3_package.get("fx_binding") or {}),
+            ],
+            "tracked_slots": ["clothing", "fx"],
+            "scene_capture_source": str(FIXED_EXECUTION_PROFILE["scene_capture_source"]),
+            "scene_capture_warmup_count": int(FIXED_EXECUTION_PROFILE["scene_capture_warmup_count"]),
+            "scene_capture_warmup_delay_seconds": float(FIXED_EXECUTION_PROFILE["scene_capture_warmup_delay_seconds"]),
+            "prime_niagara_before_capture": True,
+            "niagara_desired_age_seconds": float(FIXED_EXECUTION_PROFILE["niagara_desired_age_seconds"]),
+            "niagara_seek_delta_seconds": float(FIXED_EXECUTION_PROFILE["niagara_seek_delta_seconds"]),
+            "niagara_advance_step_count": int(FIXED_EXECUTION_PROFILE["niagara_advance_step_count"]),
+            "niagara_advance_step_delta_seconds": float(FIXED_EXECUTION_PROFILE["niagara_advance_step_delta_seconds"]),
+            "niagara_flush_world": True,
+        },
+        output_path=result_path,
+        host_key=str(FIXED_EXECUTION_PROFILE["host_key"]),
+    )
 
 
 def evaluate_showcase_package(repo_root: Path, package_id: str, q4_package: dict, r3_package: dict, host_result: dict, host_invocation_error: str | None, result_path: Path) -> tuple[dict, list[dict]]:

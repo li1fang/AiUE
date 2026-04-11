@@ -11,12 +11,12 @@ T1_PYTHON_ROOT = REPO_ROOT / "tools" / "t1" / "python"
 if str(T1_PYTHON_ROOT) not in sys.path:
     sys.path.insert(0, str(T1_PYTHON_ROOT))
 
+from _demo_common import run_host_command_result
 from _gate_common import build_discussion_signal, default_latest_report_path, default_output_root, make_failed_requirement, now_utc, write_report_pair
 
 from aiue_core.report_writer import make_compatibility_block, with_report_envelope
 from aiue_core.schema_utils import load_json, load_workspace_config
 from aiue_t1.q5a_visible_conflict import analyze_visible_conflict
-from aiue_unreal.host_bridge import run_host_auto_ue_cli
 
 GATE_ID = "visible_conflict_inspection_q5a"
 DEFAULT_P2_LATEST_NAME = "latest_clothing_vertical_slice_p2_report.json"
@@ -129,8 +129,8 @@ def run_package_inspection(
     capture_root = output_root / "captures" / package["package_id"]
     result_path.parent.mkdir(parents=True, exist_ok=True)
     capture_root.mkdir(parents=True, exist_ok=True)
-    host_payload = run_host_auto_ue_cli(
-        workspace_or_config=workspace,
+    result, _, resolved_result_path = run_host_command_result(
+        workspace=workspace,
         mode=str(FIXED_EXECUTION_PROFILE["mode"]),
         command="inspect-visible-conflict",
         params={
@@ -149,10 +149,10 @@ def run_package_inspection(
             "scene_capture_source": str(FIXED_EXECUTION_PROFILE["scene_capture_source"]),
             "camera_distance_scale": float(FIXED_EXECUTION_PROFILE["camera_distance_scale"]),
         },
-        output_path=str(result_path.resolve()),
+        output_path=result_path,
         host_key=str(FIXED_EXECUTION_PROFILE["host_key"]),
     )
-    return dict((host_payload.get("payload") or {}).get("result") or {}), result_path
+    return result, resolved_result_path
 
 
 def analyze_host_result(host_result: dict, *, output_root: Path) -> tuple[dict, list[dict]]:
