@@ -12,6 +12,7 @@ CATEGORY_LABELS = {
     "platform_line": "Platform Line",
     "historical_other": "Historical / Other",
 }
+DEFAULT_E2_SESSION_NAME = "playable_demo_e2_session.json"
 
 
 @dataclass
@@ -66,6 +67,99 @@ class PreviewImageRecord:
 
 
 @dataclass
+class DemoPresetRecord:
+    preset_id: str
+    preset_kind: str
+    family: str = ""
+    source_gate_id: str = ""
+    status: str = ""
+    requested_asset_path: str = ""
+    resolved_asset_path: str = ""
+    payload: dict[str, Any] = field(default_factory=dict)
+
+    def to_dump_dict(self) -> dict[str, Any]:
+        return {
+            "preset_id": self.preset_id,
+            "preset_kind": self.preset_kind,
+            "family": self.family,
+            "source_gate_id": self.source_gate_id,
+            "status": self.status,
+            "requested_asset_path": self.requested_asset_path,
+            "resolved_asset_path": self.resolved_asset_path,
+        }
+
+
+@dataclass
+class DemoPackageRecord:
+    package_id: str
+    sample_id: str
+    host_blueprint_asset: str
+    hero_shot_id: str
+    slot_names: list[str]
+    hero_before_image_path: str
+    hero_after_image_path: str
+    action_presets: list[DemoPresetRecord] = field(default_factory=list)
+    animation_presets: list[DemoPresetRecord] = field(default_factory=list)
+    payload: dict[str, Any] = field(default_factory=dict)
+
+    def to_dump_dict(self) -> dict[str, Any]:
+        return {
+            "package_id": self.package_id,
+            "sample_id": self.sample_id,
+            "host_blueprint_asset": self.host_blueprint_asset,
+            "hero_shot_id": self.hero_shot_id,
+            "slot_names": list(self.slot_names),
+            "hero_before_image_path": self.hero_before_image_path,
+            "hero_after_image_path": self.hero_after_image_path,
+            "action_presets": [record.to_dump_dict() for record in self.action_presets],
+            "animation_presets": [record.to_dump_dict() for record in self.animation_presets],
+        }
+
+
+@dataclass
+class DemoSessionRecord:
+    status: str
+    session_manifest_path: str
+    session_id: str
+    session_type: str
+    host_key: str
+    mode: str
+    level_path: str
+    default_package_id: str | None
+    packages: list[DemoPackageRecord] = field(default_factory=list)
+    switch_order: list[str] = field(default_factory=list)
+    source_reports: dict[str, str] = field(default_factory=dict)
+
+    def package_by_id(self, package_id: str | None) -> DemoPackageRecord | None:
+        if not package_id:
+            return None
+        return next((record for record in self.packages if record.package_id == package_id), None)
+
+    def to_dump_dict(
+        self,
+        *,
+        selected_package_id: str | None = None,
+        selected_action_preset_id: str | None = None,
+        selected_animation_preset_id: str | None = None,
+    ) -> dict[str, Any]:
+        return {
+            "status": self.status,
+            "session_manifest_path": self.session_manifest_path,
+            "session_id": self.session_id,
+            "session_type": self.session_type,
+            "host_key": self.host_key,
+            "mode": self.mode,
+            "level_path": self.level_path,
+            "default_package_id": self.default_package_id,
+            "package_count": len(self.packages),
+            "package_ids": [record.package_id for record in self.packages],
+            "selected_package_id": selected_package_id,
+            "selected_action_preset_id": selected_action_preset_id,
+            "selected_animation_preset_id": selected_animation_preset_id,
+        }
+
+
+@dataclass
 class AppState:
     status: str
     manifest_path: str
@@ -77,15 +171,20 @@ class AppState:
     preview_images: list[PreviewImageRecord]
     r3_metrics: list[dict[str, Any]]
     slot_debugger: dict[str, Any]
+    demo_session: DemoSessionRecord
     errors: list[ErrorRecord]
     default_report_gate_id: str | None
     default_image_key: str | None
     default_package_id: str | None
+    default_action_preset_id: str | None
+    default_animation_preset_id: str | None
 
     def to_dump_payload(self, view_state: "ViewState | None" = None) -> dict[str, Any]:
         selected_report = view_state.selected_report_gate_id if view_state else self.default_report_gate_id
         selected_image = view_state.selected_image_key if view_state else self.default_image_key
         selected_package = view_state.selected_package_id if view_state else self.default_package_id
+        selected_action_preset = view_state.selected_action_preset_id if view_state else self.default_action_preset_id
+        selected_animation_preset = view_state.selected_animation_preset_id if view_state else self.default_animation_preset_id
         slot_packages = list(self.slot_debugger.get("packages") or [])
         return {
             "status": self.status,
@@ -100,10 +199,17 @@ class AppState:
             "selected_default_report": selected_report,
             "selected_default_image": selected_image,
             "selected_default_package": selected_package,
+            "selected_default_action_preset": selected_action_preset,
+            "selected_default_animation_preset": selected_animation_preset,
             "slot_debugger": {
                 "package_count": int(self.slot_debugger.get("package_count") or 0),
                 "package_ids": [str(item.get("package_id") or "") for item in slot_packages],
             },
+            "demo_session": self.demo_session.to_dump_dict(
+                selected_package_id=selected_package,
+                selected_action_preset_id=selected_action_preset,
+                selected_animation_preset_id=selected_animation_preset,
+            ),
             "preview_images": [record.to_dump_dict() for record in self.preview_images],
             "errors": [error.to_dict() for error in self.errors],
         }
@@ -114,6 +220,8 @@ class ViewState:
     selected_report_gate_id: str | None = None
     selected_image_key: str | None = None
     selected_package_id: str | None = None
+    selected_action_preset_id: str | None = None
+    selected_animation_preset_id: str | None = None
 
 
 def build_default_view_state(app_state: AppState) -> ViewState:
@@ -121,6 +229,8 @@ def build_default_view_state(app_state: AppState) -> ViewState:
         selected_report_gate_id=app_state.default_report_gate_id,
         selected_image_key=app_state.default_image_key,
         selected_package_id=app_state.default_package_id,
+        selected_action_preset_id=app_state.default_action_preset_id,
+        selected_animation_preset_id=app_state.default_animation_preset_id,
     )
 
 
@@ -155,10 +265,22 @@ def _error_app_state(*, manifest_path: Path, code: str, message: str) -> AppStat
         preview_images=[],
         r3_metrics=[],
         slot_debugger={"package_count": 0, "packages": []},
+        demo_session=DemoSessionRecord(
+            status="missing",
+            session_manifest_path="",
+            session_id="",
+            session_type="",
+            host_key="",
+            mode="",
+            level_path="",
+            default_package_id=None,
+        ),
         errors=[error],
         default_report_gate_id=None,
         default_image_key=None,
         default_package_id=None,
+        default_action_preset_id=None,
+        default_animation_preset_id=None,
     )
 
 
@@ -296,7 +418,155 @@ def _default_report_gate_id(report_categories: dict[str, list[ReportRecord]]) ->
     return None
 
 
-def load_workbench_state(manifest_path: str | Path) -> AppState:
+def _discover_latest_session_manifest_path(manifest_path: Path) -> Path | None:
+    for ancestor in manifest_path.parents:
+        candidate = (ancestor / "Saved" / "demo" / "e2" / "latest" / DEFAULT_E2_SESSION_NAME).resolve()
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def resolve_session_manifest_path(
+    *,
+    manifest_path: Path,
+    session_manifest_path: str | Path | None = None,
+) -> tuple[Path | None, bool]:
+    if session_manifest_path:
+        return Path(session_manifest_path).expanduser().resolve(), True
+    return _discover_latest_session_manifest_path(manifest_path), False
+
+
+def _demo_preset_from_payload(payload: dict[str, Any], *, preset_kind: str) -> DemoPresetRecord:
+    return DemoPresetRecord(
+        preset_id=str(payload.get("preset_id") or ""),
+        preset_kind=preset_kind,
+        family=str(payload.get("family") or ""),
+        source_gate_id=str(payload.get("source_gate_id") or ""),
+        status=str(payload.get("status") or ""),
+        requested_asset_path=str(payload.get("requested_animation_asset_path") or payload.get("requested_asset_path") or ""),
+        resolved_asset_path=str(payload.get("resolved_animation_asset_path") or payload.get("resolved_asset_path") or payload.get("retargeted_animation_asset_path") or ""),
+        payload=dict(payload),
+    )
+
+
+def _load_demo_session(
+    *,
+    manifest_path: Path,
+    session_manifest_path: str | Path | None,
+    errors: list[ErrorRecord],
+) -> DemoSessionRecord:
+    resolved_session_path, explicit_session = resolve_session_manifest_path(
+        manifest_path=manifest_path,
+        session_manifest_path=session_manifest_path,
+    )
+    if resolved_session_path is None:
+        return DemoSessionRecord(
+            status="missing",
+            session_manifest_path="",
+            session_id="",
+            session_type="",
+            host_key="",
+            mode="",
+            level_path="",
+            default_package_id=None,
+        )
+    if not resolved_session_path.exists():
+        if explicit_session:
+            errors.append(
+                ErrorRecord(
+                    code="manifest_missing",
+                    message="The requested E2 session manifest does not exist.",
+                    path=str(resolved_session_path),
+                )
+            )
+        return DemoSessionRecord(
+            status="missing" if not explicit_session else "error",
+            session_manifest_path=str(resolved_session_path),
+            session_id="",
+            session_type="",
+            host_key="",
+            mode="",
+            level_path="",
+            default_package_id=None,
+        )
+    try:
+        payload = _load_json(resolved_session_path)
+    except json.JSONDecodeError as exc:
+        errors.append(
+            ErrorRecord(
+                code="manifest_invalid_json",
+                message=f"Failed to parse E2 session manifest JSON: {exc}",
+                path=str(resolved_session_path),
+            )
+        )
+        return DemoSessionRecord(
+            status="error",
+            session_manifest_path=str(resolved_session_path),
+            session_id="",
+            session_type="",
+            host_key="",
+            mode="",
+            level_path="",
+            default_package_id=None,
+        )
+
+    packages: list[DemoPackageRecord] = []
+    for package_payload in list(payload.get("packages") or []):
+        slot_names = [str(item.get("slot_name") or "") for item in list(package_payload.get("slot_bindings") or []) if str(item.get("slot_name") or "")]
+        evidence = dict(package_payload.get("evidence") or {})
+        packages.append(
+            DemoPackageRecord(
+                package_id=str(package_payload.get("package_id") or ""),
+                sample_id=str(package_payload.get("sample_id") or ""),
+                host_blueprint_asset=str(package_payload.get("host_blueprint_asset") or ""),
+                hero_shot_id=str(package_payload.get("hero_shot_id") or ""),
+                slot_names=slot_names,
+                hero_before_image_path=str(evidence.get("hero_before_image_path") or ""),
+                hero_after_image_path=str(evidence.get("hero_after_image_path") or ""),
+                action_presets=[_demo_preset_from_payload(dict(item), preset_kind="action") for item in list(package_payload.get("action_presets") or [])],
+                animation_presets=[_demo_preset_from_payload(dict(item), preset_kind="animation") for item in list(package_payload.get("animation_presets") or [])],
+                payload=dict(package_payload),
+            )
+        )
+
+    default_package_id = str(payload.get("default_package_id") or "")
+    if not default_package_id and packages:
+        default_package_id = packages[0].package_id
+    return DemoSessionRecord(
+        status="pass",
+        session_manifest_path=str(resolved_session_path),
+        session_id=str(payload.get("session_id") or ""),
+        session_type=str(payload.get("session_type") or ""),
+        host_key=str(payload.get("host_key") or ""),
+        mode=str(payload.get("mode") or ""),
+        level_path=str(payload.get("level_path") or ""),
+        default_package_id=default_package_id or None,
+        packages=packages,
+        switch_order=[str(item) for item in list(payload.get("switch_order") or [])],
+        source_reports={str(key): str(value) for key, value in dict(payload.get("source_reports") or {}).items()},
+    )
+
+
+def _default_demo_preset_id(
+    demo_session: DemoSessionRecord,
+    *,
+    package_id: str | None,
+    preset_kind: str,
+) -> str | None:
+    package = demo_session.package_by_id(package_id)
+    if package is None:
+        return None
+    presets = package.action_presets if preset_kind == "action" else package.animation_presets
+    if not presets:
+        return None
+    return presets[0].preset_id or None
+
+
+def load_workbench_state(
+    manifest_path: str | Path,
+    *,
+    session_manifest_path: str | Path | None = None,
+) -> AppState:
     resolved_manifest_path = Path(manifest_path).expanduser().resolve()
     if not resolved_manifest_path.exists():
         return _error_app_state(
@@ -326,11 +596,26 @@ def load_workbench_state(manifest_path: str | Path) -> AppState:
         errors=errors,
     )
     slot_debugger = dict(manifest.get("slot_debugger") or {})
+    demo_session = _load_demo_session(
+        manifest_path=resolved_manifest_path,
+        session_manifest_path=session_manifest_path,
+        errors=errors,
+    )
     summary_counts = _coerce_summary_counts(dict(manifest.get("report_index") or {}))
     default_report_gate_id = _default_report_gate_id(report_categories)
     default_image_key = preview_images[0].key if preview_images else None
     slot_packages = list(slot_debugger.get("packages") or [])
-    default_package_id = str(slot_packages[0].get("package_id") or "") if slot_packages else None
+    default_package_id = demo_session.default_package_id or (str(slot_packages[0].get("package_id") or "") if slot_packages else None)
+    default_action_preset_id = _default_demo_preset_id(
+        demo_session,
+        package_id=default_package_id,
+        preset_kind="action",
+    )
+    default_animation_preset_id = _default_demo_preset_id(
+        demo_session,
+        package_id=default_package_id,
+        preset_kind="animation",
+    )
     return AppState(
         status="pass" if not errors else "error",
         manifest_path=str(resolved_manifest_path),
@@ -342,10 +627,13 @@ def load_workbench_state(manifest_path: str | Path) -> AppState:
         preview_images=preview_images,
         r3_metrics=_extract_r3_metrics(reports_by_gate_id),
         slot_debugger=slot_debugger,
+        demo_session=demo_session,
         errors=errors,
         default_report_gate_id=default_report_gate_id,
         default_image_key=default_image_key,
         default_package_id=default_package_id,
+        default_action_preset_id=default_action_preset_id,
+        default_animation_preset_id=default_animation_preset_id,
     )
 
 

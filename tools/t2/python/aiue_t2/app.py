@@ -18,6 +18,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the AiUE T2 Windows Native Workbench.")
     parser.add_argument("--latest", action="store_true", help="Open Saved/tooling/t1/latest/manifest.json")
     parser.add_argument("--manifest", help="Open a specific T1 manifest path.")
+    parser.add_argument("--session-manifest", help="Open a specific E2 session manifest path.")
     parser.add_argument("--dump-state-json", action="store_true", help="Print the current workbench state as JSON.")
     parser.add_argument("--exit-after-load", action="store_true", help="Load the manifest and exit immediately.")
     return parser.parse_args(argv)
@@ -32,7 +33,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     app = QApplication.instance() or QApplication(sys.argv[:1] if argv is None else ["aiue-t2", *argv])
     app.setApplicationName("AiUE T2 Workbench")
-    window = WorkbenchWindow(manifest_path=manifest_path)
+    window = WorkbenchWindow(
+        manifest_path=manifest_path,
+        session_manifest_path=Path(args.session_manifest).expanduser().resolve() if args.session_manifest else None,
+    )
     window.show()
     app.processEvents()
 

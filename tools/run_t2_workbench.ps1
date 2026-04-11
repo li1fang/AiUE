@@ -2,6 +2,7 @@ param(
     [string]$PythonExe = "python3.12.exe",
     [switch]$Latest,
     [string]$Manifest = "",
+    [string]$SessionManifest = "",
     [switch]$DumpStateJson,
     [switch]$ExitAfterLoad
 )
@@ -25,6 +26,9 @@ if ($Latest -or -not $Manifest) {
 }
 if ($Manifest) {
     $args += @("--manifest", $Manifest)
+}
+if ($SessionManifest) {
+    $args += @("--session-manifest", $SessionManifest)
 }
 if ($DumpStateJson) {
     $args += "--dump-state-json"

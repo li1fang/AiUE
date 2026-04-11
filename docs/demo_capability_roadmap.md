@@ -120,6 +120,27 @@ Interpretation:
 - `playable_demo_e2_bootstrap` is the first `E2` checkpoint
 - it opens the path for future interactive work, but it is still evidence-backed bootstrap work rather than a finished playable demo
 
+Current second slice:
+
+- `T2` now auto-discovers [playable_demo_e2_session.json](C:/AiUE/Saved/demo/e2/latest/playable_demo_e2_session.json)
+- `T2 --latest --dump-state-json --exit-after-load` now exposes:
+  - `demo_session.status`
+  - `demo_session.package_ids`
+  - `selected_default_package`
+  - `selected_default_action_preset`
+  - `selected_default_animation_preset`
+- the Windows native workbench now has a dedicated `Demo Session` view for:
+  - package switching
+  - action preset selection
+  - animation preset selection
+  - package-level session JSON inspection
+
+What this second slice still does **not** do:
+
+- it does not launch UE commands directly
+- it does not yet provide a true playable control loop
+- it is a native session explorer, not the final `E2` interaction layer
+
 Not in scope yet:
 
 - complex game loop

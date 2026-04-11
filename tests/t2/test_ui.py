@@ -18,4 +18,9 @@ def test_workbench_window_renders_fixture_pack(qtbot, tmp_path: Path):
     assert window.metrics_table.rowCount() >= 1
     assert window.slot_table.rowCount() >= 3
     assert "visual_proof_v1" in window.details_text.toPlainText()
+    assert window.demo_session_package_list.count() == 1
+    assert window.demo_action_preset_list.count() == 1
+    assert window.demo_animation_preset_list.count() == 1
+    assert "playable_demo_e2_bootstrap" in window.demo_session_summary.text()
+    assert "pkg_alpha" in window.demo_package_details.toPlainText()
     assert window.current_error_codes() == []

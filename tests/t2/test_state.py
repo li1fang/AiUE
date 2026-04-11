@@ -16,6 +16,9 @@ def test_load_workbench_state_reads_fixture_pack(tmp_path: Path):
     assert state.summary_counts["platform_line_reports"] == 3
     assert state.slot_debugger["package_count"] == 1
     assert state.default_report_gate_id == "visual_proof_v1"
+    assert state.demo_session.status == "pass"
+    assert state.demo_session.default_package_id == "pkg_alpha"
+    assert len(state.demo_session.packages) == 1
     assert len(state.preview_images) >= 4
 
 
@@ -33,6 +36,10 @@ def test_dump_payload_exposes_expected_native_state(tmp_path: Path):
     ]
     assert payload["slot_debugger"]["package_count"] == 1
     assert payload["slot_debugger"]["package_ids"] == ["pkg_alpha"]
+    assert payload["demo_session"]["status"] == "pass"
+    assert payload["demo_session"]["package_ids"] == ["pkg_alpha"]
+    assert payload["selected_default_action_preset"] == "showcase_root_translate_and_turn"
+    assert payload["selected_default_animation_preset"] == "MM_Attack_01"
 
 
 def test_load_workbench_state_flags_invalid_manifest(tmp_path: Path):

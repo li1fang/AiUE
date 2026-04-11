@@ -31,6 +31,9 @@ from aiue_t2.state import (
     CATEGORY_LABELS,
     CATEGORY_ORDER,
     AppState,
+    DemoPackageRecord,
+    DemoPresetRecord,
+    DemoSessionRecord,
     PreviewImageRecord,
     ReportRecord,
     ViewState,
@@ -102,12 +105,15 @@ class SummaryCard(QFrame):
 
 
 class WorkbenchWindow(QMainWindow):
-    def __init__(self, *, manifest_path: Path) -> None:
+    def __init__(self, *, manifest_path: Path, session_manifest_path: Path | None = None) -> None:
         super().__init__()
         self.setWindowTitle("AiUE T2 Windows Native Workbench")
         self.resize(1440, 900)
         self.setStyleSheet(APP_STYLESHEET)
         self.current_manifest_path = Path(manifest_path).expanduser().resolve()
+        self.current_session_manifest_path = (
+            Path(session_manifest_path).expanduser().resolve() if session_manifest_path is not None else None
+        )
         self.app_state = AppState(
             status="error",
             manifest_path=str(self.current_manifest_path),
@@ -119,16 +125,28 @@ class WorkbenchWindow(QMainWindow):
             preview_images=[],
             r3_metrics=[],
             slot_debugger={"package_count": 0, "packages": []},
+            demo_session=DemoSessionRecord(
+                status="missing",
+                session_manifest_path="",
+                session_id="",
+                session_type="",
+                host_key="",
+                mode="",
+                level_path="",
+                default_package_id=None,
+            ),
             errors=[],
             default_report_gate_id=None,
             default_image_key=None,
             default_package_id=None,
+            default_action_preset_id=None,
+            default_animation_preset_id=None,
         )
         self.view_state = ViewState()
         self.report_items_by_gate_id: dict[str, QTreeWidgetItem] = {}
         self.preview_records_by_key: dict[str, PreviewImageRecord] = {}
         self._build_ui()
-        self.load_manifest(self.current_manifest_path)
+        self.load_manifest(self.current_manifest_path, session_manifest_path=self.current_session_manifest_path)
 
     def _build_ui(self) -> None:
         toolbar = QToolBar("Workbench")
@@ -152,6 +170,10 @@ class WorkbenchWindow(QMainWindow):
         open_pack_action = QAction("Open Pack Root", self)
         open_pack_action.triggered.connect(self.open_pack_root)
         toolbar.addAction(open_pack_action)
+
+        open_session_action = QAction("Open Session", self)
+        open_session_action.triggered.connect(self.open_demo_session_manifest)
+        toolbar.addAction(open_session_action)
 
         root = QWidget()
         root_layout = QVBoxLayout(root)
@@ -253,15 +275,68 @@ class WorkbenchWindow(QMainWindow):
         slot_layout.addWidget(self.slot_table)
         self.tabs.addTab(slot_root, "Slot Debugger")
 
+        self.demo_session_summary = QLabel("No E2 session loaded")
+        self.demo_session_summary.setObjectName("demoSessionSummaryLabel")
+        self.demo_session_summary.setProperty("role", "muted")
+        self.demo_session_summary.setWordWrap(True)
+
+        self.demo_session_package_list = QListWidget()
+        self.demo_session_package_list.setObjectName("demoSessionPackageList")
+        self.demo_session_package_list.currentItemChanged.connect(self._on_demo_session_package_changed)
+
+        self.demo_action_preset_list = QListWidget()
+        self.demo_action_preset_list.setObjectName("demoActionPresetList")
+        self.demo_action_preset_list.currentItemChanged.connect(self._on_demo_action_preset_changed)
+
+        self.demo_animation_preset_list = QListWidget()
+        self.demo_animation_preset_list.setObjectName("demoAnimationPresetList")
+        self.demo_animation_preset_list.currentItemChanged.connect(self._on_demo_animation_preset_changed)
+
+        self.demo_package_details = QPlainTextEdit()
+        self.demo_package_details.setObjectName("demoPackageDetailsText")
+        self.demo_package_details.setReadOnly(True)
+
+        action_box = QGroupBox("Action Presets")
+        action_box_layout = QVBoxLayout(action_box)
+        action_box_layout.addWidget(self.demo_action_preset_list)
+
+        animation_box = QGroupBox("Animation Presets")
+        animation_box_layout = QVBoxLayout(animation_box)
+        animation_box_layout.addWidget(self.demo_animation_preset_list)
+
+        session_right = QWidget()
+        session_right_layout = QVBoxLayout(session_right)
+        session_right_layout.addWidget(self.demo_session_summary)
+        session_right_layout.addWidget(action_box)
+        session_right_layout.addWidget(animation_box)
+        session_right_layout.addWidget(self.demo_package_details)
+
+        session_splitter = QSplitter()
+        session_splitter.addWidget(self.demo_session_package_list)
+        session_splitter.addWidget(session_right)
+        session_splitter.setStretchFactor(0, 0)
+        session_splitter.setStretchFactor(1, 1)
+
+        demo_root = QWidget()
+        demo_layout = QVBoxLayout(demo_root)
+        demo_layout.addWidget(session_splitter)
+        self.tabs.addTab(demo_root, "Demo Session")
+
         content_splitter.addWidget(self.tabs)
         content_splitter.setStretchFactor(1, 1)
         root_layout.addWidget(content_splitter)
 
         self.setCentralWidget(root)
 
-    def load_manifest(self, manifest_path: Path) -> None:
+    def load_manifest(self, manifest_path: Path, *, session_manifest_path: Path | None = None) -> None:
         self.current_manifest_path = Path(manifest_path).expanduser().resolve()
-        self.app_state = load_workbench_state(self.current_manifest_path)
+        self.current_session_manifest_path = (
+            Path(session_manifest_path).expanduser().resolve() if session_manifest_path is not None else self.current_session_manifest_path
+        )
+        self.app_state = load_workbench_state(
+            self.current_manifest_path,
+            session_manifest_path=self.current_session_manifest_path,
+        )
         self.view_state = build_default_view_state(self.app_state)
         self._render_state()
 
@@ -290,6 +365,12 @@ class WorkbenchWindow(QMainWindow):
             self._select_report(gate_ids[step % len(gate_ids)])
         if self.preview_list.count():
             self.preview_list.setCurrentRow(step % self.preview_list.count())
+        if self.demo_session_package_list.count():
+            self.demo_session_package_list.setCurrentRow(step % self.demo_session_package_list.count())
+        if self.demo_action_preset_list.count():
+            self.demo_action_preset_list.setCurrentRow(step % self.demo_action_preset_list.count())
+        if self.demo_animation_preset_list.count():
+            self.demo_animation_preset_list.setCurrentRow(step % self.demo_animation_preset_list.count())
         if self.tabs.count():
             self.tabs.setCurrentIndex(step % self.tabs.count())
 
@@ -309,6 +390,11 @@ class WorkbenchWindow(QMainWindow):
     def open_pack_root(self) -> None:
         self._open_in_explorer(self.app_state.pack_root)
 
+    def open_demo_session_manifest(self) -> None:
+        session_manifest_path = self.app_state.demo_session.session_manifest_path
+        if session_manifest_path:
+            self._open_in_explorer(session_manifest_path)
+
     def _render_state(self) -> None:
         self._render_errors()
         counts = dict(self.app_state.summary_counts)
@@ -321,6 +407,7 @@ class WorkbenchWindow(QMainWindow):
         self._render_preview_images()
         self._render_metrics()
         self._render_slot_table()
+        self._render_demo_session()
 
     def _render_errors(self) -> None:
         if not self.app_state.errors:
@@ -449,6 +536,96 @@ class WorkbenchWindow(QMainWindow):
             for column_index, value in enumerate(row):
                 self.slot_table.setItem(row_index, column_index, QTableWidgetItem(value))
 
+    def _render_demo_session(self) -> None:
+        session = self.app_state.demo_session
+        self.demo_session_package_list.clear()
+        self.demo_action_preset_list.clear()
+        self.demo_animation_preset_list.clear()
+
+        if session.status != "pass":
+            session_path = session.session_manifest_path or "(auto-discovery found no session yet)"
+            self.demo_session_summary.setText(f"E2 session status: {session.status.upper()} | {session_path}")
+            self.demo_package_details.setPlainText("{}")
+            return
+
+        self.demo_session_summary.setText(
+            " | ".join(
+                [
+                    f"Session {session.session_id or 'unknown'}",
+                    f"Type {session.session_type or 'unknown'}",
+                    f"Packages {len(session.packages)}",
+                    f"Host {session.host_key or 'unknown'}",
+                    f"Mode {session.mode or 'unknown'}",
+                ]
+            )
+        )
+        for record in session.packages:
+            item = QListWidgetItem(record.package_id)
+            item.setData(Qt.UserRole, record.package_id)
+            self.demo_session_package_list.addItem(item)
+
+        selected_package_id = self.view_state.selected_package_id or session.default_package_id
+        if selected_package_id:
+            for index in range(self.demo_session_package_list.count()):
+                item = self.demo_session_package_list.item(index)
+                if item.data(Qt.UserRole) == selected_package_id:
+                    self.demo_session_package_list.setCurrentItem(item)
+                    break
+        if self.demo_session_package_list.currentItem() is None and self.demo_session_package_list.count():
+            self.demo_session_package_list.setCurrentRow(0)
+        self._render_demo_session_package_details()
+
+    def _selected_demo_package_record(self) -> DemoPackageRecord | None:
+        return self.app_state.demo_session.package_by_id(self.view_state.selected_package_id)
+
+    def _render_demo_session_package_details(self) -> None:
+        package = self._selected_demo_package_record()
+        if package is None:
+            self.demo_package_details.setPlainText("{}")
+            return
+        self._render_demo_preset_lists(package)
+        self.demo_package_details.setPlainText(json.dumps(package.payload or {}, ensure_ascii=False, indent=2))
+
+    def _render_demo_preset_lists(self, package: DemoPackageRecord) -> None:
+        self.demo_action_preset_list.clear()
+        for preset in package.action_presets:
+            item = QListWidgetItem(self._demo_preset_label(preset))
+            item.setData(Qt.UserRole, preset.preset_id)
+            self.demo_action_preset_list.addItem(item)
+        selected_action_preset_id = self.view_state.selected_action_preset_id
+        if selected_action_preset_id:
+            for index in range(self.demo_action_preset_list.count()):
+                item = self.demo_action_preset_list.item(index)
+                if item.data(Qt.UserRole) == selected_action_preset_id:
+                    self.demo_action_preset_list.setCurrentItem(item)
+                    break
+        if self.demo_action_preset_list.currentItem() is None and self.demo_action_preset_list.count():
+            self.demo_action_preset_list.setCurrentRow(0)
+
+        self.demo_animation_preset_list.clear()
+        for preset in package.animation_presets:
+            item = QListWidgetItem(self._demo_preset_label(preset))
+            item.setData(Qt.UserRole, preset.preset_id)
+            self.demo_animation_preset_list.addItem(item)
+        selected_animation_preset_id = self.view_state.selected_animation_preset_id
+        if selected_animation_preset_id:
+            for index in range(self.demo_animation_preset_list.count()):
+                item = self.demo_animation_preset_list.item(index)
+                if item.data(Qt.UserRole) == selected_animation_preset_id:
+                    self.demo_animation_preset_list.setCurrentItem(item)
+                    break
+        if self.demo_animation_preset_list.currentItem() is None and self.demo_animation_preset_list.count():
+            self.demo_animation_preset_list.setCurrentRow(0)
+
+    @staticmethod
+    def _demo_preset_label(preset: DemoPresetRecord) -> str:
+        parts = [preset.preset_id or "preset", preset.preset_kind]
+        if preset.family:
+            parts.append(preset.family)
+        if preset.status:
+            parts.append(preset.status)
+        return " | ".join(parts)
+
     def _selected_report_record(self) -> ReportRecord | None:
         gate_id = self.view_state.selected_report_gate_id
         if not gate_id:
@@ -477,6 +654,27 @@ class WorkbenchWindow(QMainWindow):
             return
         self.view_state.selected_image_key = str(item.data(Qt.UserRole) or "")
         self._render_preview_image()
+
+    def _on_demo_session_package_changed(self) -> None:
+        item = self.demo_session_package_list.currentItem()
+        if item is None:
+            return
+        self.view_state.selected_package_id = str(item.data(Qt.UserRole) or "")
+        self.view_state.selected_action_preset_id = None
+        self.view_state.selected_animation_preset_id = None
+        self._render_demo_session_package_details()
+
+    def _on_demo_action_preset_changed(self) -> None:
+        item = self.demo_action_preset_list.currentItem()
+        if item is None:
+            return
+        self.view_state.selected_action_preset_id = str(item.data(Qt.UserRole) or "")
+
+    def _on_demo_animation_preset_changed(self) -> None:
+        item = self.demo_animation_preset_list.currentItem()
+        if item is None:
+            return
+        self.view_state.selected_animation_preset_id = str(item.data(Qt.UserRole) or "")
 
     def _select_report(self, gate_id: str) -> None:
         item = self.report_items_by_gate_id.get(gate_id)

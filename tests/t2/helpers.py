@@ -13,6 +13,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXTURE_ROOT = REPO_ROOT / "tests" / "fixtures"
 REPORT_FIXTURES = FIXTURE_ROOT / "reports"
 WORKBENCH_SCRIPT = REPO_ROOT / "tools" / "run_t2_workbench.ps1"
+DEFAULT_E2_SESSION_NAME = "playable_demo_e2_session.json"
 
 
 def materialize_report_fixtures(target_root: Path) -> Path:
@@ -36,12 +37,69 @@ def build_fixture_pack(tmp_path: Path) -> dict:
         latest_root=latest_root,
         repo_root=tmp_path,
     )
+    session_manifest_path = build_fixture_e2_session(tmp_path)
     return {
         "manifest_path": output_root / "manifest.json",
         "output_root": output_root,
         "latest_root": latest_root,
         "manifest": manifest,
+        "session_manifest_path": session_manifest_path,
     }
+
+
+def build_fixture_e2_session(tmp_path: Path) -> Path:
+    session_root = tmp_path / "Saved" / "demo" / "e2" / "latest"
+    session_root.mkdir(parents=True, exist_ok=True)
+    session_manifest_path = session_root / DEFAULT_E2_SESSION_NAME
+    session_payload = {
+        "generated_at_utc": "2026-04-11T05:35:30+00:00",
+        "session_id": "playable_demo_e2_bootstrap",
+        "session_type": "playable_demo_bootstrap",
+        "host_key": "demo",
+        "mode": "editor_rendered",
+        "level_path": "/Game/Levels/DefaultLevel",
+        "default_package_id": "pkg_alpha",
+        "switch_order": ["pkg_alpha"],
+        "packages": [
+            {
+                "package_id": "pkg_alpha",
+                "sample_id": "fixture_alpha",
+                "host_blueprint_asset": "/Game/Fixture/BP_PMXCharacterHost_FixtureAlpha",
+                "hero_shot_id": "top",
+                "slot_bindings": [
+                    {"slot_name": "weapon", "item_kind": "skeletal_mesh"},
+                    {"slot_name": "clothing", "item_kind": "skeletal_mesh"},
+                    {"slot_name": "fx", "item_kind": "niagara_system"},
+                ],
+                "action_presets": [
+                    {
+                        "preset_id": "showcase_root_translate_and_turn",
+                        "action_kind": "root_translate_and_turn",
+                        "status": "pass",
+                    }
+                ],
+                "animation_presets": [
+                    {
+                        "preset_id": "MM_Attack_01",
+                        "family": "attack",
+                        "source_gate_id": "demo_retargeted_animation_preview_d8",
+                        "requested_animation_asset_path": "/Game/CombatMagicAnims/MM_Attack_01",
+                        "resolved_animation_asset_path": "/Game/RTG_MM_Attack_01_PMXPreview",
+                        "status": "pass",
+                    }
+                ],
+                "evidence": {
+                    "hero_before_image_path": str((FIXTURE_ROOT / "images" / "front.ppm").resolve()),
+                    "hero_after_image_path": str((FIXTURE_ROOT / "images" / "side.ppm").resolve()),
+                },
+            }
+        ],
+        "source_reports": {
+            "e1_report_path": str((REPORT_FIXTURES / "latest_demo_cross_bundle_regression_d12_report.json").resolve()),
+        },
+    }
+    write_json(session_manifest_path, session_payload)
+    return session_manifest_path
 
 
 def create_invalid_manifest(tmp_path: Path) -> Path:
@@ -68,7 +126,12 @@ def parse_json_from_stdout(stdout: str) -> dict:
     return json.loads(stdout[start : end + 1])
 
 
-def run_workbench_process(*, manifest_path: Path | None = None, latest: bool = False) -> tuple[subprocess.CompletedProcess[str], dict]:
+def run_workbench_process(
+    *,
+    manifest_path: Path | None = None,
+    latest: bool = False,
+    session_manifest_path: Path | None = None,
+) -> tuple[subprocess.CompletedProcess[str], dict]:
     command = [
         "powershell",
         "-NoProfile",
@@ -83,6 +146,8 @@ def run_workbench_process(*, manifest_path: Path | None = None, latest: bool = F
         command += ["-Manifest", str(manifest_path)]
     elif latest:
         command += ["-Latest"]
+    if session_manifest_path is not None:
+        command += ["-SessionManifest", str(session_manifest_path)]
     env = os.environ.copy()
     env["QT_QPA_PLATFORM"] = "offscreen"
     env["QT_API"] = "pyside6"
