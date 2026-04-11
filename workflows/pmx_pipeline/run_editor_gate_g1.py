@@ -2,13 +2,19 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-from datetime import datetime, timezone
 from pathlib import Path
 
 from _bootstrap import ensure_aiue_paths
 
 REPO_ROOT = ensure_aiue_paths()
 
+from _gate_common import (
+    build_discussion_signal,
+    default_latest_report_path,
+    default_output_root,
+    make_failed_requirement,
+    now_utc,
+)
 from aiue_core.report_writer import make_compatibility_block, with_report_envelope
 from aiue_core.schema_utils import load_json, load_workspace_config, write_json
 from aiue_unreal.host_bridge import run_host_auto_ue_cli
@@ -38,15 +44,6 @@ FIXED_EXECUTION_PROFILE = {
     "finalize_wait_seconds": 8,
 }
 
-
-def now_utc() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-
-
-def run_stamp() -> str:
-    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-
-
 def parse_args():
     parser = argparse.ArgumentParser(description="Run the AiUE PMX editor core closure gate G1.")
     parser.add_argument("--workspace-config", required=True)
@@ -62,19 +59,6 @@ def latest_matching_file(root: Path, pattern: str) -> Path | None:
         return None
     candidates = sorted(root.rglob(pattern), key=lambda item: item.stat().st_mtime, reverse=True)
     return candidates[0] if candidates else None
-
-
-def repo_root_from_workspace(workspace: dict) -> Path:
-    return Path(workspace["paths"].get("aiue_repo_root") or REPO_ROOT).expanduser().resolve()
-
-
-def default_output_root(workspace: dict) -> Path:
-    return repo_root_from_workspace(workspace) / "Saved" / "verification" / f"{GATE_ID}_{run_stamp()}"
-
-
-def default_latest_report_path(workspace: dict) -> Path:
-    return repo_root_from_workspace(workspace) / "Saved" / "verification" / f"latest_{GATE_ID}_report.json"
-
 
 def resolve_equipment_report_path(workspace: dict, explicit_path: str | None) -> Path:
     if explicit_path:
@@ -215,16 +199,6 @@ def evaluate_scenario_capture(scenario_result: dict | None, scenario_name: str) 
         "warnings": list(scenario_result.get("warnings") or []),
         "errors": sorted(set(errors)),
     }
-
-
-def make_failed_requirement(requirement_id: str, message: str, **details) -> dict:
-    payload = {
-        "id": requirement_id,
-        "message": message,
-    }
-    payload.update(details)
-    return payload
-
 
 def evaluate_package_result(package: dict, action_payload: dict, package_artifacts: dict) -> tuple[dict, list[dict]]:
     host_record = package["host_record"]
@@ -409,38 +383,6 @@ def aggregate_counts(per_package_results: list[dict]) -> dict:
             counts["late_captures"] += int(bool(scenario.get("late_capture")))
     return counts
 
-
-def normalize_failed_requirement_ids(payload: dict | None) -> list[str]:
-    values = []
-    for item in (payload or {}).get("failed_requirements") or []:
-        if isinstance(item, dict) and item.get("id"):
-            values.append(str(item["id"]))
-        elif item:
-            values.append(str(item))
-    return sorted(set(values))
-
-
-def build_discussion_signal(status: str, failed_requirements: list[dict], previous_report: dict | None, previous_report_path: Path | None) -> dict:
-    current_failed_ids = normalize_failed_requirement_ids({"failed_requirements": failed_requirements})
-    previous_status = (previous_report or {}).get("status")
-    previous_failed_ids = normalize_failed_requirement_ids(previous_report)
-    signal = {
-        "should_discuss": False,
-        "reason": None,
-        "previous_report_path": str(previous_report_path) if previous_report_path else None,
-        "repeated_failed_requirement_ids": [],
-    }
-    if status == "pass" and previous_status != "pass":
-        signal["should_discuss"] = True
-        signal["reason"] = "g1_first_complete_pass"
-        return signal
-    if status != "pass" and current_failed_ids and previous_status != "pass" and current_failed_ids == previous_failed_ids:
-        signal["should_discuss"] = True
-        signal["reason"] = "same_failed_requirement_two_rounds"
-        signal["repeated_failed_requirement_ids"] = current_failed_ids
-    return signal
-
-
 def verify_editor_capture_capability(workspace: dict) -> list[dict]:
     capability_path = Path(workspace["paths"]["capability_probe_root"]).expanduser().resolve() / "latest_capabilities.json"
     if not capability_path.exists():
@@ -537,7 +479,13 @@ def build_report(
 ) -> dict:
     counts = aggregate_counts(per_package_results)
     status = "pass" if not failed_requirements else "fail"
-    discussion_signal = build_discussion_signal(status, failed_requirements, previous_report, previous_report_path)
+    discussion_signal = build_discussion_signal(
+        status,
+        failed_requirements,
+        previous_report,
+        previous_report_path,
+        first_pass_reason="g1_first_complete_pass",
+    )
     package_run_roots = []
     for entry in per_package_results:
         capture_root = (entry.get("artifacts") or {}).get("capture_root")
@@ -578,8 +526,12 @@ def build_report(
 def main():
     args = parse_args()
     workspace = load_workspace_config(args.workspace_config)
-    output_root = Path(args.output_root).expanduser().resolve() if args.output_root else default_output_root(workspace)
-    latest_report_path = Path(args.latest_report_path).expanduser().resolve() if args.latest_report_path else default_latest_report_path(workspace)
+    output_root = Path(args.output_root).expanduser().resolve() if args.output_root else default_output_root(workspace, REPO_ROOT, GATE_ID)
+    latest_report_path = (
+        Path(args.latest_report_path).expanduser().resolve()
+        if args.latest_report_path
+        else default_latest_report_path(workspace, REPO_ROOT, GATE_ID)
+    )
     previous_report = load_json(latest_report_path) if latest_report_path.exists() else None
     previous_report_path = latest_report_path if latest_report_path.exists() else None
 
