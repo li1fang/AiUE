@@ -25,19 +25,19 @@ It is now asking:
 
 ## Current Evidence Snapshot
 
-Latest overall evidence state after the 2026-04-11 checkpoint refresh:
+Latest overall evidence state after archiving the historical `D3` latest fail:
 
-- latest reports present: `30`
+- latest reports present: `29`
 - latest reports passing: `29`
 - active line reports: `8`
 - platform line reports: `10`
-- historical / other reports: `12`
+- historical / other reports: `11`
 
 Important note:
 
-- the single non-passing latest report is still historical: `demo_animation_preview_d3 = fail`
-- the failure class is `animation_skeleton_incompatible`
-- this is not an active-line regression, but it does still pollute global "latest" summaries until it is archived or reclassified
+- the historical `demo_animation_preview_d3` latest fail has now been archived out of the top-level latest surface
+- the archive reason is `historical_gate_superseded_by_retarget_line`
+- this keeps active dashboard summaries aligned with the current active and platform lines
 
 Latest route-relevant reports:
 
@@ -55,7 +55,7 @@ Current route-specific status:
 - `T1 latest evidence pack = refreshed`
 - `T2 latest smoke = pass`
 - `pytest = 25 passed`
-- `historical D3 latest = still fail and visible`
+- `historical D3 latest = archived`
 
 ## Capability Assessment
 
@@ -245,7 +245,7 @@ Current live read:
 - `T1 latest manifest` regenerated successfully
 - `T2 --latest --dump-state-json --exit-after-load` returned `status = pass`
 - `slot_debugger.package_count = 2`
-- `report counts = 30 total / 29 pass / 1 historical fail`
+- `report counts = 29 total / 29 pass`
 
 Judgment:
 
@@ -255,16 +255,16 @@ Judgment:
 
 ### 5. Historical report hygiene is now a real governance concern
 
-The remaining visible fail is:
+The first archived historical latest is now:
 
-- [latest_demo_animation_preview_d3_report.json](C:/AiUE/Saved/verification/latest_demo_animation_preview_d3_report.json)
+- [latest_demo_animation_preview_d3_report.json](C:/AiUE/Saved/verification/archived_latest/20260411T041030Z/latest_demo_animation_preview_d3_report.json)
 
-This is useful historical evidence, but it should not continue to sit in the same surface as current success criteria forever.
+This is useful historical evidence, and it is now retained without continuing to sit in the same surface as current success criteria.
 
 Judgment:
 
-- this is not a reason to panic
-- it is a reason to formalize historical report archiving or reclassification
+- this is the right direction
+- future historical latest cleanup should use the same archive mechanism instead of manual deletion
 
 ## Should Anything Be Rewritten?
 
@@ -368,9 +368,9 @@ It is:
 
 The most pragmatic next priorities are now:
 
-1. clean up or archive the lingering historical `D3` latest fail so dashboard surfaces match the active line
-2. if governance continues, target `composition.py` before touching `common.py`
-3. keep `E1` stable enough to become a real `E2` entry gate
+1. if governance continues, target `composition.py` before touching `common.py`
+2. keep `E1` stable enough to become a real `E2` entry gate
+3. apply the new latest-report archive mechanism to any future superseded historical line
 4. only then deepen `Q5C` from `lite` toward richer spatial / volumetric evidence
 
 ## Bottom Line
