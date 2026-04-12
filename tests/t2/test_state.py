@@ -23,6 +23,8 @@ def test_load_workbench_state_reads_fixture_pack(tmp_path: Path):
     assert state.governance_balance.recommended_next_round_kind == "flexible"
     assert state.test_governance.status == "attention"
     assert state.test_governance.checkpoint_ready is False
+    assert state.test_governance.automation_checkpoint_ready is False
+    assert state.test_governance.signoff_checkpoint_ready is False
     assert state.demo_session.status == "pass"
     assert state.demo_session.default_package_id == "pkg_alpha"
     assert len(state.demo_session.packages) == 1
@@ -55,6 +57,8 @@ def test_dump_payload_exposes_expected_native_state(tmp_path: Path):
     assert payload["governance_balance"]["recommended_next_round_kind"] == "flexible"
     assert payload["test_governance"]["status"] == "attention"
     assert payload["test_governance"]["checkpoint_ready"] is False
+    assert payload["test_governance"]["automation_checkpoint_ready"] is False
+    assert payload["test_governance"]["signoff_checkpoint_ready"] is False
     assert payload["test_governance"]["required_lane_ids"] == [
         "repo_surface",
         "schema_contracts",
@@ -62,6 +66,12 @@ def test_dump_payload_exposes_expected_native_state(tmp_path: Path):
     ]
     assert payload["test_governance"]["high_priority_blind_spot_ids"] == [
         "material_texture_loading",
+        "manual_playable_demo_validation",
+    ]
+    assert payload["test_governance"]["high_priority_automation_blind_spot_ids"] == [
+        "material_texture_loading",
+    ]
+    assert payload["test_governance"]["high_priority_signoff_blind_spot_ids"] == [
         "manual_playable_demo_validation",
     ]
     assert payload["quality_summaries"]["q5c_lite"]["status"] == "missing"

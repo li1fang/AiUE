@@ -25,7 +25,19 @@
     "partial_count": 7,
     "missing_count": 2,
     "blind_spot_count": 9,
-    "high_priority_missing_count": 2
+    "high_priority_missing_count": 2,
+    "high_priority_missing_ids": [
+      "material_texture_loading",
+      "manual_playable_demo_validation"
+    ],
+    "high_priority_automation_missing_count": 1,
+    "high_priority_automation_missing_ids": [
+      "material_texture_loading"
+    ],
+    "high_priority_signoff_missing_count": 1,
+    "high_priority_signoff_missing_ids": [
+      "manual_playable_demo_validation"
+    ]
   },
   "coverage_axes": [
     {
@@ -53,17 +65,20 @@
     {
       "axis_id": "material_texture_loading",
       "status": "missing",
-      "priority": "high"
+      "priority": "high",
+      "readiness_domain": "automation"
     },
     {
       "axis_id": "manual_playable_demo_validation",
       "status": "missing",
-      "priority": "high"
+      "priority": "high",
+      "readiness_domain": "manual_signoff"
     },
     {
       "axis_id": "weapon_variant_diversity",
       "status": "partial",
-      "priority": "normal"
+      "priority": "normal",
+      "readiness_domain": "automation"
     }
   ],
   "lane_policy": {
@@ -106,18 +121,27 @@
   ],
   "checkpoint_readiness": {
     "ready": false,
+    "automation_checkpoint_ready": false,
+    "signoff_checkpoint_ready": false,
     "failed_required_lane_ids": [],
     "high_priority_blind_spot_ids": [
       "material_texture_loading",
       "manual_playable_demo_validation"
     ],
+    "high_priority_automation_blind_spot_ids": [
+      "material_texture_loading"
+    ],
+    "high_priority_signoff_blind_spot_ids": [
+      "manual_playable_demo_validation"
+    ],
     "reasons": [
-      "high_priority_blind_spots_missing"
+      "high_priority_automation_blind_spots_missing",
+      "manual_signoff_missing"
     ]
   },
   "discussion_signal": {
     "should_discuss": true,
-    "reason": "high_priority_blind_spots_missing"
+    "reason": "high_priority_automation_blind_spots_missing"
   },
   "artifacts": {
     "report_path": "C:\\AiUE\\Saved\\verification\\test_governance_round1_fixture\\test_governance_round1_report.json",

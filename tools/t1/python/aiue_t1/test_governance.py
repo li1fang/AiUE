@@ -19,6 +19,9 @@ HIGH_PRIORITY_AXIS_IDS = [
     "material_texture_loading",
     "manual_playable_demo_validation",
 ]
+MANUAL_SIGNOFF_AXIS_IDS = {
+    "manual_playable_demo_validation",
+}
 DV1_COVERAGE_AXIS_IDS = {
     "character_variant_diversity",
     "weapon_variant_diversity",
@@ -117,6 +120,16 @@ def load_coverage_ledger(coverage_ledger_path: Path) -> dict[str, Any]:
     return payload
 
 
+def readiness_domain_for_axis(entry: dict[str, Any]) -> str:
+    axis_id = str(entry.get("axis_id") or "")
+    configured_domain = str(entry.get("readiness_domain") or "").strip().lower()
+    if configured_domain in {"automation", "manual_signoff"}:
+        return configured_domain
+    if axis_id in MANUAL_SIGNOFF_AXIS_IDS:
+        return "manual_signoff"
+    return "automation"
+
+
 def summarize_coverage_ledger(coverage_ledger: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
     axes = [dict(item) for item in list(coverage_ledger.get("coverage_axes") or [])]
     covered_count = sum(1 for item in axes if str(item.get("status") or "") == "covered")
@@ -124,29 +137,42 @@ def summarize_coverage_ledger(coverage_ledger: dict[str, Any]) -> tuple[dict[str
     missing_count = sum(1 for item in axes if str(item.get("status") or "") == "missing")
     known_blind_spots: list[dict[str, Any]] = []
     high_priority_missing_ids: list[str] = []
+    high_priority_automation_missing_ids: list[str] = []
+    high_priority_signoff_missing_ids: list[str] = []
     for entry in axes:
         axis_id = str(entry.get("axis_id") or "")
         status = str(entry.get("status") or "")
         if status == "covered":
             continue
         priority = "high" if axis_id in HIGH_PRIORITY_AXIS_IDS else "normal"
+        readiness_domain = readiness_domain_for_axis(entry)
         known_blind_spots.append(
             {
                 "axis_id": axis_id,
                 "status": status,
                 "summary": str(entry.get("summary") or ""),
                 "priority": priority,
+                "readiness_domain": readiness_domain,
                 "evidence_gate_ids": [str(item) for item in list(entry.get("evidence_gate_ids") or []) if str(item)],
             }
         )
         if axis_id in HIGH_PRIORITY_AXIS_IDS and status == "missing":
             high_priority_missing_ids.append(axis_id)
+            if readiness_domain == "manual_signoff":
+                high_priority_signoff_missing_ids.append(axis_id)
+            else:
+                high_priority_automation_missing_ids.append(axis_id)
     coverage_summary = {
         "covered_count": covered_count,
         "partial_count": partial_count,
         "missing_count": missing_count,
         "blind_spot_count": len(known_blind_spots),
         "high_priority_missing_count": len(high_priority_missing_ids),
+        "high_priority_missing_ids": list(high_priority_missing_ids),
+        "high_priority_automation_missing_count": len(high_priority_automation_missing_ids),
+        "high_priority_automation_missing_ids": list(high_priority_automation_missing_ids),
+        "high_priority_signoff_missing_count": len(high_priority_signoff_missing_ids),
+        "high_priority_signoff_missing_ids": list(high_priority_signoff_missing_ids),
     }
     return coverage_summary, known_blind_spots, high_priority_missing_ids
 
@@ -278,6 +304,8 @@ def build_checkpoint_readiness(
     required_lane_ids: list[str],
     executed_lane_results: list[dict[str, Any]],
     high_priority_blind_spot_ids: list[str],
+    high_priority_automation_blind_spot_ids: list[str] | None = None,
+    high_priority_signoff_blind_spot_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     results_by_lane_id = {
         str(item.get("lane_id") or ""): dict(item)
@@ -289,15 +317,25 @@ def build_checkpoint_readiness(
         for lane_id in required_lane_ids
         if str((results_by_lane_id.get(lane_id) or {}).get("status") or "missing") != "pass"
     ]
+    high_priority_automation_blind_spot_ids = list(high_priority_automation_blind_spot_ids or [])
+    high_priority_signoff_blind_spot_ids = list(high_priority_signoff_blind_spot_ids or [])
+    automation_checkpoint_ready = not failed_required_lane_ids and not high_priority_automation_blind_spot_ids
+    signoff_checkpoint_ready = not high_priority_signoff_blind_spot_ids
     reasons: list[str] = []
     if failed_required_lane_ids:
         reasons.append("required_lanes_failed_or_missing")
-    if high_priority_blind_spot_ids:
-        reasons.append("high_priority_blind_spots_missing")
+    if high_priority_automation_blind_spot_ids:
+        reasons.append("high_priority_automation_blind_spots_missing")
+    if high_priority_signoff_blind_spot_ids:
+        reasons.append("manual_signoff_missing")
     return {
-        "ready": not failed_required_lane_ids and not high_priority_blind_spot_ids,
+        "ready": automation_checkpoint_ready and signoff_checkpoint_ready,
+        "automation_checkpoint_ready": automation_checkpoint_ready,
+        "signoff_checkpoint_ready": signoff_checkpoint_ready,
         "failed_required_lane_ids": failed_required_lane_ids,
         "high_priority_blind_spot_ids": list(high_priority_blind_spot_ids),
+        "high_priority_automation_blind_spot_ids": list(high_priority_automation_blind_spot_ids),
+        "high_priority_signoff_blind_spot_ids": list(high_priority_signoff_blind_spot_ids),
         "reasons": reasons,
     }
 
@@ -313,10 +351,15 @@ def build_discussion_signal(*, status: str, checkpoint_readiness: dict[str, Any]
             "should_discuss": True,
             "reason": "required_lanes_failed_or_missing",
         }
-    if list(checkpoint_readiness.get("high_priority_blind_spot_ids") or []):
+    if list(checkpoint_readiness.get("high_priority_automation_blind_spot_ids") or []):
         return {
             "should_discuss": True,
-            "reason": "high_priority_blind_spots_missing",
+            "reason": "high_priority_automation_blind_spots_missing",
+        }
+    if list(checkpoint_readiness.get("high_priority_signoff_blind_spot_ids") or []):
+        return {
+            "should_discuss": True,
+            "reason": "manual_signoff_pending",
         }
     return {
         "should_discuss": False,
@@ -366,6 +409,16 @@ def build_test_governance_report(
     resolved_changed_paths = list(changed_paths) if changed_paths is not None else resolve_changed_paths(repo_root, change_source=change_source)
     required_lane_ids, recommended_lane_ids = resolve_lane_ids(resolved_changed_paths)
     coverage_summary, known_blind_spots, high_priority_blind_spot_ids = summarize_coverage_ledger(coverage_ledger)
+    high_priority_automation_blind_spot_ids = [
+        str(item)
+        for item in list(coverage_summary.get("high_priority_automation_missing_ids") or [])
+        if str(item)
+    ]
+    high_priority_signoff_blind_spot_ids = [
+        str(item)
+        for item in list(coverage_summary.get("high_priority_signoff_missing_ids") or [])
+        if str(item)
+    ]
 
     executed_lane_results = [
         lane_executor(repo_root, lane_id, python_exe)
@@ -375,6 +428,8 @@ def build_test_governance_report(
         required_lane_ids=required_lane_ids,
         executed_lane_results=executed_lane_results,
         high_priority_blind_spot_ids=high_priority_blind_spot_ids,
+        high_priority_automation_blind_spot_ids=high_priority_automation_blind_spot_ids,
+        high_priority_signoff_blind_spot_ids=high_priority_signoff_blind_spot_ids,
     )
 
     status = "pass"

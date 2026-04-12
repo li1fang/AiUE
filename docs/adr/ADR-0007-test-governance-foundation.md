@@ -56,12 +56,14 @@ Positive:
 - the repo can now say what is green and what is still under-covered
 - checkpoint packaging gets a minimum explicit lane policy
 - `T1/T2` can show testing truth next to feature and quality truth
+- automation readiness and manual signoff readiness are reported separately, so playable-demo signoff does not masquerade as automation authority
 
 Tradeoffs:
 
 - first-round coverage is intentionally coarse and axis-based
 - path-based lane resolution is heuristic, not semantic
 - `TG1` exposes blind spots but does not close them by itself
+- the overall governance status may remain `attention` even when automation is ready, because human signoff is intentionally tracked as a separate unresolved domain
 
 ## Follow-up
 

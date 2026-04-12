@@ -211,10 +211,14 @@ class GovernanceBalanceRecord:
 class TestGovernanceRecord:
     status: str
     checkpoint_ready: bool = False
+    automation_checkpoint_ready: bool = False
+    signoff_checkpoint_ready: bool = False
     required_lane_ids: list[str] = field(default_factory=list)
     executed_lane_ids: list[str] = field(default_factory=list)
     failed_lane_ids: list[str] = field(default_factory=list)
     high_priority_blind_spot_ids: list[str] = field(default_factory=list)
+    high_priority_automation_blind_spot_ids: list[str] = field(default_factory=list)
+    high_priority_signoff_blind_spot_ids: list[str] = field(default_factory=list)
     report_gate_id: str = ""
     report_source_path: str = ""
 
@@ -222,10 +226,14 @@ class TestGovernanceRecord:
         return {
             "status": self.status,
             "checkpoint_ready": bool(self.checkpoint_ready),
+            "automation_checkpoint_ready": bool(self.automation_checkpoint_ready),
+            "signoff_checkpoint_ready": bool(self.signoff_checkpoint_ready),
             "required_lane_ids": list(self.required_lane_ids),
             "executed_lane_ids": list(self.executed_lane_ids),
             "failed_lane_ids": list(self.failed_lane_ids),
             "high_priority_blind_spot_ids": list(self.high_priority_blind_spot_ids),
+            "high_priority_automation_blind_spot_ids": list(self.high_priority_automation_blind_spot_ids),
+            "high_priority_signoff_blind_spot_ids": list(self.high_priority_signoff_blind_spot_ids),
             "report_gate_id": self.report_gate_id,
             "report_source_path": self.report_source_path,
         }

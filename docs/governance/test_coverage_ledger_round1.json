@@ -73,6 +73,7 @@
     },
     {
       "axis_id": "material_texture_loading",
+      "readiness_domain": "automation",
       "status": "missing",
       "summary": "Material and texture loading have not yet been promoted into the primary verified path; M1 will clear this once its latest report passes.",
       "evidence_gate_ids": [
@@ -81,6 +82,7 @@
     },
     {
       "axis_id": "manual_playable_demo_validation",
+      "readiness_domain": "manual_signoff",
       "status": "missing",
       "summary": "The playable demo path is exercised through tests, but has not yet been manually validated as a played demo; PV1 will clear this once a manual signoff passes.",
       "evidence_gate_ids": [

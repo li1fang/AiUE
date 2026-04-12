@@ -480,18 +480,50 @@ def _render_test_governance_card(report_index: dict) -> str:
         return "<p class=\"muted\">No test governance report was available.</p>"
     checkpoint_readiness = dict(governance_report.get("checkpoint_readiness") or {})
     required_lane_ids = [str(item) for item in list(governance_report.get("required_lane_ids") or []) if str(item)]
+    automation_blind_spot_ids = [
+        str(item)
+        for item in list(checkpoint_readiness.get("high_priority_automation_blind_spot_ids") or [])
+        if str(item)
+    ]
+    signoff_blind_spot_ids = [
+        str(item)
+        for item in list(checkpoint_readiness.get("high_priority_signoff_blind_spot_ids") or [])
+        if str(item)
+    ]
+    if not automation_blind_spot_ids and not signoff_blind_spot_ids:
+        known_blind_spots = [dict(item) for item in list(governance_report.get("known_blind_spots") or [])]
+        automation_blind_spot_ids = [
+            str(item.get("axis_id") or "")
+            for item in known_blind_spots
+            if str(item.get("axis_id") or "")
+            and str(item.get("priority") or "").lower() == "high"
+            and str(item.get("readiness_domain") or "automation").lower() != "manual_signoff"
+        ]
+        signoff_blind_spot_ids = [
+            str(item.get("axis_id") or "")
+            for item in known_blind_spots
+            if str(item.get("axis_id") or "")
+            and str(item.get("priority") or "").lower() == "high"
+            and str(item.get("readiness_domain") or "").lower() == "manual_signoff"
+        ]
     high_priority_blind_spot_ids = [
         str(item)
         for item in list(checkpoint_readiness.get("high_priority_blind_spot_ids") or [])
         if str(item)
     ]
+    automation_ready = bool(checkpoint_readiness.get("automation_checkpoint_ready", checkpoint_readiness.get("ready")))
+    signoff_ready = bool(checkpoint_readiness.get("signoff_checkpoint_ready", checkpoint_readiness.get("ready")))
     return (
         "<article class=\"card\">"
         f"<h3>Test Governance</h3>"
         f"<p><strong>Status:</strong> {html.escape(str(governance_report.get('status') or 'unknown'))}</p>"
         f"<p><strong>Checkpoint Ready:</strong> {html.escape(str(bool(checkpoint_readiness.get('ready'))))}</p>"
+        f"<p><strong>Automation Ready:</strong> {html.escape(str(automation_ready))}</p>"
+        f"<p><strong>Signoff Ready:</strong> {html.escape(str(signoff_ready))}</p>"
         f"<p><strong>Required Lanes:</strong> {html.escape(', '.join(required_lane_ids) if required_lane_ids else 'none')}</p>"
-        f"<p><strong>High-Priority Blind Spots:</strong> {html.escape(', '.join(high_priority_blind_spot_ids) if high_priority_blind_spot_ids else 'none')}</p>"
+        f"<p><strong>Automation Blind Spots:</strong> {html.escape(', '.join(automation_blind_spot_ids) if automation_blind_spot_ids else 'none')}</p>"
+        f"<p><strong>Signoff Blind Spots:</strong> {html.escape(', '.join(signoff_blind_spot_ids) if signoff_blind_spot_ids else 'none')}</p>"
+        f"<p class=\"muted\">Combined high-priority blind spots: {html.escape(', '.join(high_priority_blind_spot_ids) if high_priority_blind_spot_ids else 'none')}</p>"
         "</article>"
     )
 
@@ -504,6 +536,8 @@ def _render_test_governance_summary(report_index: dict) -> str:
     checkpoint_readiness = dict(governance_report.get("checkpoint_readiness") or {})
     executed_lane_results = list(governance_report.get("executed_lane_results") or [])
     known_blind_spots = list(governance_report.get("known_blind_spots") or [])
+    automation_ready = bool(checkpoint_readiness.get("automation_checkpoint_ready", checkpoint_readiness.get("ready")))
+    signoff_ready = bool(checkpoint_readiness.get("signoff_checkpoint_ready", checkpoint_readiness.get("ready")))
     lane_rows = "".join(
         "<tr>"
         f"<td><code>{html.escape(str(item.get('lane_id') or ''))}</code></td>"
@@ -517,20 +551,25 @@ def _render_test_governance_summary(report_index: dict) -> str:
         f"<td><code>{html.escape(str(item.get('axis_id') or ''))}</code></td>"
         f"<td>{html.escape(str(item.get('status') or 'unknown'))}</td>"
         f"<td>{html.escape(str(item.get('priority') or 'normal'))}</td>"
+        f"<td>{html.escape(str(item.get('readiness_domain') or 'automation'))}</td>"
         "</tr>"
         for item in known_blind_spots
-    ) or "<tr><td colspan=\"3\" class=\"muted\">No blind spots were recorded.</td></tr>"
+    ) or "<tr><td colspan=\"4\" class=\"muted\">No blind spots were recorded.</td></tr>"
     return (
         "<article class=\"card\">"
         f"<p><strong>Blind Spots:</strong> {int(coverage_summary.get('blind_spot_count') or 0)} | "
         f"<strong>High-Priority Missing:</strong> {int(coverage_summary.get('high_priority_missing_count') or 0)} | "
-        f"<strong>Checkpoint Ready:</strong> {html.escape(str(bool(checkpoint_readiness.get('ready'))))}</p>"
+        f"<strong>Automation Missing:</strong> {int(coverage_summary.get('high_priority_automation_missing_count') or 0)} | "
+        f"<strong>Signoff Missing:</strong> {int(coverage_summary.get('high_priority_signoff_missing_count') or 0)} | "
+        f"<strong>Checkpoint Ready:</strong> {html.escape(str(bool(checkpoint_readiness.get('ready'))))} | "
+        f"<strong>Automation Ready:</strong> {html.escape(str(automation_ready))} | "
+        f"<strong>Signoff Ready:</strong> {html.escape(str(signoff_ready))}</p>"
         "<h3>Required Lane Results</h3>"
         "<table><thead><tr><th>Lane</th><th>Status</th><th>Return Code</th></tr></thead><tbody>"
         f"{lane_rows}"
         "</tbody></table>"
         "<h3>Known Blind Spots</h3>"
-        "<table><thead><tr><th>Axis</th><th>Status</th><th>Priority</th></tr></thead><tbody>"
+        "<table><thead><tr><th>Axis</th><th>Status</th><th>Priority</th><th>Readiness Domain</th></tr></thead><tbody>"
         f"{blind_spot_rows}"
         "</tbody></table>"
         "</article>"

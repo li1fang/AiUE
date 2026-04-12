@@ -26,6 +26,8 @@ def test_workbench_window_renders_fixture_pack(qtbot, tmp_path: Path):
     assert window.current_dump_payload()["test_governance"]["status"] == "attention"
     assert window.test_governance_summary.isVisible() is True
     assert "Test Governance ATTENTION" in window.test_governance_summary.text()
+    assert "automation_ready False" in window.test_governance_summary.text()
+    assert "signoff_ready False" in window.test_governance_summary.text()
     assert "manual_playable_demo_validation" in window.test_governance_summary.text()
     assert window.demo_session_package_list.count() == 1
     assert window.demo_action_preset_list.count() == 1

@@ -122,6 +122,8 @@ def test_build_evidence_pack_generates_static_bundle(tmp_path: Path):
     assert any(str(item.get("artifact_image_relative_path") or "").startswith("images/q5c_") for item in list(q5c_summary.get("packages") or []))
     index_html = (output_root / "index.html").read_text(encoding="utf-8")
     assert "Test Governance" in index_html
+    assert "Automation Ready" in index_html
+    assert "Signoff Ready" in index_html
     assert "manual_playable_demo_validation" in index_html
 
 

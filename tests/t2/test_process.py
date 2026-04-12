@@ -59,6 +59,8 @@ def test_workbench_cli_seven_open_cycles(tmp_path: Path):
         assert payload["governance_balance"]["status"] == "attention"
         assert payload["test_governance"]["status"] == "attention"
         assert payload["test_governance"]["checkpoint_ready"] is False
+        assert payload["test_governance"]["automation_checkpoint_ready"] is False
+        assert payload["test_governance"]["signoff_checkpoint_ready"] is False
         assert payload["quality_summaries"]["q5c_lite"]["status"] == "missing"
         assert payload["demo_session"]["status"] == "pass"
         assert payload["demo_session"]["package_ids"] == ["pkg_alpha"]

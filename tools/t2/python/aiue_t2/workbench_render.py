@@ -80,17 +80,25 @@ class WorkbenchRenderMixin:
             self.test_governance_summary.setText("")
             return
         required_text = ", ".join(summary.required_lane_ids) if summary.required_lane_ids else "none"
-        blind_spot_text = (
-            ", ".join(summary.high_priority_blind_spot_ids)
-            if summary.high_priority_blind_spot_ids
+        automation_blind_spot_text = (
+            ", ".join(summary.high_priority_automation_blind_spot_ids)
+            if summary.high_priority_automation_blind_spot_ids
+            else "none"
+        )
+        signoff_blind_spot_text = (
+            ", ".join(summary.high_priority_signoff_blind_spot_ids)
+            if summary.high_priority_signoff_blind_spot_ids
             else "none"
         )
         failed_text = ", ".join(summary.failed_lane_ids) if summary.failed_lane_ids else "none"
         self.test_governance_summary.setText(
             "Test Governance "
             f"{summary.status.upper()} | checkpoint_ready {summary.checkpoint_ready} | "
+            f"automation_ready {summary.automation_checkpoint_ready} | "
+            f"signoff_ready {summary.signoff_checkpoint_ready} | "
             f"required {required_text} | failed {failed_text} | "
-            f"high-priority blind spots {blind_spot_text}"
+            f"automation blind spots {automation_blind_spot_text} | "
+            f"signoff blind spots {signoff_blind_spot_text}"
         )
         self.test_governance_summary.setVisible(True)
 

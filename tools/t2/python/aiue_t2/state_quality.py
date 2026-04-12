@@ -504,6 +504,7 @@ def extract_test_governance(reports_by_gate_id: dict[str, ReportRecord]) -> Test
         for item in executed_lane_results
         if str(item.get("lane_id") or "") and str(item.get("status") or "unknown") != "pass"
     ]
+    known_blind_spots = [dict(item) for item in list(report_payload.get("known_blind_spots") or [])]
     high_priority_blind_spot_ids = [
         str(item)
         for item in list(checkpoint_readiness.get("high_priority_blind_spot_ids") or [])
@@ -512,17 +513,47 @@ def extract_test_governance(reports_by_gate_id: dict[str, ReportRecord]) -> Test
     if not high_priority_blind_spot_ids:
         high_priority_blind_spot_ids = [
             str(item.get("axis_id") or "")
-            for item in list(report_payload.get("known_blind_spots") or [])
+            for item in known_blind_spots
             if str(item.get("axis_id") or "") and str(item.get("priority") or "").lower() == "high"
         ]
+    high_priority_automation_blind_spot_ids = [
+        str(item)
+        for item in list(checkpoint_readiness.get("high_priority_automation_blind_spot_ids") or [])
+        if str(item)
+    ]
+    high_priority_signoff_blind_spot_ids = [
+        str(item)
+        for item in list(checkpoint_readiness.get("high_priority_signoff_blind_spot_ids") or [])
+        if str(item)
+    ]
+    if not high_priority_automation_blind_spot_ids and not high_priority_signoff_blind_spot_ids:
+        for item in known_blind_spots:
+            axis_id = str(item.get("axis_id") or "")
+            if not axis_id or str(item.get("priority") or "").lower() != "high":
+                continue
+            readiness_domain = str(item.get("readiness_domain") or "").strip().lower()
+            if readiness_domain == "manual_signoff" or axis_id == "manual_playable_demo_validation":
+                high_priority_signoff_blind_spot_ids.append(axis_id)
+            else:
+                high_priority_automation_blind_spot_ids.append(axis_id)
+    automation_checkpoint_ready = bool(
+        checkpoint_readiness.get("automation_checkpoint_ready", checkpoint_readiness.get("ready"))
+    )
+    signoff_checkpoint_ready = bool(
+        checkpoint_readiness.get("signoff_checkpoint_ready", checkpoint_readiness.get("ready"))
+    )
 
     return TestGovernanceRecord(
         status=str(report_payload.get("status") or "unknown"),
         checkpoint_ready=bool(checkpoint_readiness.get("ready")),
+        automation_checkpoint_ready=automation_checkpoint_ready,
+        signoff_checkpoint_ready=signoff_checkpoint_ready,
         required_lane_ids=required_lane_ids,
         executed_lane_ids=executed_lane_ids,
         failed_lane_ids=failed_lane_ids,
         high_priority_blind_spot_ids=high_priority_blind_spot_ids,
+        high_priority_automation_blind_spot_ids=high_priority_automation_blind_spot_ids,
+        high_priority_signoff_blind_spot_ids=high_priority_signoff_blind_spot_ids,
         report_gate_id=record.gate_id,
         report_source_path=record.report_source_path,
     )
