@@ -25,12 +25,18 @@ def resolve_manifest_artifact(manifest_path: Path, artifact_path: str | None) ->
     if not artifact_path:
         return None
     candidate = Path(artifact_path).expanduser()
-    if candidate.exists():
-        return candidate.resolve()
+    if candidate.is_absolute():
+        if candidate.exists():
+            return candidate.resolve()
+        local_candidate = candidate
+    else:
+        local_candidate = (manifest_path.parent / candidate)
+        if local_candidate.exists():
+            return local_candidate.resolve()
     local_sibling = manifest_path.parent / candidate.name
     if local_sibling.exists():
         return local_sibling.resolve()
-    return candidate.resolve(strict=False)
+    return local_candidate.resolve(strict=False)
 
 
 def is_under_root(path: Path | None, root: Path | None) -> bool:
@@ -171,12 +177,18 @@ def inspect_manifest_artifacts(manifest_path: Path, export_root: Path | None = N
     if external_texture_reference_count:
         issues.append(f"external_texture_references:{external_texture_reference_count}")
 
+    blocking_issues = [
+        issue
+        for issue in issues
+        if issue != "source_file_external_reference"
+    ]
+
     import_report_path = manifest_path.parent / "ue_import_report.local.json"
     validation_report_path = manifest_path.parent / "ue_validation_report.local.json"
     consumer_contract_path = manifest_path.parent / "ue_consumer_contract.json"
 
     return {
-        "status": "pass" if not issues else "attention",
+        "status": "pass" if not blocking_issues else "attention",
         "manifest_path": str(manifest_path),
         "package_id": manifest.get("package_id"),
         "sample_id": manifest.get("sample_id"),

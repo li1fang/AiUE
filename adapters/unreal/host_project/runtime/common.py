@@ -46,12 +46,18 @@ def resolve_manifest_artifact(manifest_path: Path, artifact_path: str | None) ->
     if not artifact_path:
         return None
     candidate = Path(artifact_path).expanduser()
-    if candidate.exists():
-        return candidate.resolve()
+    if candidate.is_absolute():
+        if candidate.exists():
+            return candidate.resolve()
+        local_candidate = candidate
+    else:
+        local_candidate = (manifest_path.parent / candidate)
+        if local_candidate.exists():
+            return local_candidate.resolve()
     local_sibling = manifest_path.parent / candidate.name
     if local_sibling.exists():
         return local_sibling.resolve()
-    return candidate.resolve(strict=False)
+    return local_candidate.resolve(strict=False)
 
 
 def read_json(path: Path) -> dict:

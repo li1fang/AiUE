@@ -19,6 +19,10 @@ from run_editor_gate_g1 import (
     resolve_summary_path,
     select_target_packages,
 )
+from toy_yard_view import (
+    build_toy_yard_manifest_index,
+    resolve_toy_yard_registry_path,
+)
 
 GATE_ID = "demo_stage_d1_onboarding"
 REQUIRED_MODE = "editor_rendered"
@@ -55,12 +59,16 @@ def parse_args():
     parser.add_argument("--latest-report-path")
     return parser.parse_args()
 
-def resolve_registry_path(equipment_report: dict, summary_path: Path, explicit_path: str | None) -> Path:
+def resolve_registry_path(equipment_report: dict, summary_path: Path, explicit_path: str | None, workspace: dict | None = None) -> Path:
     if explicit_path:
         candidate = Path(explicit_path).expanduser().resolve()
         if candidate.exists():
             return candidate
         raise FileNotFoundError(f"Registry path does not exist: {candidate}")
+    if workspace is not None:
+        toy_yard_registry = resolve_toy_yard_registry_path(workspace)
+        if toy_yard_registry:
+            return toy_yard_registry
     registry_json_path = equipment_report.get("registry_json_path")
     if registry_json_path:
         candidate = Path(registry_json_path).expanduser()
@@ -72,19 +80,7 @@ def resolve_registry_path(equipment_report: dict, summary_path: Path, explicit_p
     raise FileNotFoundError("No ue_equipment_registry.json could be resolved for D1.")
 
 def build_local_manifest_index(summary_path: Path) -> tuple[Path, dict[str, Path]]:
-    conversion_root = summary_path.parent.parent / "conversion"
-    if not conversion_root.exists():
-        raise FileNotFoundError(f"Local conversion root missing for D1: {conversion_root}")
-    manifest_index: dict[str, Path] = {}
-    for manifest_path in sorted(conversion_root.rglob("manifest.json")):
-        try:
-            payload = load_json(manifest_path)
-        except Exception:
-            continue
-        package_id = str(payload.get("package_id") or "").strip()
-        if package_id:
-            manifest_index[package_id] = manifest_path.resolve()
-    return conversion_root.resolve(), manifest_index
+    return build_toy_yard_manifest_index(summary_path)
 
 def filter_summary_payload(summary_payload: dict, selected_package_ids: set[str], manifest_index: dict[str, Path]) -> dict:
     successes = []
@@ -316,7 +312,7 @@ def main():
     equipment_report = load_json(equipment_report_path)
     summary_path = resolve_summary_path(workspace, equipment_report_path, equipment_report, args.summary_path)
     summary_payload = load_json(summary_path)
-    registry_path = resolve_registry_path(equipment_report, summary_path, args.registry_path)
+    registry_path = resolve_registry_path(equipment_report, summary_path, args.registry_path, workspace=workspace)
     registry_payload = load_json(registry_path)
 
     selected_packages = select_target_packages(equipment_report)

@@ -18,6 +18,10 @@ from _gate_common import (
 from aiue_core.report_writer import make_compatibility_block, with_report_envelope
 from aiue_core.schema_utils import load_json, load_workspace_config, write_json
 from aiue_unreal.host_bridge import run_host_auto_ue_cli
+from toy_yard_view import (
+    resolve_toy_yard_equipment_report_path,
+    resolve_toy_yard_summary_path,
+)
 
 GATE_ID = "editor_core_closure_g1"
 REQUIRED_PACKAGE_COUNT = 2
@@ -67,6 +71,10 @@ def resolve_equipment_report_path(workspace: dict, explicit_path: str | None) ->
             return candidate
         raise FileNotFoundError(f"Equipment report path does not exist: {candidate}")
 
+    toy_yard_report = resolve_toy_yard_equipment_report_path(workspace)
+    if toy_yard_report:
+        return toy_yard_report
+
     local_auto_report = Path(workspace["paths"].get("auto_ue_cli_output_root") or "") / "ue_equipment_assets_report.local.json"
     if local_auto_report.exists():
         return local_auto_report.resolve()
@@ -84,6 +92,10 @@ def resolve_summary_path(workspace: dict, equipment_report_path: Path, equipment
         if candidate.exists():
             return candidate
         raise FileNotFoundError(f"Suite summary path does not exist: {candidate}")
+
+    toy_yard_summary = resolve_toy_yard_summary_path(workspace)
+    if toy_yard_summary:
+        return toy_yard_summary
 
     registry_json_path = equipment_report.get("registry_json_path")
     if registry_json_path:

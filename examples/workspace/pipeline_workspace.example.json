@@ -9,6 +9,7 @@
     "dataset_catalog_root": "C:\\path\\to\\_dataset_catalog\\mingchao",
     "preflight_root": "C:\\path\\to\\_preflight_out\\mingchao",
     "conversion_root": "C:\\path\\to\\_fbx_out_fastloop\\mingchao",
+    "toy_yard_pmx_view_root": "C:\\Projects\\toy-yard\\05_publish\\aiue_pmx\\default",
     "blender_python_exe": "C:\\Program Files\\Blender Foundation\\Blender 3.6\\3.6\\python\\bin\\python.exe",
     "unreal_editor_cmd": "C:\\Program Files\\Epic Games\\UE_5.7\\Engine\\Binaries\\Win64\\UnrealEditor-Cmd.exe",
     "unreal_editor_gui": "C:\\Program Files\\Epic Games\\UE_5.7\\Engine\\Binaries\\Win64\\UnrealEditor.exe",

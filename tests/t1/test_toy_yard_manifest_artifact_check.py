@@ -75,6 +75,42 @@ def test_inspect_manifest_artifacts_passes_for_export_local_files(tmp_path: Path
     assert result["textures"][0]["chosen_in_export_root"] is True
 
 
+def test_inspect_manifest_artifacts_supports_manifest_relative_paths(tmp_path: Path):
+    export_root = tmp_path / "export"
+    manifest_dir = export_root / "conversion" / "pkg_alpha"
+    textures_dir = manifest_dir / "textures"
+    manifest_dir.mkdir(parents=True, exist_ok=True)
+    textures_dir.mkdir(parents=True, exist_ok=True)
+    output_fbx = manifest_dir / "model.fbx"
+    texture = textures_dir / "diffuse.png"
+    output_fbx.write_text("fbx", encoding="utf-8")
+    texture.write_text("png", encoding="utf-8")
+    manifest_path = manifest_dir / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "package_id": "pkg_alpha",
+                "sample_id": "sample_alpha",
+                "output_fbx": "model.fbx",
+                "source_file": "C:/Users/source/models/pkg_alpha/model.pmx",
+                "textures": [
+                    {
+                        "material_name": "Body",
+                        "relocated_path": "textures/diffuse.png",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = inspect_manifest_artifacts(manifest_path, export_root=export_root)
+
+    assert result["status"] == "pass"
+    assert result["output_fbx"]["resolved"] == str(output_fbx.resolve())
+    assert result["textures"][0]["chosen_path"] == str(texture.resolve())
+
+
 def test_build_manifest_artifact_check_report_aggregates_counts(tmp_path: Path):
     export_root = tmp_path / "export"
     manifest_dir = export_root / "conversion" / "pkg_alpha"
