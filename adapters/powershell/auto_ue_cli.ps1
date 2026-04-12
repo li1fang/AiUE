@@ -40,6 +40,7 @@ function Get-HostProjectRoot {
     $defaultRoutes = @{
         "import-package" = "kernel"
         "build-equipment-registry" = "kernel"
+        "refresh-assets" = "kernel"
         "inspect-host" = "kernel"
         "inspect-host-visual" = "kernel"
         "inspect-visible-conflict" = "demo"

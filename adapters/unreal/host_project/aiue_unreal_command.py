@@ -11,7 +11,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from runtime.capture import capture_frame, ensure_stage_anchors, inspect_stage_anchors, load_level, run_scene_sweep, spawn_host
-from runtime.composition import build_equipment_registry, import_package, import_package_dry_run
+from runtime.composition import build_equipment_registry, import_package, import_package_dry_run, refresh_assets, validate_package
 from runtime.inspection import debug_physics_api, inspect_host, inspect_host_visual, inspect_live_fx_visual_pair, inspect_slot_runtime, inspect_visible_conflict, list_assets
 from runtime.preview import action_preview, animation_preview
 from runtime.retarget import retarget_author_chains, retarget_bootstrap, retarget_preflight
@@ -61,6 +61,10 @@ def dispatch(request: dict) -> dict:
         return list_assets(request)
     if command == "build-equipment-registry":
         return build_equipment_registry(request)
+    if command == "validate-package":
+        return validate_package(request)
+    if command == "refresh-assets":
+        return refresh_assets(request)
     if command == "import-package" and request.get("dry_run"):
         return import_package_dry_run(request)
     if command == "import-package":

@@ -9,6 +9,7 @@ from pathlib import Path
 from aiue_core.report_writer import make_compatibility_block, with_report_envelope
 from aiue_core.schema_utils import load_json, write_json
 from aiue_unreal.command_catalog import get_command_metadata
+from aiue_unreal.execution_errors import ActionResultError
 from aiue_unreal.guards import GuardError, ensure_action_allowed
 from aiue_unreal.mode_runner import normalize_mode
 
@@ -137,6 +138,23 @@ def run_action(action_spec: dict, workspace: dict) -> tuple[dict, str]:
             "aiue_action_result",
             workflow_pack=metadata.get("workflow_pack", "core"),
             compatibility=make_compatibility_block("aiue_action_result", notes=["guard_blocked"]),
+        )
+    except ActionResultError as exc:
+        payload = with_report_envelope(
+            {
+                "generated_at_utc": now_utc(),
+                "run_id": run_id,
+                "command": action_spec["command"],
+                "mode": mode,
+                "status": "fail",
+                "success": False,
+                "warnings": list(exc.warnings),
+                "errors": list(exc.errors or [str(exc)]),
+                "result": dict(exc.result or {}),
+            },
+            "aiue_action_result",
+            workflow_pack=metadata.get("workflow_pack", "core"),
+            compatibility=make_compatibility_block("aiue_action_result", notes=["host_failure_with_structured_result"]),
         )
     except Exception as exc:
         payload = with_report_envelope(

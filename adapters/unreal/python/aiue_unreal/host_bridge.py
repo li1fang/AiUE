@@ -5,6 +5,7 @@ import subprocess
 from pathlib import Path
 
 from aiue_core.schema_utils import load_json, load_workspace_config
+from aiue_unreal.execution_errors import ActionResultError
 
 DEFAULT_HOST_ROUTES = {
     "import-package": "kernel",
@@ -160,8 +161,18 @@ def run_host_auto_ue_cli(
         if payload_path.exists():
             payload = load_json(payload_path)
     if invocation["returncode"] != 0:
-        if payload and payload.get("errors"):
-            raise RuntimeError("; ".join(str(item) for item in payload["errors"]))
+        if payload:
+            result = dict(payload.get("result") or {})
+            result.setdefault("warnings", list(payload.get("warnings", [])))
+            result.setdefault("errors", list(payload.get("errors", [])))
+            result["host_action_result_path"] = str(Path(output_path).expanduser().resolve()) if output_path else None
+            result["host_returncode"] = invocation["returncode"]
+            raise ActionResultError(
+                "; ".join(str(item) for item in payload.get("errors") or [f"host_auto_ue_cli_exit_{invocation['returncode']}"]),
+                result=result,
+                warnings=list(payload.get("warnings", [])),
+                errors=list(payload.get("errors", [])),
+            )
         raise RuntimeError(invocation["stderr"] or invocation["stdout"] or "host auto_ue_cli failed")
     return {
         "invocation": invocation,

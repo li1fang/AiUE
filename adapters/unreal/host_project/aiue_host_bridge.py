@@ -810,7 +810,7 @@ def run_command(
             "warnings": list(result.get("warnings", [])),
             "errors": list(result.get("errors", [])),
         }
-    elif command in {"inspect-host", "inspect-host-visual", "inspect-visible-conflict", "inspect-live-fx-visual-pair", "inspect-slot-runtime", "list-assets", "debug-physics-api", "build-equipment-registry", "load-level", "spawn-host", "capture-frame", "stage-capture", "inspect-stage-anchors", "ensure-stage-anchors", "action-preview", "animation-preview", "retarget-preflight", "retarget-bootstrap", "retarget-author-chains"}:
+    elif command in {"inspect-host", "inspect-host-visual", "inspect-visible-conflict", "inspect-live-fx-visual-pair", "inspect-slot-runtime", "list-assets", "debug-physics-api", "build-equipment-registry", "validate-package", "refresh-assets", "load-level", "spawn-host", "capture-frame", "stage-capture", "inspect-stage-anchors", "ensure-stage-anchors", "action-preview", "animation-preview", "retarget-preflight", "retarget-bootstrap", "retarget-author-chains"}:
         request = {"command": command, "asset_root": workspace["paths"]["asset_root"], **params}
         host_payload = run_unreal_python_request(workspace, effective_mode, request)
     elif command == "import-package" and dry_run:
