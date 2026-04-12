@@ -1,0 +1,92 @@
+{
+  "route_id": "post_pv1_automation_first_v1",
+  "status": "accepted",
+  "description": "Quality-first next-phase route after M1 and E2B, with PV1 kept as governance-only manual signoff.",
+  "current_repo_state": {
+    "active_line_latest_status": "green",
+    "platform_line_latest_status": "green",
+    "m1_material_texture_proof": "pass",
+    "e2b_credible_showcase": "pass",
+    "pv1_manual_signoff": "attention_pending_human_operator",
+    "dynamic_balance_default": "flexible",
+    "test_governance_default": "attention_manual_signoff_pending"
+  },
+  "principles": [
+    "playable_demo_is_presentation_not_validation_authority",
+    "automation_quality_is_primary_confidence_source",
+    "manual_playable_signoff_is_governance_not_automation",
+    "demo_polish_follows_automation_breadth",
+    "motion_integration_requires_evidence_rich_platform"
+  ],
+  "parallel_tracks": [
+    {
+      "track_id": "pv1_signoff",
+      "title": "Manual Playable Demo Validation",
+      "kind": "governance",
+      "status": "pending",
+      "non_blocking_for": [
+        "dv2",
+        "e2c",
+        "a1"
+      ],
+      "recommended_before": [
+        "external_packaging",
+        "milestone_demo_handoff",
+        "stronger_project_presentation_claims"
+      ]
+    }
+  ],
+  "ordered_phases": [
+    {
+      "phase_id": "dv2",
+      "title": "Automated Diversity Expansion",
+      "priority": 1,
+      "kind": "automation_quality",
+      "entry_rule": "may_begin_now",
+      "goals": [
+        "expand character diversity beyond the current narrow ready path",
+        "expand weapon, clothing, FX, action, and animation diversity evidence",
+        "keep T1/T2 consumption stable while diversity evidence grows"
+      ],
+      "exit_conditions": [
+        "first_full_pass",
+        "one_stable_rerun",
+        "t1_t2_consumption_stable"
+      ]
+    },
+    {
+      "phase_id": "e2c",
+      "title": "Credible Showcase Polish",
+      "priority": 2,
+      "kind": "demo_presentation",
+      "entry_rule": "dv2_first_full_pass_plus_one_stable_rerun",
+      "goals": [
+        "make current demo evidence easier to trust and easier to present",
+        "improve showcase readability without redefining validation authority",
+        "keep material, slot, motion, and package evidence visible inside the polished bundle"
+      ],
+      "exit_conditions": [
+        "polished_demo_bundle_exists",
+        "t1_t2_can_read_e2c_artifacts",
+        "no_active_or_platform_regression"
+      ]
+    },
+    {
+      "phase_id": "a1",
+      "title": "Action Candidate Provider Interface",
+      "priority": 3,
+      "kind": "integration_seam",
+      "entry_rule": "dv2_stable_plus_e2c_bundle_plus_dynamic_balance_not_stabilization",
+      "goals": [
+        "define how future learned-motion or external candidate providers plug into AiUE",
+        "keep motion generation outside the shared runtime core",
+        "preserve evidence-first evaluation around imported or generated motion candidates"
+      ],
+      "exit_conditions": [
+        "provider_contract_defined",
+        "first_candidate_source_roundtrip_exists",
+        "automation_evidence_can_evaluate_candidate_results"
+      ]
+    }
+  ]
+}
