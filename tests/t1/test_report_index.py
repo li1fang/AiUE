@@ -28,6 +28,7 @@ def test_report_index_knows_new_e1_and_q5x_gates():
     assert classify_gate("q5c_lite_contrast_lab")[0] == "platform_line"
     assert classify_gate("dynamic_balance_governance_progress")[0] == "governance_line"
     assert classify_gate("test_governance_round1")[0] == "governance_line"
+    assert classify_gate("diversity_matrix_dv2")[0] == "governance_line"
     assert classify_gate("diversity_matrix_dv1")[0] == "governance_line"
     assert classify_gate("manual_playable_demo_validation_pv1")[0] == "governance_line"
 
@@ -41,3 +42,14 @@ def test_report_index_classifies_dv1_governance_report(tmp_path: Path):
     report_index = build_report_index(verification_root)
     governance_gate_ids = [item["gate_id"] for item in report_index["categories"]["governance_line"]]
     assert governance_gate_ids == ["diversity_matrix_dv1"]
+
+
+def test_report_index_classifies_dv2_governance_report(tmp_path: Path):
+    from tests.t2.helpers import write_fixture_dv2_report
+
+    verification_root = tmp_path / "verification"
+    verification_root.mkdir(parents=True, exist_ok=True)
+    write_fixture_dv2_report(verification_root)
+    report_index = build_report_index(verification_root)
+    governance_gate_ids = [item["gate_id"] for item in report_index["categories"]["governance_line"]]
+    assert governance_gate_ids == ["diversity_matrix_dv2"]

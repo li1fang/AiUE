@@ -22,7 +22,7 @@ HIGH_PRIORITY_AXIS_IDS = [
 MANUAL_SIGNOFF_AXIS_IDS = {
     "manual_playable_demo_validation",
 }
-DV1_COVERAGE_AXIS_IDS = {
+DIVERSITY_COVERAGE_AXIS_IDS = {
     "character_variant_diversity",
     "weapon_variant_diversity",
     "clothing_fixture_diversity",
@@ -200,20 +200,24 @@ def apply_report_coverage_overrides(coverage_ledger: dict[str, Any], verificatio
             if str(pv1_report.get("status") or "") == "pass":
                 axis["status"] = "covered"
                 axis["summary"] = "Playable demo has a recorded manual PV1 signoff for the current demo path."
-        elif axis_id in DV1_COVERAGE_AXIS_IDS:
-            evidence_gate_ids = sorted(set(evidence_gate_ids + ["diversity_matrix_dv1"]))
-            dv1_report = dict(reports_by_gate_id.get("diversity_matrix_dv1") or {}).get("report") or {}
-            dv1_axis = next(
+        elif axis_id in DIVERSITY_COVERAGE_AXIS_IDS:
+            evidence_gate_ids = sorted(set(evidence_gate_ids + ["diversity_matrix_dv2", "diversity_matrix_dv1"]))
+            diversity_report = (
+                dict(reports_by_gate_id.get("diversity_matrix_dv2") or {}).get("report")
+                or dict(reports_by_gate_id.get("diversity_matrix_dv1") or {}).get("report")
+                or {}
+            )
+            diversity_axis = next(
                 (
                     dict(item)
-                    for item in list(dv1_report.get("coverage_axes") or [])
+                    for item in list(diversity_report.get("coverage_axes") or [])
                     if str(item.get("axis_id") or "") == axis_id
                 ),
                 {},
             )
-            if dv1_axis:
-                axis["status"] = str(dv1_axis.get("status") or axis.get("status") or "partial")
-                axis["summary"] = str(dv1_axis.get("summary") or axis.get("summary") or "")
+            if diversity_axis:
+                axis["status"] = str(diversity_axis.get("status") or axis.get("status") or "partial")
+                axis["summary"] = str(diversity_axis.get("summary") or axis.get("summary") or "")
         axis["evidence_gate_ids"] = evidence_gate_ids
         overridden_axes.append(axis)
     return {

@@ -409,11 +409,106 @@ def write_fixture_dv1_report(verification_root: Path, *, status: str = "pass") -
     return report_path
 
 
+def write_fixture_dv2_report(verification_root: Path, *, status: str = "pass") -> Path:
+    verification_root.mkdir(parents=True, exist_ok=True)
+    front_image_path = str((FIXTURE_ROOT / "images" / "front.ppm").resolve())
+    after_image_path = str((FIXTURE_ROOT / "images" / "after.ppm").resolve())
+    report_path = verification_root / "latest_diversity_matrix_dv2_report.json"
+    write_json(
+        report_path,
+        {
+            "gate_id": "diversity_matrix_dv2",
+            "status": status,
+            "generated_at_utc": "2026-04-12T03:00:00+00:00",
+            "distinct_counts": {
+                "character_variant_diversity": 2,
+                "weapon_variant_diversity": 2,
+                "clothing_fixture_diversity": 2,
+                "fx_fixture_diversity": 2,
+                "action_variation": 2,
+                "animation_variation": 3,
+            },
+            "coverage_axes": [
+                {
+                    "axis_id": "character_variant_diversity",
+                    "status": "covered",
+                    "distinct_count": 2,
+                    "observed_values": ["pkg_alpha", "pkg_beta"],
+                    "summary": "DV2 currently verifies 2 distinct character bundles on the automated demo-ready path.",
+                },
+                {
+                    "axis_id": "weapon_variant_diversity",
+                    "status": "covered",
+                    "distinct_count": 2,
+                    "observed_values": ["weapon_alpha", "weapon_beta"],
+                    "summary": "DV2 currently verifies 2 distinct weapon bundles on the automated demo-ready path.",
+                },
+                {
+                    "axis_id": "clothing_fixture_diversity",
+                    "status": "covered",
+                    "distinct_count": 2,
+                    "observed_values": ["fixture_hair", "fixture_brow_cards"],
+                    "summary": "DV2 currently verifies 2 distinct clothing slot fixtures on the automated demo-ready path.",
+                },
+                {
+                    "axis_id": "fx_fixture_diversity",
+                    "status": "covered",
+                    "distinct_count": 2,
+                    "observed_values": ["fixture_directional_burst", "fixture_radial_burst"],
+                    "summary": "DV2 currently verifies 2 distinct FX fixtures on the automated demo-ready path.",
+                },
+                {
+                    "axis_id": "action_variation",
+                    "status": "covered",
+                    "distinct_count": 2,
+                    "observed_values": ["showcase_root_translate_and_turn", "dv2_root_translate_forward"],
+                    "summary": "DV2 currently verifies 2 distinct verified action presets on the automated demo-ready path.",
+                },
+                {
+                    "axis_id": "animation_variation",
+                    "status": "covered",
+                    "distinct_count": 3,
+                    "observed_values": ["MM_Attack_01", "MM_Idle", "MF_Unarmed_Walk_Fwd"],
+                    "summary": "DV2 currently verifies 3 distinct verified animation presets on the automated demo-ready path.",
+                },
+            ],
+            "per_package_results": [
+                {
+                    "package_id": "pkg_alpha",
+                    "status": "pass",
+                    "targeted_runs": [
+                        {
+                            "axis_id": "action_variation",
+                            "variant_id": "dv2_root_translate_forward",
+                            "status": "pass",
+                            "request_kind": "action_preview",
+                            "key_image_paths": {
+                                "primary_after": after_image_path,
+                            },
+                        },
+                        {
+                            "axis_id": "clothing_fixture_diversity",
+                            "variant_id": "fixture_brow_cards",
+                            "status": "pass",
+                            "request_kind": "action_preview",
+                            "key_image_paths": {
+                                "primary_after": front_image_path,
+                            },
+                        },
+                    ],
+                }
+            ],
+        },
+    )
+    return report_path
+
+
 def build_fixture_pack(
     tmp_path: Path,
     *,
     include_governance: bool = True,
     include_dv1: bool = False,
+    include_dv2: bool = False,
     include_m1: bool = False,
     include_e2b: bool = False,
     include_pv1: bool = False,
@@ -423,6 +518,8 @@ def build_fixture_pack(
     verification_root = materialize_report_fixtures(tmp_path / "verification", include_governance=include_governance)
     if include_dv1:
         write_fixture_dv1_report(verification_root)
+    if include_dv2:
+        write_fixture_dv2_report(verification_root)
     if include_m1:
         write_fixture_m1_report(verification_root)
     if include_e2b:

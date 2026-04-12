@@ -7,7 +7,7 @@ from pathlib import Path
 
 from aiue_core.schema_utils import write_json
 
-from aiue_t1.diversity_matrix import build_diversity_matrix_quality_summary
+from aiue_t1.diversity_matrix import build_diversity_matrix_quality_summary, latest_diversity_matrix_entry
 from aiue_t1.material_proof import build_material_proof_quality_summary
 from aiue_t1.q5c_lite import closest_margin_info, margin_to_failure_by_metric, risk_band_for_q5c_lite, risk_reason_for_q5c_lite
 from aiue_t1.report_index import build_report_index
@@ -171,8 +171,9 @@ def _collect_preview_artifacts(report_index: dict) -> list[dict]:
                         "key": f"e2b_{package_id}_{image_key}",
                     }
                 )
-    dv1_report = dict((reports_by_gate_id.get("diversity_matrix_dv1") or {}).get("report") or {})
-    for package in list(dv1_report.get("per_package_results") or []):
+    diversity_gate_id, _, diversity_report = latest_diversity_matrix_entry(report_index)
+    diversity_label = "DV2" if diversity_gate_id == "diversity_matrix_dv2" else "DV1"
+    for package in list(diversity_report.get("per_package_results") or []):
         package_id = str(package.get("package_id") or "")
         for entry in list(package.get("action_matrix_runs") or []):
             image_path = str(dict(entry.get("key_image_paths") or {}).get("primary_after") or "")
@@ -180,10 +181,10 @@ def _collect_preview_artifacts(report_index: dict) -> list[dict]:
             if image_path:
                 artifacts.append(
                     {
-                        "title": f"DV1 {package_id} action {preset_id}",
+                        "title": f"{diversity_label} {package_id} action {preset_id}",
                         "section": "Diversity Matrix",
                         "source_path": image_path,
-                        "key": f"dv1_{package_id}_action_{preset_id}",
+                        "key": f"{diversity_label.lower()}_{package_id}_action_{preset_id}",
                     }
                 )
         for entry in list(package.get("animation_matrix_runs") or []):
@@ -192,10 +193,23 @@ def _collect_preview_artifacts(report_index: dict) -> list[dict]:
             if image_path:
                 artifacts.append(
                     {
-                        "title": f"DV1 {package_id} animation {preset_id}",
+                        "title": f"{diversity_label} {package_id} animation {preset_id}",
                         "section": "Diversity Matrix",
                         "source_path": image_path,
-                        "key": f"dv1_{package_id}_animation_{preset_id}",
+                        "key": f"{diversity_label.lower()}_{package_id}_animation_{preset_id}",
+                    }
+                )
+        for entry in list(package.get("targeted_runs") or []):
+            image_path = str(dict(entry.get("key_image_paths") or {}).get("primary_after") or "")
+            axis_id = str(entry.get("axis_id") or "")
+            variant_id = str(entry.get("variant_id") or "")
+            if image_path:
+                artifacts.append(
+                    {
+                        "title": f"{diversity_label} {package_id} {axis_id} {variant_id}",
+                        "section": "Diversity Matrix",
+                        "source_path": image_path,
+                        "key": f"{diversity_label.lower()}_{package_id}_{axis_id}_{variant_id}",
                     }
                 )
     e1_report = dict((reports_by_gate_id.get("showcase_demo_e1") or {}).get("report") or {})
@@ -703,9 +717,11 @@ def _render_m1_material_summary(quality_summaries: dict) -> str:
 def _render_diversity_matrix_summary(quality_summaries: dict) -> str:
     summary = dict((quality_summaries or {}).get("diversity_matrix") or {})
     if not summary or str(summary.get("status") or "missing") == "missing":
-        return "<p class=\"muted\">No DV1 diversity matrix summary was available.</p>"
+        return "<p class=\"muted\">No diversity matrix summary was available.</p>"
     distinct_counts = dict(summary.get("distinct_counts") or {})
     coverage_axes = [dict(item) for item in list(summary.get("coverage_axes") or [])]
+    gate_id = str(summary.get("gate_id") or "diversity_matrix")
+    gate_label = "DV2" if gate_id == "diversity_matrix_dv2" else "DV1" if gate_id == "diversity_matrix_dv1" else gate_id
     rows = []
     for axis in coverage_axes:
         rows.append(
@@ -722,7 +738,7 @@ def _render_diversity_matrix_summary(quality_summaries: dict) -> str:
     ) or "none"
     return (
         "<article class=\"card\">"
-        f"<h3>DV1 Diversity Matrix</h3>"
+        f"<h3>{html.escape(gate_label)} Diversity Matrix</h3>"
         f"<p><strong>Status:</strong> {html.escape(str(summary.get('status') or 'unknown'))}</p>"
         f"<p><strong>Axes:</strong> covered {int(summary.get('covered_axis_count') or 0)} | "
         f"partial {int(summary.get('partial_axis_count') or 0)} | "
@@ -757,7 +773,7 @@ def _render_html(manifest: dict, *, report_index: dict | None = None) -> str:
 <section class="section"><h2>Historical / Other Reports</h2><div class="grid cards">{_render_report_cards(list(categories.get('historical_other') or []))}</div></section>
 <section class="section"><h2>Key Screenshot Previews</h2><div class="artifact-grid">{_render_preview_cards(preview_artifacts)}</div></section>
 <section class="section"><h2>Before / After Metrics</h2>{_render_r3_metrics(report_index)}</section>
-<section class="section"><h2>DV1 Diversity Matrix</h2>{_render_diversity_matrix_summary(quality_summaries)}</section>
+<section class="section"><h2>Diversity Matrix</h2>{_render_diversity_matrix_summary(quality_summaries)}</section>
 <section class="section"><h2>M1 Material / Texture Proof</h2>{_render_m1_material_summary(quality_summaries)}</section>
 <section class="section"><h2>Q5C-lite Quality Summary</h2>{_render_q5c_quality_summary(quality_summaries)}</section>
 <section class="section"><h2>Slot Debugger</h2>{_render_slot_debugger(slot_debugger)}</section>

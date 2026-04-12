@@ -140,6 +140,18 @@ def test_build_evidence_pack_renders_diversity_matrix_summary(tmp_path: Path):
     assert "character_variant_diversity" in index_html
 
 
+def test_build_evidence_pack_prefers_dv2_diversity_matrix_summary(tmp_path: Path):
+    from tests.t2.helpers import build_fixture_pack
+
+    pack = build_fixture_pack(tmp_path, include_dv1=True, include_dv2=True)
+    manifest = load_json(pack["output_root"] / "manifest.json")
+    diversity_summary = dict((manifest.get("quality_summaries") or {}).get("diversity_matrix") or {})
+    assert diversity_summary["gate_id"] == "diversity_matrix_dv2"
+    index_html = (pack["output_root"] / "index.html").read_text(encoding="utf-8")
+    assert "DV2 Diversity Matrix" in index_html
+    assert "fixture_brow_cards" in index_html
+
+
 def test_build_evidence_pack_renders_pv1_signoff_card(tmp_path: Path):
     from tests.t2.helpers import build_fixture_pack
 

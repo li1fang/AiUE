@@ -128,8 +128,10 @@ class WorkbenchRenderMixin:
             self.diversity_matrix_summary.setText("")
         else:
             distinct_counts = dict(diversity_summary.get("distinct_counts") or {})
+            gate_id = str(diversity_summary.get("gate_id") or "diversity_matrix")
+            gate_label = "DV2" if gate_id == "diversity_matrix_dv2" else "DV1" if gate_id == "diversity_matrix_dv1" else gate_id
             self.diversity_matrix_summary.setText(
-                "DV1 Diversity Matrix "
+                f"{gate_label} Diversity Matrix "
                 f"{str(diversity_summary.get('status') or 'unknown').upper()} | "
                 f"covered {int(diversity_summary.get('covered_axis_count') or 0)} | "
                 f"partial {int(diversity_summary.get('partial_axis_count') or 0)} | "

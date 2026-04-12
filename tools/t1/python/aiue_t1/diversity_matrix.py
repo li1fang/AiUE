@@ -12,6 +12,11 @@ DIVERSITY_AXIS_THRESHOLDS = {
     "animation_variation": {"covered": 2, "partial": 1},
 }
 
+DIVERSITY_MATRIX_GATE_IDS = [
+    "diversity_matrix_dv2",
+    "diversity_matrix_dv1",
+]
+
 
 def diversity_status_for_count(axis_id: str, distinct_count: int) -> str:
     thresholds = dict(DIVERSITY_AXIS_THRESHOLDS.get(axis_id) or {})
@@ -29,13 +34,14 @@ def build_diversity_axis(
     observed_values: list[str],
     *,
     noun_phrase: str,
+    gate_label: str = "DV1",
 ) -> dict[str, Any]:
     distinct_values = sorted({str(item) for item in observed_values if str(item)})
     distinct_count = len(distinct_values)
     status = diversity_status_for_count(axis_id, distinct_count)
     thresholds = dict(DIVERSITY_AXIS_THRESHOLDS.get(axis_id) or {})
     summary = (
-        f"DV1 currently verifies {distinct_count} distinct {noun_phrase} on the automated demo-ready path."
+        f"{gate_label} currently verifies {distinct_count} distinct {noun_phrase} on the automated demo-ready path."
     )
     return {
         "axis_id": axis_id,
@@ -48,14 +54,22 @@ def build_diversity_axis(
     }
 
 
-def build_diversity_matrix_quality_summary(report_index: dict) -> dict[str, Any]:
+def latest_diversity_matrix_entry(report_index: dict) -> tuple[str, dict[str, Any], dict[str, Any]]:
     reports_by_gate_id = dict(report_index.get("reports_by_gate_id") or {})
-    entry = dict(reports_by_gate_id.get("diversity_matrix_dv1") or {})
-    report_payload = dict(entry.get("report") or {})
+    for gate_id in DIVERSITY_MATRIX_GATE_IDS:
+        entry = dict(reports_by_gate_id.get(gate_id) or {})
+        report_payload = dict(entry.get("report") or {})
+        if report_payload:
+            return gate_id, entry, report_payload
+    return DIVERSITY_MATRIX_GATE_IDS[0], {}, {}
+
+
+def build_diversity_matrix_quality_summary(report_index: dict) -> dict[str, Any]:
+    gate_id, entry, report_payload = latest_diversity_matrix_entry(report_index)
     if not report_payload:
         return {
             "status": "missing",
-            "gate_id": "diversity_matrix_dv1",
+            "gate_id": gate_id,
             "report_source_path": "",
             "covered_axis_count": 0,
             "partial_axis_count": 0,
@@ -69,7 +83,7 @@ def build_diversity_matrix_quality_summary(report_index: dict) -> dict[str, Any]
     distinct_counts = dict(report_payload.get("distinct_counts") or {})
     return {
         "status": str(report_payload.get("status") or entry.get("status") or "unknown"),
-        "gate_id": "diversity_matrix_dv1",
+        "gate_id": gate_id,
         "report_source_path": str(entry.get("report_path") or ""),
         "covered_axis_count": sum(1 for item in coverage_axes if str(item.get("status") or "") == "covered"),
         "partial_axis_count": sum(1 for item in coverage_axes if str(item.get("status") or "") == "partial"),

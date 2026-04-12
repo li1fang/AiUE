@@ -210,3 +210,14 @@ def test_load_workbench_state_reads_dv1_diversity_summary(tmp_path: Path):
     assert diversity_summary["distinct_counts"]["character_variant_diversity"] == 2
     assert "diversity_matrix_dv1" in payload["report_categories"]["governance_line"]
     assert payload["quality_summaries"]["diversity_matrix"]["status"] == "pass"
+
+
+def test_load_workbench_state_reads_dv2_diversity_summary(tmp_path: Path):
+    pack = build_fixture_pack(tmp_path, include_dv2=True)
+    state = load_workbench_state(pack["manifest_path"])
+    payload = state.to_dump_payload(build_default_view_state(state))
+    diversity_summary = state.quality_summaries["diversity_matrix"]
+    assert diversity_summary["status"] == "pass"
+    assert diversity_summary["gate_id"] == "diversity_matrix_dv2"
+    assert diversity_summary["covered_axis_count"] == 6
+    assert "diversity_matrix_dv2" in payload["report_categories"]["governance_line"]

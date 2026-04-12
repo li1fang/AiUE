@@ -33,6 +33,7 @@ PLATFORM_LINE_GATE_IDS = [
 GOVERNANCE_LINE_GATE_IDS = [
     "dynamic_balance_governance_progress",
     "test_governance_round1",
+    "diversity_matrix_dv2",
     "diversity_matrix_dv1",
     "manual_playable_demo_validation_pv1",
 ]

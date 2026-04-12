@@ -154,3 +154,37 @@ def test_test_governance_promotes_diversity_axes_from_dv1(tmp_path: Path):
     assert axes_by_id["weapon_variant_diversity"]["status"] == "covered"
     assert axes_by_id["animation_variation"]["status"] == "covered"
     assert axes_by_id["clothing_fixture_diversity"]["status"] == "partial"
+
+
+def test_test_governance_prefers_dv2_diversity_axes(tmp_path: Path):
+    from tests.t2.helpers import write_fixture_dv2_report
+
+    verification_root = tmp_path / "verification"
+    verification_root.mkdir(parents=True, exist_ok=True)
+    write_fixture_dv2_report(verification_root, status="pass")
+
+    def fake_lane_executor(repo_root, lane_id, python_executable):
+        return {
+            "lane_id": lane_id,
+            "status": "pass",
+            "returncode": 0,
+            "stdout_tail": [],
+            "stderr_tail": [],
+            "command": [python_executable, lane_id],
+        }
+
+    report, _, _ = build_test_governance_report(
+        repo_root=REPO_ROOT,
+        verification_root=verification_root,
+        coverage_ledger_path=REPO_ROOT / "docs" / "governance" / "test_coverage_ledger_round1.json",
+        changed_paths=["tools/t1/python/aiue_t1/diversity_matrix.py"],
+        lane_executor=fake_lane_executor,
+    )
+    axes_by_id = {
+        str(item.get("axis_id") or ""): dict(item)
+        for item in list(report.get("coverage_axes") or [])
+        if str(item.get("axis_id") or "")
+    }
+    assert axes_by_id["clothing_fixture_diversity"]["status"] == "covered"
+    assert axes_by_id["fx_fixture_diversity"]["status"] == "covered"
+    assert axes_by_id["action_variation"]["status"] == "covered"
