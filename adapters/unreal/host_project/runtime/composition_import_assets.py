@@ -55,15 +55,6 @@ def classify_imported_assets(object_paths: list[str]) -> dict:
     return result
 
 
-def path_for_loaded_asset(asset) -> str | None:
-    if not asset:
-        return None
-    try:
-        return unreal.EditorAssetLibrary.get_path_name_for_loaded_asset(asset)
-    except Exception:
-        return None
-
-
 def enrich_related_assets(imported_assets: dict, mesh_destination: str, mesh_name: str) -> dict:
     skeletal_mesh_path = imported_assets.get("skeletal_mesh")
     if not skeletal_mesh_path:

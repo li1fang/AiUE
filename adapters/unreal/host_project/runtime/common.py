@@ -162,6 +162,15 @@ def asset_name_from_path(asset_path: str) -> str:
     return asset_path.rstrip("/").split("/")[-1]
 
 
+def path_for_loaded_asset(asset) -> str | None:
+    if not asset:
+        return None
+    try:
+        return unreal.EditorAssetLibrary.get_path_name_for_loaded_asset(asset)
+    except Exception:
+        return None
+
+
 def object_path_from_asset_path(asset_path: str) -> str:
     asset_name = asset_name_from_path(asset_path)
     return f"{asset_path}.{asset_name}"
