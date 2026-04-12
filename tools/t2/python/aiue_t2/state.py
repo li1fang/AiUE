@@ -16,6 +16,7 @@ from aiue_t2.state_models import (
     DemoSessionRecord,
     ErrorRecord,
     GovernanceBalanceRecord,
+    Pv1SignoffRecord,
     PreviewImageRecord,
     ReportRecord,
     TestGovernanceRecord,
@@ -27,6 +28,7 @@ from aiue_t2.state_models import (
 from aiue_t2.state_quality import (
     build_q5c_contrast_focus,
     extract_governance_balance,
+    extract_pv1_signoff,
     extract_r3_metrics,
     extract_test_governance,
     load_preview_images,
@@ -91,6 +93,7 @@ def _error_app_state(*, manifest_path: Path, code: str, message: str) -> AppStat
         slot_debugger={"package_count": 0, "packages": []},
         governance_balance=GovernanceBalanceRecord(status="missing"),
         test_governance=TestGovernanceRecord(status="missing"),
+        pv1_signoff=Pv1SignoffRecord(status="missing"),
         demo_session=DemoSessionRecord(
             status="missing",
             session_manifest_path="",
@@ -186,6 +189,7 @@ def load_workbench_state(
     slot_packages = list(slot_debugger.get("packages") or [])
     governance_balance = extract_governance_balance(reports_by_gate_id)
     test_governance = extract_test_governance(reports_by_gate_id)
+    pv1_signoff = extract_pv1_signoff(reports_by_gate_id)
     default_package_id = (
         demo_session.default_package_id
         or (str(slot_packages[0].get("package_id") or "") if slot_packages else None)
@@ -227,6 +231,7 @@ def load_workbench_state(
         slot_debugger=slot_debugger,
         governance_balance=governance_balance,
         test_governance=test_governance,
+        pv1_signoff=pv1_signoff,
         demo_session=demo_session,
         demo_request=demo_request,
         errors=errors,

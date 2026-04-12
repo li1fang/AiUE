@@ -57,6 +57,18 @@ def test_workbench_window_renders_fixture_pack(qtbot, tmp_path: Path):
     assert window.q5c_contrast_compare_panel.isVisible() is False
 
 
+def test_workbench_window_shows_pv1_signoff_summary(qtbot, tmp_path: Path):
+    pack = build_fixture_pack(tmp_path, include_pv1=True, include_e2b=True)
+    window = WorkbenchWindow(manifest_path=pack["manifest_path"])
+    qtbot.addWidget(window)
+    window.show()
+    qtbot.waitUntil(lambda: window.current_dump_payload()["pv1_signoff"]["status"] == "attention")
+    assert window.pv1_signoff_summary.isVisible() is True
+    assert "PV1 Signoff ATTENTION" in window.pv1_signoff_summary.text()
+    assert "operator fixture_user" in window.pv1_signoff_summary.text()
+    assert "package_ids pkg_alpha" in window.pv1_signoff_summary.text()
+
+
 def test_workbench_window_shows_q5c_quality_summary(qtbot, tmp_path: Path):
     pack = build_fixture_pack(tmp_path, include_q5c=True, include_q5c_contrast=True)
     window = WorkbenchWindow(manifest_path=pack["manifest_path"])

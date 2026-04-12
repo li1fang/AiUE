@@ -8,6 +8,7 @@ from aiue_t2.state_models import (
     CATEGORY_ORDER,
     ErrorRecord,
     GovernanceBalanceRecord,
+    Pv1SignoffRecord,
     PreviewImageRecord,
     ReportRecord,
     TestGovernanceRecord,
@@ -554,6 +555,33 @@ def extract_test_governance(reports_by_gate_id: dict[str, ReportRecord]) -> Test
         high_priority_blind_spot_ids=high_priority_blind_spot_ids,
         high_priority_automation_blind_spot_ids=high_priority_automation_blind_spot_ids,
         high_priority_signoff_blind_spot_ids=high_priority_signoff_blind_spot_ids,
+        report_gate_id=record.gate_id,
+        report_source_path=record.report_source_path,
+    )
+
+
+def extract_pv1_signoff(reports_by_gate_id: dict[str, ReportRecord]) -> Pv1SignoffRecord:
+    record = reports_by_gate_id.get("manual_playable_demo_validation_pv1")
+    if not record or not record.report_payload:
+        return Pv1SignoffRecord(status="missing")
+
+    report_payload = dict(record.report_payload or {})
+    checked_packages = [dict(item) for item in list(report_payload.get("checked_packages") or [])]
+    checked_package_ids = [
+        str(item.get("package_id") or "")
+        for item in checked_packages
+        if str(item.get("package_id") or "")
+    ]
+    return Pv1SignoffRecord(
+        status=str(report_payload.get("status") or "unknown"),
+        requested_signoff_status=str(report_payload.get("requested_signoff_status") or ""),
+        operator=str(report_payload.get("operator") or ""),
+        notes=str(report_payload.get("notes") or ""),
+        success=bool(report_payload.get("success")),
+        checked_package_ids=checked_package_ids,
+        checked_package_count=len(checked_package_ids),
+        source_session_manifest=str(report_payload.get("source_session_manifest") or ""),
+        source_e2b_report=str(report_payload.get("source_e2b_report") or ""),
         report_gate_id=record.gate_id,
         report_source_path=record.report_source_path,
     )

@@ -194,6 +194,9 @@ def test_load_workbench_state_reads_m1_material_summary_and_pv1_report(tmp_path:
     assert m1_summary["packages"][0]["character_imported_texture_count"] == 13
     assert payload["quality_summaries"]["m1_material_proof"]["status"] == "pass"
     assert "manual_playable_demo_validation_pv1" in payload["report_categories"]["governance_line"]
+    assert payload["pv1_signoff"]["status"] == "attention"
+    assert payload["pv1_signoff"]["operator"] == "fixture_user"
+    assert payload["pv1_signoff"]["checked_package_ids"] == ["pkg_alpha"]
     assert "playable_demo_e2b_credible_showcase" in payload["report_categories"]["historical_other"]
 
 

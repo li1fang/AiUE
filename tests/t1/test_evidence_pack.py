@@ -138,3 +138,13 @@ def test_build_evidence_pack_renders_diversity_matrix_summary(tmp_path: Path):
     index_html = (pack["output_root"] / "index.html").read_text(encoding="utf-8")
     assert "DV1 Diversity Matrix" in index_html
     assert "character_variant_diversity" in index_html
+
+
+def test_build_evidence_pack_renders_pv1_signoff_card(tmp_path: Path):
+    from tests.t2.helpers import build_fixture_pack
+
+    pack = build_fixture_pack(tmp_path, include_pv1=True, include_e2b=True)
+    index_html = (pack["output_root"] / "index.html").read_text(encoding="utf-8")
+    assert "PV1 Manual Signoff" in index_html
+    assert "fixture_user" in index_html
+    assert "pkg_alpha" in index_html

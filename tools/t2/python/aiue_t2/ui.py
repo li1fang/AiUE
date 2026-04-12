@@ -25,6 +25,7 @@ from aiue_t2.state import (
     DemoRequestRecord,
     DemoSessionRecord,
     GovernanceBalanceRecord,
+    Pv1SignoffRecord,
     TestGovernanceRecord,
     ViewState,
     build_default_view_state,
@@ -144,6 +145,7 @@ class WorkbenchWindow(WorkbenchRenderMixin, WorkbenchDemoOpsMixin, QMainWindow):
             slot_debugger={"package_count": 0, "packages": []},
             governance_balance=GovernanceBalanceRecord(status="missing"),
             test_governance=TestGovernanceRecord(status="missing"),
+            pv1_signoff=Pv1SignoffRecord(status="missing"),
             demo_session=DemoSessionRecord(
                 status="missing",
                 session_manifest_path="",
@@ -241,6 +243,14 @@ class WorkbenchWindow(WorkbenchRenderMixin, WorkbenchDemoOpsMixin, QMainWindow):
         self.test_governance_summary.setStyleSheet("padding: 0 2px 6px 2px;")
         self.test_governance_summary.setVisible(False)
         root_layout.addWidget(self.test_governance_summary)
+
+        self.pv1_signoff_summary = QLabel("")
+        self.pv1_signoff_summary.setObjectName("pv1SignoffSummary")
+        self.pv1_signoff_summary.setWordWrap(True)
+        self.pv1_signoff_summary.setProperty("role", "muted")
+        self.pv1_signoff_summary.setStyleSheet("padding: 0 2px 6px 2px;")
+        self.pv1_signoff_summary.setVisible(False)
+        root_layout.addWidget(self.pv1_signoff_summary)
 
         self.material_proof_summary = QLabel("")
         self.material_proof_summary.setObjectName("materialProofSummary")

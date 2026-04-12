@@ -528,6 +528,28 @@ def _render_test_governance_card(report_index: dict) -> str:
     )
 
 
+def _render_pv1_signoff_card(report_index: dict) -> str:
+    pv1_report = dict((dict(report_index.get("reports_by_gate_id") or {}).get("manual_playable_demo_validation_pv1") or {}).get("report") or {})
+    if not pv1_report:
+        return "<p class=\"muted\">No PV1 manual signoff report was available.</p>"
+    checked_packages = [dict(item) for item in list(pv1_report.get("checked_packages") or [])]
+    checked_package_ids = [
+        str(item.get("package_id") or "")
+        for item in checked_packages
+        if str(item.get("package_id") or "")
+    ]
+    return (
+        "<article class=\"card\">"
+        f"<h3>PV1 Manual Signoff</h3>"
+        f"<p><strong>Status:</strong> {html.escape(str(pv1_report.get('status') or 'unknown'))}</p>"
+        f"<p><strong>Requested Signoff:</strong> {html.escape(str(pv1_report.get('requested_signoff_status') or 'n/a'))}</p>"
+        f"<p><strong>Operator:</strong> {html.escape(str(pv1_report.get('operator') or 'unknown'))}</p>"
+        f"<p><strong>Checked Packages:</strong> {html.escape(', '.join(checked_package_ids) if checked_package_ids else 'none')}</p>"
+        f"<p class=\"muted\">Notes: {html.escape(str(pv1_report.get('notes') or 'none'))}</p>"
+        "</article>"
+    )
+
+
 def _render_test_governance_summary(report_index: dict) -> str:
     governance_report = dict((dict(report_index.get("reports_by_gate_id") or {}).get("test_governance_round1") or {}).get("report") or {})
     if not governance_report:
@@ -722,7 +744,7 @@ def _render_html(manifest: dict, *, report_index: dict | None = None) -> str:
 <h1>AiUE T1 Evidence Pack</h1>
 <p class="muted">Generated at {html.escape(str(manifest.get('generated_at_utc') or ''))}</p>
 <section class="section"><h2>Summary</h2><div class="grid cards"><article class="card"><h3>Reports</h3><p>{int(counts.get('reports') or 0)}</p></article><article class="card"><h3>Active Line</h3><p>{int(counts.get('active_line_reports') or 0)}</p></article><article class="card"><h3>Platform Line</h3><p>{int(counts.get('platform_line_reports') or 0)}</p></article><article class="card"><h3>Governance Line</h3><p>{int(counts.get('governance_line_reports') or 0)}</p></article><article class="card"><h3>Passing Reports</h3><p>{int(counts.get('passing_reports') or 0)}</p></article></div></section>
-<section class="section"><h2>Governance</h2><div class="grid cards">{_render_balance_card(report_index)}{_render_test_governance_card(report_index)}</div></section>
+<section class="section"><h2>Governance</h2><div class="grid cards">{_render_balance_card(report_index)}{_render_test_governance_card(report_index)}{_render_pv1_signoff_card(report_index)}</div></section>
 <section class="section"><h2>Test Coverage / Blind Spots</h2>{_render_test_governance_summary(report_index)}</section>
 <section class="section"><h2>Active Line Reports</h2><div class="grid cards">{_render_report_cards(list(categories.get('active_line') or []))}</div></section>
 <section class="section"><h2>Platform Line Reports</h2><div class="grid cards">{_render_report_cards(list(categories.get('platform_line') or []))}</div></section>

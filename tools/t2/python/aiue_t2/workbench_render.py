@@ -54,6 +54,7 @@ class WorkbenchRenderMixin:
         self.summary_cards["governance"].set_value(int(counts.get("governance_line_reports") or 0))
         self.summary_cards["passing"].set_value(int(counts.get("passing_reports") or 0))
         self._render_test_governance_summary()
+        self._render_pv1_signoff_summary()
         self._render_quality_summaries()
         self._render_report_tree()
         self._render_details()
@@ -101,6 +102,24 @@ class WorkbenchRenderMixin:
             f"signoff blind spots {signoff_blind_spot_text}"
         )
         self.test_governance_summary.setVisible(True)
+
+    def _render_pv1_signoff_summary(self) -> None:
+        summary = self.app_state.pv1_signoff
+        if summary.status == "missing":
+            self.pv1_signoff_summary.setVisible(False)
+            self.pv1_signoff_summary.setText("")
+            return
+        checked_packages_text = ", ".join(summary.checked_package_ids) if summary.checked_package_ids else "none"
+        notes_text = summary.notes or "none"
+        operator_text = summary.operator or "unknown"
+        requested_text = summary.requested_signoff_status or "n/a"
+        self.pv1_signoff_summary.setText(
+            "PV1 Signoff "
+            f"{summary.status.upper()} | requested {requested_text} | "
+            f"operator {operator_text} | checked_packages {summary.checked_package_count} | "
+            f"package_ids {checked_packages_text} | notes {notes_text}"
+        )
+        self.pv1_signoff_summary.setVisible(True)
 
     def _render_quality_summaries(self) -> None:
         diversity_summary = dict((self.app_state.quality_summaries or {}).get("diversity_matrix") or {})

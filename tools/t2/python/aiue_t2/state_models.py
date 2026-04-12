@@ -240,6 +240,36 @@ class TestGovernanceRecord:
 
 
 @dataclass
+class Pv1SignoffRecord:
+    status: str
+    requested_signoff_status: str = ""
+    operator: str = ""
+    notes: str = ""
+    success: bool = False
+    checked_package_ids: list[str] = field(default_factory=list)
+    checked_package_count: int = 0
+    source_session_manifest: str = ""
+    source_e2b_report: str = ""
+    report_gate_id: str = ""
+    report_source_path: str = ""
+
+    def to_dump_dict(self) -> dict[str, Any]:
+        return {
+            "status": self.status,
+            "requested_signoff_status": self.requested_signoff_status,
+            "operator": self.operator,
+            "notes": self.notes,
+            "success": bool(self.success),
+            "checked_package_ids": list(self.checked_package_ids),
+            "checked_package_count": int(self.checked_package_count),
+            "source_session_manifest": self.source_session_manifest,
+            "source_e2b_report": self.source_e2b_report,
+            "report_gate_id": self.report_gate_id,
+            "report_source_path": self.report_source_path,
+        }
+
+
+@dataclass
 class AppState:
     status: str
     manifest_path: str
@@ -254,6 +284,7 @@ class AppState:
     slot_debugger: dict[str, Any]
     governance_balance: GovernanceBalanceRecord
     test_governance: TestGovernanceRecord
+    pv1_signoff: Pv1SignoffRecord
     demo_session: DemoSessionRecord
     demo_request: DemoRequestRecord
     errors: list[ErrorRecord]
@@ -301,6 +332,7 @@ class AppState:
             },
             "governance_balance": self.governance_balance.to_dump_dict(),
             "test_governance": self.test_governance.to_dump_dict(),
+            "pv1_signoff": self.pv1_signoff.to_dump_dict(),
             "q5c_contrast_focus": build_q5c_contrast_focus(
                 self.quality_summaries,
                 selected_package_id=selected_package,
