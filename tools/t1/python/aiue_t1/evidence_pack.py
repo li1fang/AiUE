@@ -534,17 +534,22 @@ def _render_pv1_signoff_card(report_index: dict) -> str:
         return "<p class=\"muted\">No PV1 manual signoff report was available.</p>"
     checked_packages = [dict(item) for item in list(pv1_report.get("checked_packages") or [])]
     checked_package_ids = [
+        str(item)
+        for item in list(pv1_report.get("checked_package_ids") or [])
+        if str(item or "")
+    ] or [
         str(item.get("package_id") or "")
         for item in checked_packages
         if str(item.get("package_id") or "")
     ]
+    checked_package_count = int(pv1_report.get("checked_package_count") or len(checked_package_ids))
     return (
         "<article class=\"card\">"
         f"<h3>PV1 Manual Signoff</h3>"
         f"<p><strong>Status:</strong> {html.escape(str(pv1_report.get('status') or 'unknown'))}</p>"
         f"<p><strong>Requested Signoff:</strong> {html.escape(str(pv1_report.get('requested_signoff_status') or 'n/a'))}</p>"
         f"<p><strong>Operator:</strong> {html.escape(str(pv1_report.get('operator') or 'unknown'))}</p>"
-        f"<p><strong>Checked Packages:</strong> {html.escape(', '.join(checked_package_ids) if checked_package_ids else 'none')}</p>"
+        f"<p><strong>Checked Packages:</strong> {html.escape(str(checked_package_count))} | {html.escape(', '.join(checked_package_ids) if checked_package_ids else 'none')}</p>"
         f"<p class=\"muted\">Notes: {html.escape(str(pv1_report.get('notes') or 'none'))}</p>"
         "</article>"
     )

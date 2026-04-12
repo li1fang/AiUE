@@ -110,6 +110,11 @@ def main() -> int:
         )
 
     checked_packages = build_checked_packages(session_payload)
+    checked_package_ids = [
+        str(item.get("package_id") or "")
+        for item in checked_packages
+        if str(item.get("package_id") or "")
+    ]
     if not checked_packages:
         failed_requirements.append(
             make_failed_requirement(
@@ -142,6 +147,8 @@ def main() -> int:
             "source_session_manifest": str(session_manifest_path.resolve()) if session_manifest_path.exists() else "",
             "source_e2b_report": str(e2b_report_path.resolve()) if e2b_report_path.exists() else "",
             "checked_packages": checked_packages,
+            "checked_package_ids": checked_package_ids,
+            "checked_package_count": len(checked_package_ids),
             "completed_operations": completed_operations,
             "issues": failed_requirements if status != "pass" else [],
             "discussion_signal": discussion_signal,

@@ -302,6 +302,8 @@ def write_fixture_pv1_report(verification_root: Path, *, status: str = "attentio
             "status": status,
             "generated_at_utc": "2026-04-12T02:20:00+00:00",
             "operator": "fixture_user",
+            "checked_package_ids": ["pkg_alpha"],
+            "checked_package_count": 1,
             "checked_packages": [
                 {
                     "package_id": "pkg_alpha",

@@ -568,10 +568,15 @@ def extract_pv1_signoff(reports_by_gate_id: dict[str, ReportRecord]) -> Pv1Signo
     report_payload = dict(record.report_payload or {})
     checked_packages = [dict(item) for item in list(report_payload.get("checked_packages") or [])]
     checked_package_ids = [
+        str(item)
+        for item in list(report_payload.get("checked_package_ids") or [])
+        if str(item or "")
+    ] or [
         str(item.get("package_id") or "")
         for item in checked_packages
         if str(item.get("package_id") or "")
     ]
+    checked_package_count = int(report_payload.get("checked_package_count") or len(checked_package_ids))
     return Pv1SignoffRecord(
         status=str(report_payload.get("status") or "unknown"),
         requested_signoff_status=str(report_payload.get("requested_signoff_status") or ""),
@@ -579,7 +584,7 @@ def extract_pv1_signoff(reports_by_gate_id: dict[str, ReportRecord]) -> Pv1Signo
         notes=str(report_payload.get("notes") or ""),
         success=bool(report_payload.get("success")),
         checked_package_ids=checked_package_ids,
-        checked_package_count=len(checked_package_ids),
+        checked_package_count=checked_package_count,
         source_session_manifest=str(report_payload.get("source_session_manifest") or ""),
         source_e2b_report=str(report_payload.get("source_e2b_report") or ""),
         report_gate_id=record.gate_id,

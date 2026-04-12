@@ -147,4 +147,5 @@ def test_build_evidence_pack_renders_pv1_signoff_card(tmp_path: Path):
     index_html = (pack["output_root"] / "index.html").read_text(encoding="utf-8")
     assert "PV1 Manual Signoff" in index_html
     assert "fixture_user" in index_html
+    assert "Checked Packages:</strong> 1 | pkg_alpha" in index_html
     assert "pkg_alpha" in index_html
