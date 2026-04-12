@@ -123,3 +123,16 @@ def test_build_evidence_pack_generates_static_bundle(tmp_path: Path):
     index_html = (output_root / "index.html").read_text(encoding="utf-8")
     assert "Test Governance" in index_html
     assert "manual_playable_demo_validation" in index_html
+
+
+def test_build_evidence_pack_renders_diversity_matrix_summary(tmp_path: Path):
+    from tests.t2.helpers import build_fixture_pack
+
+    pack = build_fixture_pack(tmp_path, include_dv1=True)
+    manifest = load_json(pack["output_root"] / "manifest.json")
+    diversity_summary = dict((manifest.get("quality_summaries") or {}).get("diversity_matrix") or {})
+    assert diversity_summary["status"] == "pass"
+    assert diversity_summary["covered_axis_count"] == 3
+    index_html = (pack["output_root"] / "index.html").read_text(encoding="utf-8")
+    assert "DV1 Diversity Matrix" in index_html
+    assert "character_variant_diversity" in index_html

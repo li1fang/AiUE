@@ -16,6 +16,7 @@ ACTIVE_LINE_GATE_IDS = [
 ]
 
 PLATFORM_LINE_GATE_IDS = [
+    "material_texture_proof_m1",
     "generic_slot_abstraction_p1",
     "clothing_vertical_slice_p2",
     "visible_conflict_inspection_q5a",
@@ -32,6 +33,8 @@ PLATFORM_LINE_GATE_IDS = [
 GOVERNANCE_LINE_GATE_IDS = [
     "dynamic_balance_governance_progress",
     "test_governance_round1",
+    "diversity_matrix_dv1",
+    "manual_playable_demo_validation_pv1",
 ]
 
 

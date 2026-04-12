@@ -9,6 +9,7 @@ from typing import Any, Callable
 from aiue_core.schema_utils import load_json, write_json
 
 from aiue_t1.dynamic_balance import now_utc, run_stamp
+from aiue_t1.report_index import build_report_index
 
 
 GATE_ID = "test_governance_round1"
@@ -18,6 +19,14 @@ HIGH_PRIORITY_AXIS_IDS = [
     "material_texture_loading",
     "manual_playable_demo_validation",
 ]
+DV1_COVERAGE_AXIS_IDS = {
+    "character_variant_diversity",
+    "weapon_variant_diversity",
+    "clothing_fixture_diversity",
+    "fx_fixture_diversity",
+    "action_variation",
+    "animation_variation",
+}
 RECOMMENDED_T2_DEFAULT_PATHS = {
     "tools/t2/python/aiue_t2/state.py",
     "tools/t2/python/aiue_t2/ui.py",
@@ -140,6 +149,51 @@ def summarize_coverage_ledger(coverage_ledger: dict[str, Any]) -> tuple[dict[str
         "high_priority_missing_count": len(high_priority_missing_ids),
     }
     return coverage_summary, known_blind_spots, high_priority_missing_ids
+
+
+def apply_report_coverage_overrides(coverage_ledger: dict[str, Any], verification_root: Path) -> dict[str, Any]:
+    verification_root = Path(verification_root).expanduser().resolve()
+    if not verification_root.exists():
+        return coverage_ledger
+    report_index = build_report_index(verification_root)
+    reports_by_gate_id = dict(report_index.get("reports_by_gate_id") or {})
+    overridden_axes = []
+    for entry in list(coverage_ledger.get("coverage_axes") or []):
+        axis = dict(entry)
+        axis_id = str(axis.get("axis_id") or "")
+        evidence_gate_ids = [str(item) for item in list(axis.get("evidence_gate_ids") or []) if str(item)]
+        if axis_id == "material_texture_loading":
+            evidence_gate_ids = sorted(set(evidence_gate_ids + ["material_texture_proof_m1"]))
+            m1_report = dict(reports_by_gate_id.get("material_texture_proof_m1") or {}).get("report") or {}
+            if str(m1_report.get("status") or "") == "pass":
+                axis["status"] = "covered"
+                axis["summary"] = "Material and texture loading are covered by the current M1 material proof."
+        elif axis_id == "manual_playable_demo_validation":
+            evidence_gate_ids = sorted(set(evidence_gate_ids + ["manual_playable_demo_validation_pv1"]))
+            pv1_report = dict(reports_by_gate_id.get("manual_playable_demo_validation_pv1") or {}).get("report") or {}
+            if str(pv1_report.get("status") or "") == "pass":
+                axis["status"] = "covered"
+                axis["summary"] = "Playable demo has a recorded manual PV1 signoff for the current demo path."
+        elif axis_id in DV1_COVERAGE_AXIS_IDS:
+            evidence_gate_ids = sorted(set(evidence_gate_ids + ["diversity_matrix_dv1"]))
+            dv1_report = dict(reports_by_gate_id.get("diversity_matrix_dv1") or {}).get("report") or {}
+            dv1_axis = next(
+                (
+                    dict(item)
+                    for item in list(dv1_report.get("coverage_axes") or [])
+                    if str(item.get("axis_id") or "") == axis_id
+                ),
+                {},
+            )
+            if dv1_axis:
+                axis["status"] = str(dv1_axis.get("status") or axis.get("status") or "partial")
+                axis["summary"] = str(dv1_axis.get("summary") or axis.get("summary") or "")
+        axis["evidence_gate_ids"] = evidence_gate_ids
+        overridden_axes.append(axis)
+    return {
+        **coverage_ledger,
+        "coverage_axes": overridden_axes,
+    }
 
 
 def resolve_lane_ids(changed_paths: list[str]) -> tuple[list[str], list[str]]:
@@ -305,7 +359,10 @@ def build_test_governance_report(
     python_exe = python_exe or sys.executable
     lane_executor = lane_executor or run_lane
 
-    coverage_ledger = load_coverage_ledger(coverage_ledger_path)
+    coverage_ledger = apply_report_coverage_overrides(
+        load_coverage_ledger(coverage_ledger_path),
+        verification_root=verification_root,
+    )
     resolved_changed_paths = list(changed_paths) if changed_paths is not None else resolve_changed_paths(repo_root, change_source=change_source)
     required_lane_ids, recommended_lane_ids = resolve_lane_ids(resolved_changed_paths)
     coverage_summary, known_blind_spots, high_priority_blind_spot_ids = summarize_coverage_ledger(coverage_ledger)

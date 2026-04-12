@@ -141,7 +141,9 @@ def load_quality_summaries(
     preview_images: list[PreviewImageRecord],
 ) -> dict[str, Any]:
     payload = dict(manifest.get("quality_summaries") or {})
+    diversity_summary = dict(payload.get("diversity_matrix") or {})
     q5c_summary = dict(payload.get("q5c_lite") or {})
+    m1_summary = dict(payload.get("m1_material_proof") or {})
     preview_by_key = {
         str(record.key or ""): record
         for record in preview_images
@@ -153,6 +155,8 @@ def load_quality_summaries(
     )
     if not q5c_summary:
         return {
+            "diversity_matrix": diversity_summary or {"status": "missing", "coverage_axes": []},
+            "m1_material_proof": m1_summary or {"status": "missing", "packages": []},
             "q5c_lite": {"status": "missing", "packages": [], "diagnostic_class_counts": {}},
             "q5c_contrast": q5c_contrast_summary,
         }
@@ -164,6 +168,8 @@ def load_quality_summaries(
         normalized_package["artifact_image_path"] = str(_artifact_path(pack_root, artifact_rel)) if artifact_rel else ""
         normalized_packages.append(normalized_package)
     return {
+        "diversity_matrix": diversity_summary or {"status": "missing", "coverage_axes": []},
+        "m1_material_proof": m1_summary or {"status": "missing", "packages": []},
         "q5c_lite": {
             **q5c_summary,
             "packages": normalized_packages,

@@ -61,6 +61,7 @@ def capture_visual_state_for_host(
         "superseded_bindings": visual_state.get("slot_conflicts"),
         "tracked_slots": shot_result.get("tracked_slot_names"),
         "component_visibility": visual_state.get("component_visibility"),
+        "material_evidence": visual_state.get("material_evidence"),
         "shots": shot_result.get("shots"),
         "failed_requirements": sorted(set(failed_requirements)),
         "warnings": warnings,

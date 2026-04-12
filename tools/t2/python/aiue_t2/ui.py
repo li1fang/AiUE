@@ -136,6 +136,8 @@ class WorkbenchWindow(WorkbenchRenderMixin, WorkbenchDemoOpsMixin, QMainWindow):
             preview_images=[],
             r3_metrics=[],
             quality_summaries={
+                "diversity_matrix": {"status": "missing", "coverage_axes": []},
+                "m1_material_proof": {"status": "missing", "packages": []},
                 "q5c_lite": {"status": "missing", "packages": [], "diagnostic_class_counts": {}},
                 "q5c_contrast": {"status": "missing", "packages": []},
             },
@@ -239,6 +241,22 @@ class WorkbenchWindow(WorkbenchRenderMixin, WorkbenchDemoOpsMixin, QMainWindow):
         self.test_governance_summary.setStyleSheet("padding: 0 2px 6px 2px;")
         self.test_governance_summary.setVisible(False)
         root_layout.addWidget(self.test_governance_summary)
+
+        self.material_proof_summary = QLabel("")
+        self.material_proof_summary.setObjectName("materialProofSummary")
+        self.material_proof_summary.setWordWrap(True)
+        self.material_proof_summary.setProperty("role", "muted")
+        self.material_proof_summary.setStyleSheet("padding: 0 2px 6px 2px;")
+        self.material_proof_summary.setVisible(False)
+        root_layout.addWidget(self.material_proof_summary)
+
+        self.diversity_matrix_summary = QLabel("")
+        self.diversity_matrix_summary.setObjectName("diversityMatrixSummary")
+        self.diversity_matrix_summary.setWordWrap(True)
+        self.diversity_matrix_summary.setProperty("role", "muted")
+        self.diversity_matrix_summary.setStyleSheet("padding: 0 2px 6px 2px;")
+        self.diversity_matrix_summary.setVisible(False)
+        root_layout.addWidget(self.diversity_matrix_summary)
 
         self.q5c_quality_summary = QLabel("")
         self.q5c_quality_summary.setObjectName("q5cQualitySummary")

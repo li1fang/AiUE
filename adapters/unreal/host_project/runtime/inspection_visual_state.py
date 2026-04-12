@@ -3,6 +3,105 @@ from __future__ import annotations
 from .common import *
 
 
+def _material_asset_path(material) -> str:
+    if not material:
+        return ""
+    if hasattr(material, "get_path_name"):
+        try:
+            return str(material.get_path_name() or "")
+        except Exception:
+            return ""
+    return ""
+
+
+def _component_material_slot_count(component) -> int:
+    if not component or not hasattr(component, "get_num_materials"):
+        return 0
+    try:
+        return int(component.get_num_materials() or 0)
+    except Exception:
+        return 0
+
+
+def _component_material_slot_names(component) -> list[str]:
+    if not component:
+        return []
+    if hasattr(component, "get_material_slot_names"):
+        try:
+            names = [str(item) for item in list(component.get_material_slot_names() or []) if str(item)]
+            if names:
+                return names
+        except Exception:
+            pass
+    asset = None
+    for property_name in ("skeletal_mesh_asset", "skeletal_mesh", "static_mesh"):
+        try:
+            asset = component.get_editor_property(property_name)
+        except Exception:
+            asset = None
+        if asset:
+            break
+    if not asset:
+        return []
+    for property_name in ("materials", "static_materials"):
+        try:
+            entries = list(asset.get_editor_property(property_name) or [])
+        except Exception:
+            entries = []
+        if not entries:
+            continue
+        slot_names = []
+        for entry in entries:
+            slot_name = None
+            for entry_property in ("material_slot_name", "imported_material_slot_name", "slot_name"):
+                try:
+                    slot_name = entry.get_editor_property(entry_property)
+                except Exception:
+                    slot_name = getattr(entry, entry_property, None)
+                if slot_name:
+                    break
+            slot_names.append(str(slot_name or ""))
+        if any(slot_names):
+            return slot_names
+    return []
+
+
+def _component_material_asset_paths(component) -> list[str]:
+    paths = []
+    slot_count = _component_material_slot_count(component)
+    for index in range(slot_count):
+        try:
+            material = component.get_material(index)
+        except Exception:
+            material = None
+        paths.append(_material_asset_path(material))
+    return paths
+
+
+def _component_texture_reference_summary(component) -> dict:
+    # First M1 only needs a recoverable summary envelope; full material->texture
+    # tracing can be strengthened later without changing the response shape.
+    material_asset_paths = [path for path in _component_material_asset_paths(component) if path]
+    return {
+        "status": "unavailable" if material_asset_paths else "missing",
+        "texture_asset_paths": [],
+        "warnings": [] if material_asset_paths else ["material_assets_missing"],
+        "detection_method": "material_path_only_v1",
+    }
+
+
+def _component_material_evidence(component) -> dict:
+    slot_names = _component_material_slot_names(component)
+    material_asset_paths = _component_material_asset_paths(component)
+    return {
+        "material_slot_count": _component_material_slot_count(component),
+        "material_slot_names": slot_names,
+        "material_asset_paths": material_asset_paths,
+        "non_empty_material_asset_paths": [path for path in material_asset_paths if path],
+        "texture_reference_summary": _component_texture_reference_summary(component),
+    }
+
+
 def apply_visual_slot_binding_overrides(spawned_host, override_bindings: list[dict] | None = None) -> list[str]:
     failed_requirements = []
     override_bindings = list(override_bindings or [])
@@ -48,6 +147,15 @@ def collect_visual_host_state(spawned_host) -> dict:
         "main_mesh": main_mesh_component,
         "weapon_mesh": weapon_mesh_component,
     }
+    material_evidence = {
+        "main_mesh": _component_material_evidence(primary_mesh),
+        "weapon_mesh": _component_material_evidence(weapon_mesh),
+        "managed_slots": {
+            str(slot_name or ""): _component_material_evidence(actor_managed_component_for_slot(spawned_host, slot_name, primary_component=primary_mesh))
+            for slot_name in managed_components_by_slot
+            if str(slot_name or "")
+        },
+    }
     return {
         "pmx_component": pmx_component,
         "primary_mesh": primary_mesh,
@@ -66,6 +174,7 @@ def collect_visual_host_state(spawned_host) -> dict:
         "managed_components_by_slot": managed_components_by_slot,
         "applied_slot_bindings": applied_slot_bindings,
         "component_visibility": component_visibility,
+        "material_evidence": material_evidence,
         "character_mesh_asset": str(main_mesh_component.get("asset_path") or ""),
         "weapon_mesh_asset": str(weapon_mesh_component.get("asset_path") or ""),
     }

@@ -91,6 +91,18 @@ def test_workbench_window_shows_q5c_quality_summary(qtbot, tmp_path: Path):
     )
 
 
+def test_workbench_window_shows_diversity_matrix_summary(qtbot, tmp_path: Path):
+    pack = build_fixture_pack(tmp_path, include_dv1=True)
+    window = WorkbenchWindow(manifest_path=pack["manifest_path"])
+    qtbot.addWidget(window)
+    window.show()
+    qtbot.waitUntil(lambda: window.current_dump_payload()["quality_summaries"]["diversity_matrix"]["status"] == "pass")
+    assert window.diversity_matrix_summary.isVisible() is True
+    assert "DV1 Diversity Matrix PASS" in window.diversity_matrix_summary.text()
+    assert "characters 2" in window.diversity_matrix_summary.text()
+    assert "animations 3" in window.diversity_matrix_summary.text()
+
+
 def test_workbench_window_demo_request_controls(qtbot, tmp_path: Path, monkeypatch):
     pack = build_fixture_pack(tmp_path)
     workspace_config_path = tmp_path / "local" / "pipeline_workspace.local.json"

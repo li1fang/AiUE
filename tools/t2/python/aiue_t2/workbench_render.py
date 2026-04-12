@@ -95,6 +95,52 @@ class WorkbenchRenderMixin:
         self.test_governance_summary.setVisible(True)
 
     def _render_quality_summaries(self) -> None:
+        diversity_summary = dict((self.app_state.quality_summaries or {}).get("diversity_matrix") or {})
+        if not diversity_summary or str(diversity_summary.get("status") or "missing") == "missing":
+            self.diversity_matrix_summary.setVisible(False)
+            self.diversity_matrix_summary.setText("")
+        else:
+            distinct_counts = dict(diversity_summary.get("distinct_counts") or {})
+            self.diversity_matrix_summary.setText(
+                "DV1 Diversity Matrix "
+                f"{str(diversity_summary.get('status') or 'unknown').upper()} | "
+                f"covered {int(diversity_summary.get('covered_axis_count') or 0)} | "
+                f"partial {int(diversity_summary.get('partial_axis_count') or 0)} | "
+                f"characters {int(distinct_counts.get('character_variant_diversity') or 0)} | "
+                f"weapons {int(distinct_counts.get('weapon_variant_diversity') or 0)} | "
+                f"clothing {int(distinct_counts.get('clothing_fixture_diversity') or 0)} | "
+                f"fx {int(distinct_counts.get('fx_fixture_diversity') or 0)} | "
+                f"actions {int(distinct_counts.get('action_variation') or 0)} | "
+                f"animations {int(distinct_counts.get('animation_variation') or 0)}"
+            )
+            self.diversity_matrix_summary.setVisible(True)
+        m1_summary = dict((self.app_state.quality_summaries or {}).get("m1_material_proof") or {})
+        selected_package_id = str(self.view_state.selected_package_id or "")
+        selected_m1_package = next(
+            (
+                dict(item)
+                for item in list(m1_summary.get("packages") or [])
+                if str(item.get("package_id") or "") == selected_package_id
+            ),
+            {},
+        )
+        if not m1_summary or str(m1_summary.get("status") or "missing") == "missing":
+            self.material_proof_summary.setVisible(False)
+            self.material_proof_summary.setText("")
+        else:
+            if not selected_m1_package and list(m1_summary.get("packages") or []):
+                selected_m1_package = dict(list(m1_summary.get("packages") or [])[0] or {})
+            package_label = str(selected_m1_package.get("package_id") or selected_package_id or "n/a")
+            self.material_proof_summary.setText(
+                "M1 Material Proof "
+                f"{str(m1_summary.get('status') or 'unknown').upper()} | "
+                f"package {package_label} | "
+                f"character textures {int(selected_m1_package.get('character_imported_texture_count') or 0)}/{int(selected_m1_package.get('character_expected_texture_count') or 0)} | "
+                f"weapon textures {int(selected_m1_package.get('weapon_imported_texture_count') or 0)}/{int(selected_m1_package.get('weapon_expected_texture_count') or 0)} | "
+                f"main slots {int(selected_m1_package.get('main_mesh_material_slot_count') or 0)} | "
+                f"weapon slots {int(selected_m1_package.get('weapon_material_slot_count') or 0)}"
+            )
+            self.material_proof_summary.setVisible(True)
         q5c_summary = dict((self.app_state.quality_summaries or {}).get("q5c_lite") or {})
         if not q5c_summary or str(q5c_summary.get("status") or "missing") == "missing":
             self.q5c_quality_summary.setVisible(False)

@@ -61,7 +61,10 @@ def test_demo_request_export_and_invoke_use_mocked_host_bridge(tmp_path: Path, m
     assert Path(result["request_json_path"]).exists()
     assert captured["command"] == "animation-preview"
     assert captured["dry_run"] is True
-    assert captured["params"]["animation_asset_path"] == "/Game/RTG_MM_Attack_01_PMXPreview"
+    assert captured["params"]["animation_asset_path"] == "/Game/CombatMagicAnims/MM_Attack_01"
+    assert captured["params"]["retarget_if_needed"] is True
+    assert captured["params"]["retarget_target_ik_rig_asset_path"] == "/Game/PMXPipeline/Retarget/Source/IK_pkg_alpha"
+    assert captured["params"]["pose_probe_bone_names"] == ["Bone_002", "Bone_R_011"]
 
 
 def test_demo_request_cli_dump_request_json(tmp_path: Path):

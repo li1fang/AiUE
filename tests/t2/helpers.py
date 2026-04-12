@@ -187,14 +187,246 @@ def write_fixture_q5c_contrast_report(verification_root: Path) -> Path:
     return report_path
 
 
+def write_fixture_m1_report(verification_root: Path) -> Path:
+    verification_root.mkdir(parents=True, exist_ok=True)
+    front_image_path = str((FIXTURE_ROOT / "images" / "front.ppm").resolve())
+    side_image_path = str((FIXTURE_ROOT / "images" / "side.ppm").resolve())
+    report_path = verification_root / "latest_material_texture_proof_m1_report.json"
+    write_json(
+        report_path,
+        {
+            "gate_id": "material_texture_proof_m1",
+            "status": "pass",
+            "generated_at_utc": "2026-04-12T02:00:00+00:00",
+            "per_package_results": [
+                {
+                    "package_id": "pkg_alpha",
+                    "sample_id": "fixture_alpha",
+                    "status": "pass",
+                    "import_evidence": {
+                        "character": {
+                            "status": "pass",
+                            "expected_texture_count": 13,
+                            "imported_texture_count": 13,
+                        },
+                        "default_weapon": {
+                            "status": "pass",
+                            "expected_texture_count": 3,
+                            "imported_texture_count": 3,
+                        },
+                    },
+                    "host_visual_evidence": {
+                        "status": "pass",
+                        "material_evidence": {
+                            "main_mesh": {
+                                "material_slot_count": 30,
+                                "material_asset_paths": [
+                                    "/Game/Fixture/Materials/MI_Alpha_Body",
+                                    "/Game/Fixture/Materials/MI_Alpha_Face",
+                                ],
+                            },
+                            "weapon_mesh": {
+                                "material_slot_count": 1,
+                                "material_asset_paths": [
+                                    "/Game/Fixture/Materials/MI_Alpha_Weapon",
+                                ],
+                            },
+                        },
+                        "shots": [
+                            {
+                                "shot_id": "front",
+                                "image_path": front_image_path,
+                            },
+                            {
+                                "shot_id": "side",
+                                "image_path": side_image_path,
+                            },
+                        ],
+                    },
+                    "failed_requirements": [],
+                }
+            ],
+        },
+    )
+    return report_path
+
+
+def write_fixture_e2b_report(verification_root: Path) -> Path:
+    verification_root.mkdir(parents=True, exist_ok=True)
+    front_image_path = str((FIXTURE_ROOT / "images" / "front.ppm").resolve())
+    side_image_path = str((FIXTURE_ROOT / "images" / "side.ppm").resolve())
+    after_image_path = str((FIXTURE_ROOT / "images" / "after.ppm").resolve())
+    report_path = verification_root / "latest_playable_demo_e2b_credible_showcase_report.json"
+    write_json(
+        report_path,
+        {
+            "gate_id": "playable_demo_e2b_credible_showcase",
+            "status": "pass",
+            "generated_at_utc": "2026-04-12T02:10:00+00:00",
+            "per_package_results": [
+                {
+                    "package_id": "pkg_alpha",
+                    "status": "pass",
+                    "hero_shot": {
+                        "before_image_path": front_image_path,
+                        "after_image_path": side_image_path,
+                    },
+                    "action_preview": {
+                        "status": "pass",
+                        "key_image_paths": {
+                            "primary_before": front_image_path,
+                            "primary_after": after_image_path,
+                        },
+                    },
+                    "animation_preview": {
+                        "status": "pass",
+                        "key_image_paths": {
+                            "primary_before": side_image_path,
+                            "primary_after": after_image_path,
+                        },
+                    },
+                }
+            ],
+        },
+    )
+    return report_path
+
+
+def write_fixture_pv1_report(verification_root: Path, *, status: str = "attention") -> Path:
+    verification_root.mkdir(parents=True, exist_ok=True)
+    report_path = verification_root / "latest_manual_playable_demo_validation_pv1_report.json"
+    write_json(
+        report_path,
+        {
+            "gate_id": "manual_playable_demo_validation_pv1",
+            "status": status,
+            "generated_at_utc": "2026-04-12T02:20:00+00:00",
+            "operator": "fixture_user",
+            "checked_packages": [
+                {
+                    "package_id": "pkg_alpha",
+                    "action_preset_id": "showcase_root_translate_and_turn",
+                    "animation_preset_id": "MM_Attack_01",
+                }
+            ],
+            "notes": "fixture",
+        },
+    )
+    return report_path
+
+
+def write_fixture_dv1_report(verification_root: Path, *, status: str = "pass") -> Path:
+    verification_root.mkdir(parents=True, exist_ok=True)
+    front_image_path = str((FIXTURE_ROOT / "images" / "front.ppm").resolve())
+    after_image_path = str((FIXTURE_ROOT / "images" / "after.ppm").resolve())
+    report_path = verification_root / "latest_diversity_matrix_dv1_report.json"
+    write_json(
+        report_path,
+        {
+            "gate_id": "diversity_matrix_dv1",
+            "status": status,
+            "generated_at_utc": "2026-04-12T02:30:00+00:00",
+            "distinct_counts": {
+                "character_variant_diversity": 2,
+                "weapon_variant_diversity": 2,
+                "clothing_fixture_diversity": 1,
+                "fx_fixture_diversity": 1,
+                "action_variation": 1,
+                "animation_variation": 3,
+            },
+            "coverage_axes": [
+                {
+                    "axis_id": "character_variant_diversity",
+                    "status": "covered",
+                    "distinct_count": 2,
+                    "observed_values": ["pkg_alpha", "pkg_beta"],
+                    "summary": "DV1 currently verifies 2 distinct character bundles on the automated demo-ready path.",
+                },
+                {
+                    "axis_id": "weapon_variant_diversity",
+                    "status": "covered",
+                    "distinct_count": 2,
+                    "observed_values": ["weapon_alpha", "weapon_beta"],
+                    "summary": "DV1 currently verifies 2 distinct weapon bundles on the automated demo-ready path.",
+                },
+                {
+                    "axis_id": "clothing_fixture_diversity",
+                    "status": "partial",
+                    "distinct_count": 1,
+                    "observed_values": ["fixture_hair"],
+                    "summary": "DV1 currently verifies 1 distinct clothing fixture on the automated demo-ready path.",
+                },
+                {
+                    "axis_id": "fx_fixture_diversity",
+                    "status": "partial",
+                    "distinct_count": 1,
+                    "observed_values": ["fixture_fx"],
+                    "summary": "DV1 currently verifies 1 distinct FX fixture on the automated demo-ready path.",
+                },
+                {
+                    "axis_id": "action_variation",
+                    "status": "partial",
+                    "distinct_count": 1,
+                    "observed_values": ["showcase_root_translate_and_turn"],
+                    "summary": "DV1 currently verifies 1 distinct action preset on the automated demo-ready path.",
+                },
+                {
+                    "axis_id": "animation_variation",
+                    "status": "covered",
+                    "distinct_count": 3,
+                    "observed_values": ["MM_Attack_01", "MM_Idle", "MF_Unarmed_Walk_Fwd"],
+                    "summary": "DV1 currently verifies 3 distinct animation presets on the automated demo-ready path.",
+                },
+            ],
+            "per_package_results": [
+                {
+                    "package_id": "pkg_alpha",
+                    "status": "pass",
+                    "action_matrix_runs": [
+                        {
+                            "status": "pass",
+                            "selected_action_preset_id": "showcase_root_translate_and_turn",
+                            "key_image_paths": {
+                                "primary_after": after_image_path,
+                            },
+                        }
+                    ],
+                    "animation_matrix_runs": [
+                        {
+                            "status": "pass",
+                            "selected_animation_preset_id": "MM_Attack_01",
+                            "key_image_paths": {
+                                "primary_after": front_image_path,
+                            },
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+    return report_path
+
+
 def build_fixture_pack(
     tmp_path: Path,
     *,
     include_governance: bool = True,
+    include_dv1: bool = False,
+    include_m1: bool = False,
+    include_e2b: bool = False,
+    include_pv1: bool = False,
     include_q5c: bool = False,
     include_q5c_contrast: bool = False,
 ) -> dict:
     verification_root = materialize_report_fixtures(tmp_path / "verification", include_governance=include_governance)
+    if include_dv1:
+        write_fixture_dv1_report(verification_root)
+    if include_m1:
+        write_fixture_m1_report(verification_root)
+    if include_e2b:
+        write_fixture_e2b_report(verification_root)
+    if include_pv1:
+        write_fixture_pv1_report(verification_root)
     if include_q5c:
         write_fixture_q5c_report(verification_root)
     if include_q5c_contrast:
@@ -209,6 +441,7 @@ def build_fixture_pack(
     )
     session_manifest_path = build_fixture_e2_session(tmp_path)
     return {
+        "verification_root": verification_root,
         "manifest_path": output_root / "manifest.json",
         "output_root": output_root,
         "latest_root": latest_root,
@@ -287,6 +520,13 @@ def build_fixture_e2_session(tmp_path: Path) -> Path:
                         "source_gate_id": "demo_retargeted_animation_preview_d8",
                         "requested_animation_asset_path": "/Game/CombatMagicAnims/MM_Attack_01",
                         "resolved_animation_asset_path": "/Game/RTG_MM_Attack_01_PMXPreview",
+                        "animation_sample_time_seconds": 0.65,
+                        "pose_probe_bone_names": ["Bone_002", "Bone_R_011"],
+                        "retarget_source_ik_rig_asset_path": "/Game/Characters/UE4_Mannequin/Rigs/IK_UE4_Mannequin_Retarget",
+                        "retarget_target_ik_rig_asset_path": "/Game/PMXPipeline/Retarget/Source/IK_pkg_alpha",
+                        "retarget_source_mesh_asset_path": "/Game/Characters/UE4_Mannequin/Meshes/SKM_UE4_Mannequin.SKM_UE4_Mannequin",
+                        "retarget_target_mesh_asset_path": "/Game/Fixture/Meshes/SKM_pkg_alpha.SKM_pkg_alpha",
+                        "retargeter_asset_path": "/Game/PMXPipeline/Retarget/Demo/RTG_IK_UE4_Mannequin_Retarget_to_pkg_alpha_Preview",
                         "status": "pass",
                     }
                 ],

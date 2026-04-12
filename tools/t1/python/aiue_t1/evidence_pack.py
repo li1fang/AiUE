@@ -7,6 +7,8 @@ from pathlib import Path
 
 from aiue_core.schema_utils import write_json
 
+from aiue_t1.diversity_matrix import build_diversity_matrix_quality_summary
+from aiue_t1.material_proof import build_material_proof_quality_summary
 from aiue_t1.q5c_lite import closest_margin_info, margin_to_failure_by_metric, risk_band_for_q5c_lite, risk_reason_for_q5c_lite
 from aiue_t1.report_index import build_report_index
 from aiue_t1.slot_debugger import build_slot_debugger_payload
@@ -115,6 +117,22 @@ def _collect_preview_artifacts(report_index: dict) -> list[dict]:
                     "key": f"q5c_{package_id}_debug",
                 }
             )
+    m1_report = dict((reports_by_gate_id.get("material_texture_proof_m1") or {}).get("report") or {})
+    for package in list(m1_report.get("per_package_results") or []):
+        package_id = str(package.get("package_id") or "")
+        host_visual_evidence = dict(package.get("host_visual_evidence") or {})
+        for shot in list(host_visual_evidence.get("shots") or []):
+            image_path = str(shot.get("image_path") or "")
+            shot_id = str(shot.get("shot_id") or "")
+            if image_path:
+                artifacts.append(
+                    {
+                        "title": f"M1 {package_id} {shot_id}",
+                        "section": "Material / Texture Proof",
+                        "source_path": image_path,
+                        "key": f"m1_{package_id}_{shot_id}",
+                    }
+                )
     q5c_contrast_report = dict((reports_by_gate_id.get("q5c_lite_contrast_lab") or {}).get("report") or {})
     for package in list(q5c_contrast_report.get("per_package_results") or []):
         package_id = str(package.get("package_id") or "")
@@ -128,6 +146,56 @@ def _collect_preview_artifacts(report_index: dict) -> list[dict]:
                         "section": "Q5C Contrast Lab",
                         "source_path": image_path,
                         "key": f"q5c_contrast_{package_id}_{case_id}",
+                    }
+                )
+    e2b_report = dict((reports_by_gate_id.get("playable_demo_e2b_credible_showcase") or {}).get("report") or {})
+    for package in list(e2b_report.get("per_package_results") or []):
+        package_id = str(package.get("package_id") or "")
+        action_preview = dict(package.get("action_preview") or {})
+        animation_preview = dict(package.get("animation_preview") or {})
+        hero_shot = dict(package.get("hero_shot") or {})
+        for image_key, image_path in (
+            ("hero_before", str(hero_shot.get("before_image_path") or "")),
+            ("hero_after", str(hero_shot.get("after_image_path") or "")),
+            ("action_before", str(dict(action_preview.get("key_image_paths") or {}).get("primary_before") or "")),
+            ("action_after", str(dict(action_preview.get("key_image_paths") or {}).get("primary_after") or "")),
+            ("animation_before", str(dict(animation_preview.get("key_image_paths") or {}).get("primary_before") or "")),
+            ("animation_after", str(dict(animation_preview.get("key_image_paths") or {}).get("primary_after") or "")),
+        ):
+            if image_path:
+                artifacts.append(
+                    {
+                        "title": f"E2B {package_id} {image_key}",
+                        "section": "Credible Showcase Demo",
+                        "source_path": image_path,
+                        "key": f"e2b_{package_id}_{image_key}",
+                    }
+                )
+    dv1_report = dict((reports_by_gate_id.get("diversity_matrix_dv1") or {}).get("report") or {})
+    for package in list(dv1_report.get("per_package_results") or []):
+        package_id = str(package.get("package_id") or "")
+        for entry in list(package.get("action_matrix_runs") or []):
+            image_path = str(dict(entry.get("key_image_paths") or {}).get("primary_after") or "")
+            preset_id = str(entry.get("selected_action_preset_id") or "")
+            if image_path:
+                artifacts.append(
+                    {
+                        "title": f"DV1 {package_id} action {preset_id}",
+                        "section": "Diversity Matrix",
+                        "source_path": image_path,
+                        "key": f"dv1_{package_id}_action_{preset_id}",
+                    }
+                )
+        for entry in list(package.get("animation_matrix_runs") or []):
+            image_path = str(dict(entry.get("key_image_paths") or {}).get("primary_after") or "")
+            preset_id = str(entry.get("selected_animation_preset_id") or "")
+            if image_path:
+                artifacts.append(
+                    {
+                        "title": f"DV1 {package_id} animation {preset_id}",
+                        "section": "Diversity Matrix",
+                        "source_path": image_path,
+                        "key": f"dv1_{package_id}_animation_{preset_id}",
                     }
                 )
     e1_report = dict((reports_by_gate_id.get("showcase_demo_e1") or {}).get("report") or {})
@@ -537,6 +605,70 @@ def _render_q5c_quality_summary(quality_summaries: dict) -> str:
     )
 
 
+def _render_m1_material_summary(quality_summaries: dict) -> str:
+    summary = dict((quality_summaries or {}).get("m1_material_proof") or {})
+    if not summary or str(summary.get("status") or "missing") == "missing":
+        return "<p class=\"muted\">No M1 material / texture proof summary was available.</p>"
+    rows = []
+    for package in list(summary.get("packages") or []):
+        rows.append(
+            "<tr>"
+            f"<td><code>{html.escape(str(package.get('package_id') or ''))}</code></td>"
+            f"<td>{html.escape(str(package.get('status') or 'unknown'))}</td>"
+            f"<td>{int(package.get('character_imported_texture_count') or 0)}/{int(package.get('character_expected_texture_count') or 0)}</td>"
+            f"<td>{int(package.get('weapon_imported_texture_count') or 0)}/{int(package.get('weapon_expected_texture_count') or 0)}</td>"
+            f"<td>{int(package.get('main_mesh_material_slot_count') or 0)}</td>"
+            f"<td>{int(package.get('weapon_material_slot_count') or 0)}</td>"
+            "<td>see previews</td>"
+            "</tr>"
+        )
+    return (
+        "<article class=\"card\">"
+        f"<h3>M1 Material / Texture Proof</h3>"
+        f"<p><strong>Status:</strong> {html.escape(str(summary.get('status') or 'unknown'))}</p>"
+        f"<p><strong>Packages:</strong> {int(summary.get('passing_package_count') or 0)} / {int(summary.get('package_count') or 0)} passing</p>"
+        "</article>"
+        "<table><thead><tr><th>Package</th><th>Status</th><th>Character Textures</th><th>Weapon Textures</th><th>Main Slots</th><th>Weapon Slots</th><th>Preview</th></tr></thead><tbody>"
+        + "".join(rows)
+        + "</tbody></table>"
+    )
+
+
+def _render_diversity_matrix_summary(quality_summaries: dict) -> str:
+    summary = dict((quality_summaries or {}).get("diversity_matrix") or {})
+    if not summary or str(summary.get("status") or "missing") == "missing":
+        return "<p class=\"muted\">No DV1 diversity matrix summary was available.</p>"
+    distinct_counts = dict(summary.get("distinct_counts") or {})
+    coverage_axes = [dict(item) for item in list(summary.get("coverage_axes") or [])]
+    rows = []
+    for axis in coverage_axes:
+        rows.append(
+            "<tr>"
+            f"<td><code>{html.escape(str(axis.get('axis_id') or ''))}</code></td>"
+            f"<td>{html.escape(str(axis.get('status') or 'unknown'))}</td>"
+            f"<td>{int(axis.get('distinct_count') or 0)}</td>"
+            f"<td>{html.escape(', '.join(str(item) for item in list(axis.get('observed_values') or [])) or '-')}</td>"
+            "</tr>"
+        )
+    counts_text = ", ".join(
+        f"{html.escape(str(key))}: {int(value)}"
+        for key, value in sorted(distinct_counts.items())
+    ) or "none"
+    return (
+        "<article class=\"card\">"
+        f"<h3>DV1 Diversity Matrix</h3>"
+        f"<p><strong>Status:</strong> {html.escape(str(summary.get('status') or 'unknown'))}</p>"
+        f"<p><strong>Axes:</strong> covered {int(summary.get('covered_axis_count') or 0)} | "
+        f"partial {int(summary.get('partial_axis_count') or 0)} | "
+        f"missing {int(summary.get('missing_axis_count') or 0)}</p>"
+        f"<p><strong>Distinct Counts:</strong> {counts_text}</p>"
+        "</article>"
+        "<table><thead><tr><th>Axis</th><th>Status</th><th>Distinct</th><th>Observed Values</th></tr></thead><tbody>"
+        + "".join(rows)
+        + "</tbody></table>"
+    )
+
+
 def _render_html(manifest: dict, *, report_index: dict | None = None) -> str:
     report_index = dict(report_index or manifest.get("report_index") or {})
     categories = dict(report_index.get("categories") or {})
@@ -559,6 +691,8 @@ def _render_html(manifest: dict, *, report_index: dict | None = None) -> str:
 <section class="section"><h2>Historical / Other Reports</h2><div class="grid cards">{_render_report_cards(list(categories.get('historical_other') or []))}</div></section>
 <section class="section"><h2>Key Screenshot Previews</h2><div class="artifact-grid">{_render_preview_cards(preview_artifacts)}</div></section>
 <section class="section"><h2>Before / After Metrics</h2>{_render_r3_metrics(report_index)}</section>
+<section class="section"><h2>DV1 Diversity Matrix</h2>{_render_diversity_matrix_summary(quality_summaries)}</section>
+<section class="section"><h2>M1 Material / Texture Proof</h2>{_render_m1_material_summary(quality_summaries)}</section>
 <section class="section"><h2>Q5C-lite Quality Summary</h2>{_render_q5c_quality_summary(quality_summaries)}</section>
 <section class="section"><h2>Slot Debugger</h2>{_render_slot_debugger(slot_debugger)}</section>
 </main></body></html>"""
@@ -580,6 +714,8 @@ def build_evidence_pack(*, verification_root: Path, output_root: Path | None, la
     copied_reports = _copy_reports(report_index, reports_dir)
     copied_images = _copy_preview_images(preview_artifacts, images_dir)
     quality_summaries = {
+        "diversity_matrix": build_diversity_matrix_quality_summary(report_index),
+        "m1_material_proof": build_material_proof_quality_summary(report_index),
         "q5c_lite": _build_q5c_quality_summary(report_index, copied_images),
     }
 

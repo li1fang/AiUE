@@ -68,6 +68,7 @@ def test_dynamic_balance_detects_pressure_and_recommendation():
             "demo_composition_quality_gate_q2": {"status": "pass"},
             "demo_semantic_framing_gate_q3": {"status": "pass"},
             "multi_slot_quality_gate_q4": {"status": "pass"},
+            "material_texture_proof_m1": {"status": "pass"},
             "generic_slot_abstraction_p1": {"status": "pass"},
             "clothing_vertical_slice_p2": {"status": "pass"},
             "visible_conflict_inspection_q5a": {"status": "pass"},

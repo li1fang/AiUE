@@ -83,6 +83,8 @@ def _error_app_state(*, manifest_path: Path, code: str, message: str) -> AppStat
         preview_images=[],
         r3_metrics=[],
         quality_summaries={
+            "diversity_matrix": {"status": "missing", "coverage_axes": []},
+            "m1_material_proof": {"status": "missing", "packages": []},
             "q5c_lite": {"status": "missing", "packages": [], "diagnostic_class_counts": {}},
             "q5c_contrast": {"status": "missing", "packages": []},
         },

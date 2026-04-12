@@ -171,3 +171,29 @@ def test_load_workbench_state_reads_q5c_contrast_focus(tmp_path: Path):
     assert round(float(fail_compare["closest_margin_change"]), 4) == -0.0607
     assert round(float(fail_compare["floating_ratio_change"]), 4) == 0.0407
     assert "floating +0.0407" in fail_compare["key_delta_text"]
+
+
+def test_load_workbench_state_reads_m1_material_summary_and_pv1_report(tmp_path: Path):
+    pack = build_fixture_pack(tmp_path, include_m1=True, include_pv1=True, include_e2b=True)
+    state = load_workbench_state(pack["manifest_path"])
+    payload = state.to_dump_payload(build_default_view_state(state))
+    m1_summary = state.quality_summaries["m1_material_proof"]
+    assert m1_summary["status"] == "pass"
+    assert m1_summary["package_count"] == 1
+    assert m1_summary["packages"][0]["package_id"] == "pkg_alpha"
+    assert m1_summary["packages"][0]["character_imported_texture_count"] == 13
+    assert payload["quality_summaries"]["m1_material_proof"]["status"] == "pass"
+    assert "manual_playable_demo_validation_pv1" in payload["report_categories"]["governance_line"]
+    assert "playable_demo_e2b_credible_showcase" in payload["report_categories"]["historical_other"]
+
+
+def test_load_workbench_state_reads_dv1_diversity_summary(tmp_path: Path):
+    pack = build_fixture_pack(tmp_path, include_dv1=True)
+    state = load_workbench_state(pack["manifest_path"])
+    payload = state.to_dump_payload(build_default_view_state(state))
+    diversity_summary = state.quality_summaries["diversity_matrix"]
+    assert diversity_summary["status"] == "pass"
+    assert diversity_summary["covered_axis_count"] == 3
+    assert diversity_summary["distinct_counts"]["character_variant_diversity"] == 2
+    assert "diversity_matrix_dv1" in payload["report_categories"]["governance_line"]
+    assert payload["quality_summaries"]["diversity_matrix"]["status"] == "pass"

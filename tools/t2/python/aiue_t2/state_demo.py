@@ -268,6 +268,71 @@ def resolved_animation_asset_for_preset(preset: DemoPresetRecord) -> str:
     )
 
 
+def _preset_text(payload: dict[str, Any], field_name: str) -> str:
+    return str(payload.get(field_name) or "")
+
+
+def _preset_text_list(payload: dict[str, Any], field_name: str) -> list[str]:
+    return [str(item) for item in list(payload.get(field_name) or []) if str(item)]
+
+
+def animation_request_fields_for_preset(
+    preset: DemoPresetRecord,
+    *,
+    animation_profile: dict[str, Any],
+) -> dict[str, Any]:
+    payload = dict(preset.payload or {})
+    requested_animation_asset = preset.requested_asset_path or _preset_text(payload, "requested_animation_asset_path")
+    resolved_animation_asset = resolved_animation_asset_for_preset(preset)
+    retarget_source_ik_rig_asset_path = _preset_text(payload, "retarget_source_ik_rig_asset_path")
+    retarget_target_ik_rig_asset_path = _preset_text(payload, "retarget_target_ik_rig_asset_path")
+    retarget_source_mesh_asset_path = _preset_text(payload, "retarget_source_mesh_asset_path")
+    retarget_target_mesh_asset_path = _preset_text(payload, "retarget_target_mesh_asset_path")
+    retarget_profile_available = bool(
+        requested_animation_asset
+        and retarget_source_ik_rig_asset_path
+        and retarget_target_ik_rig_asset_path
+        and retarget_source_mesh_asset_path
+    )
+    animation_asset_path = (
+        requested_animation_asset
+        if retarget_profile_available
+        else (resolved_animation_asset or requested_animation_asset)
+    )
+    pose_probe_bone_names = _preset_text_list(payload, "pose_probe_bone_names") or list(
+        animation_profile.get("pose_probe_bone_names") or DEFAULT_ANIMATION_REQUEST_PROFILE["pose_probe_bone_names"]
+    )
+    request_fields = {
+        "animation_asset_path": animation_asset_path,
+        "animation_sample_time_seconds": float(
+            payload.get("animation_sample_time_seconds")
+            or animation_profile.get("animation_sample_time_seconds")
+            or DEFAULT_ANIMATION_REQUEST_PROFILE["animation_sample_time_seconds"]
+        ),
+        "animation_settle_seconds": float(
+            animation_profile.get("animation_settle_seconds")
+            or DEFAULT_ANIMATION_REQUEST_PROFILE["animation_settle_seconds"]
+        ),
+        "retarget_if_needed": bool(
+            retarget_profile_available
+            or animation_profile.get("retarget_if_needed", DEFAULT_ANIMATION_REQUEST_PROFILE["retarget_if_needed"])
+        ),
+        "pose_probe_bone_names": pose_probe_bone_names,
+    }
+    if retarget_source_ik_rig_asset_path:
+        request_fields["retarget_source_ik_rig_asset_path"] = retarget_source_ik_rig_asset_path
+    if retarget_target_ik_rig_asset_path:
+        request_fields["retarget_target_ik_rig_asset_path"] = retarget_target_ik_rig_asset_path
+    if retarget_source_mesh_asset_path:
+        request_fields["retarget_source_mesh_asset_path"] = retarget_source_mesh_asset_path
+    if retarget_target_mesh_asset_path:
+        request_fields["retarget_target_mesh_asset_path"] = retarget_target_mesh_asset_path
+    retargeter_asset_path = _preset_text(payload, "retargeter_asset_path")
+    if retargeter_asset_path:
+        request_fields["retargeter_asset_path"] = retargeter_asset_path
+    return request_fields
+
+
 def build_demo_request(
     *,
     demo_session: DemoSessionRecord,
@@ -370,8 +435,11 @@ def build_demo_request(
         }
 
     if animation_preset is not None and not request_errors:
-        resolved_animation_asset = resolved_animation_asset_for_preset(animation_preset)
-        if not resolved_animation_asset:
+        animation_request_fields = animation_request_fields_for_preset(
+            animation_preset,
+            animation_profile=animation_profile,
+        )
+        if not str(animation_request_fields.get("animation_asset_path") or ""):
             request_warnings.append("animation_asset_missing")
         else:
             animation_params = {
@@ -387,11 +455,7 @@ def build_demo_request(
                 "capture_delay_seconds": float(animation_profile.get("capture_delay_seconds") or DEFAULT_ANIMATION_REQUEST_PROFILE["capture_delay_seconds"]),
                 "subject_min_screen_coverage": float(animation_profile.get("subject_min_screen_coverage") or DEFAULT_ANIMATION_REQUEST_PROFILE["subject_min_screen_coverage"]),
                 "weapon_min_screen_coverage": float(animation_profile.get("weapon_min_screen_coverage") or DEFAULT_ANIMATION_REQUEST_PROFILE["weapon_min_screen_coverage"]),
-                "animation_asset_path": resolved_animation_asset,
-                "animation_sample_time_seconds": float(animation_profile.get("animation_sample_time_seconds") or DEFAULT_ANIMATION_REQUEST_PROFILE["animation_sample_time_seconds"]),
-                "animation_settle_seconds": float(animation_profile.get("animation_settle_seconds") or DEFAULT_ANIMATION_REQUEST_PROFILE["animation_settle_seconds"]),
-                "retarget_if_needed": bool(animation_profile.get("retarget_if_needed", DEFAULT_ANIMATION_REQUEST_PROFILE["retarget_if_needed"])),
-                "pose_probe_bone_names": list(animation_profile.get("pose_probe_bone_names") or DEFAULT_ANIMATION_REQUEST_PROFILE["pose_probe_bone_names"]),
+                **animation_request_fields,
             }
             requests["animation_preview"] = {
                 "host_key": demo_session.host_key or "demo",

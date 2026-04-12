@@ -34,6 +34,12 @@ DEFAULT_R3_LATEST_NAME = "latest_live_fx_visual_quality_r3_report.json"
 DEFAULT_D8_LATEST_NAME = "latest_demo_retargeted_animation_preview_d8_report.json"
 DEFAULT_D12_LATEST_NAME = "latest_demo_cross_bundle_regression_d12_report.json"
 DEFAULT_D1_LATEST_NAME = "latest_demo_stage_d1_onboarding_report.json"
+RETARGET_PRESET_FIELDS = (
+    "retarget_source_ik_rig_asset_path",
+    "retarget_target_ik_rig_asset_path",
+    "retarget_source_mesh_asset_path",
+    "retarget_target_mesh_asset_path",
+)
 
 FIXED_EXECUTION_PROFILE = {
     "host_key": "demo",
@@ -139,7 +145,19 @@ def validated_animation_presets_for_primary(d8_report: dict) -> dict[str, list[d
     if not package_id or d8_report.get("status") != "pass":
         return {}
     engine_evidence = dict(d8_report.get("engine_evidence") or {})
+    retarget_generation = dict(engine_evidence.get("retarget_generation") or {})
     fixed_profile = dict(d8_report.get("fixed_execution_profile") or {})
+    preset_payload = {
+        "animation_sample_time_seconds": float(fixed_profile.get("animation_sample_time_seconds") or 0.0),
+        "pose_probe_bone_names": [str(item) for item in list(fixed_profile.get("pose_probe_bone_names") or []) if str(item)],
+    }
+    for field_name in RETARGET_PRESET_FIELDS:
+        value = str(retarget_generation.get(field_name) or fixed_profile.get(field_name) or "")
+        if value:
+            preset_payload[field_name] = value
+    retargeter_asset_path = str(retarget_generation.get("retargeter_asset_path") or "")
+    if retargeter_asset_path:
+        preset_payload["retargeter_asset_path"] = retargeter_asset_path
     preset = {
         "preset_id": animation_label(str(engine_evidence.get("animation_asset_path") or fixed_profile.get("animation_asset_path") or "")),
         "family": "attack",
@@ -150,6 +168,7 @@ def validated_animation_presets_for_primary(d8_report: dict) -> dict[str, list[d
         "retargeted_animation_asset_path": str(((engine_evidence.get("retarget_generation") or {}).get("retargeted_animation_asset_path")) or ""),
         "host_blueprint_asset": str(engine_evidence.get("host_blueprint_asset") or d8_report.get("host_blueprint_asset") or ""),
         "status": str(d8_report.get("status") or "unknown"),
+        **preset_payload,
     }
     return {package_id: [preset]}
 
@@ -162,22 +181,44 @@ def validated_animation_presets_for_secondary(d12_report: dict) -> dict[str, lis
     round_results = list(final_step_report.get("per_round_results") or [])
     first_round = next((item for item in round_results if item.get("status") == "pass"), {})
     case_results = list(first_round.get("per_case_results") or [])
+    fixed_profile = dict(final_step_report.get("fixed_execution_profile") or {})
+    animation_cases = list(fixed_profile.get("animation_cases") or [])
     presets = []
     for case_result in case_results:
         if case_result.get("status") != "pass":
             continue
         animation_asset_path = str(case_result.get("animation_asset_path") or "")
+        case_profile = next(
+            (
+                dict(item)
+                for item in animation_cases
+                if str(item.get("animation_asset_path") or "") == animation_asset_path
+            ),
+            {},
+        )
+        preset_payload = {
+            "animation_sample_time_seconds": float(case_profile.get("animation_sample_time_seconds") or fixed_profile.get("animation_sample_time_seconds") or 0.0),
+            "pose_probe_bone_names": [str(item) for item in list(fixed_profile.get("pose_probe_bone_names") or []) if str(item)],
+        }
+        for field_name in RETARGET_PRESET_FIELDS:
+            value = str(fixed_profile.get(field_name) or "")
+            if value:
+                preset_payload[field_name] = value
+        retargeter_asset_path = str(dict(case_result.get("retarget_generation_summary") or {}).get("retargeter_asset_path") or "")
+        if retargeter_asset_path:
+            preset_payload["retargeter_asset_path"] = retargeter_asset_path
         presets.append(
             {
                 "preset_id": str(case_result.get("animation_id") or animation_label(animation_asset_path)),
-                "family": str(next((entry.get("family") for entry in list((final_step_report.get("fixed_execution_profile") or {}).get("animation_cases") or []) if str(entry.get("animation_asset_path") or "") == animation_asset_path), "")),
-                "case_id": str(next((entry.get("case_id") for entry in list((final_step_report.get("fixed_execution_profile") or {}).get("animation_cases") or []) if str(entry.get("animation_asset_path") or "") == animation_asset_path), animation_label(animation_asset_path))),
+                "family": str(case_profile.get("family") or ""),
+                "case_id": str(case_profile.get("case_id") or animation_label(animation_asset_path)),
                 "source_gate_id": str(final_step_report.get("gate_id") or "demo_animation_stability_regression_d11"),
                 "requested_animation_asset_path": animation_asset_path,
                 "resolved_animation_asset_path": str(case_result.get("resolved_animation_asset_path") or ""),
                 "retargeted_animation_asset_path": str(case_result.get("retargeted_animation_asset_path") or ""),
                 "host_blueprint_asset": str(final_step_report.get("host_blueprint_asset") or ""),
                 "status": str(case_result.get("status") or "unknown"),
+                **preset_payload,
             }
         )
     return {package_id: presets}
