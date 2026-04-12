@@ -7,6 +7,7 @@ from pathlib import Path
 
 from aiue_core.schema_utils import write_json
 
+from aiue_t1.a1_candidate_provider import build_a1_candidate_provider_summary
 from aiue_t1.diversity_matrix import build_diversity_matrix_quality_summary, latest_diversity_matrix_entry
 from aiue_t1.e2c_showcase import build_e2c_showcase_polish_summary
 from aiue_t1.material_proof import build_material_proof_quality_summary
@@ -259,6 +260,25 @@ def _collect_preview_artifacts(report_index: dict) -> list[dict]:
                         "section": "E2C Showcase Polish",
                         "source_path": image_path,
                         "key": f"e2c_{package_id}_{suffix}",
+                    }
+                )
+    a1_report = dict((reports_by_gate_id.get("action_candidate_provider_a1") or {}).get("report") or {})
+    for candidate in list(a1_report.get("per_candidate_results") or []):
+        package_id = str(candidate.get("package_id") or "")
+        candidate_id = str(candidate.get("candidate_id") or "")
+        key_images = dict(candidate.get("key_images") or {})
+        for image_key, suffix in (
+            ("primary_before", "primary_before"),
+            ("primary_after", "primary_after"),
+        ):
+            image_path = str(key_images.get(image_key) or "")
+            if image_path:
+                artifacts.append(
+                    {
+                        "title": f"A1 {package_id} {candidate_id} {suffix}",
+                        "section": "A1 Candidate Provider",
+                        "source_path": image_path,
+                        "key": f"a1_{package_id}_{candidate_id}_{suffix}",
                     }
                 )
     return artifacts
@@ -812,6 +832,44 @@ def _render_e2c_showcase_summary(quality_summaries: dict) -> str:
     )
 
 
+def _render_a1_candidate_provider_summary(quality_summaries: dict) -> str:
+    summary = dict((quality_summaries or {}).get("a1_candidate_provider") or {})
+    if not summary or str(summary.get("status") or "missing") == "missing":
+        return "<p class=\"muted\">No A1 action-candidate provider summary was available.</p>"
+    counts = dict(summary.get("counts") or {})
+    source_text = ", ".join(
+        f"{str(item.get('provider_name') or 'provider')}:{str(item.get('candidate_count') or 0)}"
+        for item in list(summary.get("candidate_sources") or [])
+    ) or "none"
+    package_rows = []
+    for package in list(summary.get("packages") or []):
+        credibility = dict(package.get("credibility_summary") or {})
+        package_rows.append(
+            "<tr>"
+            f"<td><code>{html.escape(str(package.get('package_id') or ''))}</code></td>"
+            f"<td><code>{html.escape(str(package.get('candidate_id') or ''))}</code></td>"
+            f"<td>{html.escape(str(package.get('status') or 'unknown'))}</td>"
+            f"<td><code>{html.escape(str(package.get('selected_animation_preset_id') or ''))}</code></td>"
+            f"<td>{'yes' if bool(credibility.get('animation_pose_verified')) else 'no'}</td>"
+            f"<td>{'yes' if bool(credibility.get('external_motion_verified')) else 'no'}</td>"
+            f"<td>{html.escape(', '.join(str(item) for item in list(package.get('warning_flags') or [])) or '-')}</td>"
+            "</tr>"
+        )
+    return (
+        "<article class=\"card\">"
+        "<h3>A1 Action Candidate Provider</h3>"
+        f"<p><strong>Status:</strong> {html.escape(str(summary.get('status') or 'unknown'))}</p>"
+        f"<p><strong>Counts:</strong> passing {int(counts.get('passing_candidates') or 0)} / {int(counts.get('resolved_candidate_count') or 0)} | "
+        f"packages {int(counts.get('passing_packages') or 0)} / {int(counts.get('resolved_package_count') or 0)} | "
+        f"sources {int(counts.get('candidate_source_count') or 0)}</p>"
+        f"<p><strong>Providers:</strong> {html.escape(source_text)}</p>"
+        "</article>"
+        "<table><thead><tr><th>Package</th><th>Candidate</th><th>Status</th><th>Animation Preset</th><th>Pose</th><th>Motion</th><th>Warnings</th></tr></thead><tbody>"
+        + "".join(package_rows)
+        + "</tbody></table>"
+    )
+
+
 def _render_html(manifest: dict, *, report_index: dict | None = None) -> str:
     report_index = dict(report_index or manifest.get("report_index") or {})
     categories = dict(report_index.get("categories") or {})
@@ -836,6 +894,7 @@ def _render_html(manifest: dict, *, report_index: dict | None = None) -> str:
 <section class="section"><h2>Before / After Metrics</h2>{_render_r3_metrics(report_index)}</section>
 <section class="section"><h2>Diversity Matrix</h2>{_render_diversity_matrix_summary(quality_summaries)}</section>
 <section class="section"><h2>E2C Showcase Polish</h2>{_render_e2c_showcase_summary(quality_summaries)}</section>
+<section class="section"><h2>A1 Candidate Provider</h2>{_render_a1_candidate_provider_summary(quality_summaries)}</section>
 <section class="section"><h2>M1 Material / Texture Proof</h2>{_render_m1_material_summary(quality_summaries)}</section>
 <section class="section"><h2>Q5C-lite Quality Summary</h2>{_render_q5c_quality_summary(quality_summaries)}</section>
 <section class="section"><h2>Slot Debugger</h2>{_render_slot_debugger(slot_debugger)}</section>
@@ -860,6 +919,7 @@ def build_evidence_pack(*, verification_root: Path, output_root: Path | None, la
     quality_summaries = {
         "diversity_matrix": build_diversity_matrix_quality_summary(report_index),
         "e2c_showcase_polish": build_e2c_showcase_polish_summary(report_index),
+        "a1_candidate_provider": build_a1_candidate_provider_summary(report_index),
         "m1_material_proof": build_material_proof_quality_summary(report_index),
         "q5c_lite": _build_q5c_quality_summary(report_index, copied_images),
     }
@@ -869,7 +929,7 @@ def build_evidence_pack(*, verification_root: Path, output_root: Path | None, la
         "tool_name": "AiUE",
         "tooling_phase": "T1",
         "verification_root": str(verification_root.resolve()),
-        "external_candidate_sources": [],
+        "external_candidate_sources": [dict(item) for item in list(report_index.get("external_candidate_sources") or [])],
         "quality_summaries": quality_summaries,
         "report_index": {
             **report_index,

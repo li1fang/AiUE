@@ -124,6 +124,7 @@ class WorkbenchRenderMixin:
     def _render_quality_summaries(self) -> None:
         diversity_summary = dict((self.app_state.quality_summaries or {}).get("diversity_matrix") or {})
         e2c_summary = dict((self.app_state.quality_summaries or {}).get("e2c_showcase_polish") or {})
+        a1_summary = dict((self.app_state.quality_summaries or {}).get("a1_candidate_provider") or {})
         selected_package_id = str(self.view_state.selected_package_id or "")
         if not diversity_summary or str(diversity_summary.get("status") or "missing") == "missing":
             self.diversity_matrix_summary.setVisible(False)
@@ -176,6 +177,40 @@ class WorkbenchRenderMixin:
                 f"diversity {'yes' if bool(polish_summary.get('diversity_ready')) else 'no'}"
             )
             self.demo_showcase_summary.setVisible(True)
+
+        selected_a1_package = next(
+            (
+                dict(item)
+                for item in list(a1_summary.get("packages") or [])
+                if str(item.get("package_id") or "") == selected_package_id
+            ),
+            {},
+        )
+        if not a1_summary or str(a1_summary.get("status") or "missing") == "missing":
+            self.a1_candidate_provider_summary.setVisible(False)
+            self.a1_candidate_provider_summary.setText("")
+        else:
+            if not selected_a1_package and list(a1_summary.get("packages") or []):
+                selected_a1_package = dict(list(a1_summary.get("packages") or [])[0] or {})
+            counts = dict(a1_summary.get("counts") or {})
+            provider_names = ", ".join(
+                str(item.get("provider_name") or "provider")
+                for item in list(a1_summary.get("candidate_sources") or [])
+                if str(item.get("provider_name") or "")
+            ) or "none"
+            candidate_label = str(selected_a1_package.get("candidate_id") or "n/a")
+            credibility = dict(selected_a1_package.get("credibility_summary") or {})
+            self.a1_candidate_provider_summary.setText(
+                "A1 Candidate Provider "
+                f"{str(a1_summary.get('status') or 'unknown').upper()} | "
+                f"passing {int(counts.get('passing_candidates') or 0)}/{int(counts.get('resolved_candidate_count') or 0)} | "
+                f"providers {provider_names} | "
+                f"package {str(selected_a1_package.get('package_id') or selected_package_id or 'n/a')} | "
+                f"candidate {candidate_label} | "
+                f"pose {'yes' if bool(credibility.get('animation_pose_verified')) else 'no'} | "
+                f"motion {'yes' if bool(credibility.get('external_motion_verified')) else 'no'}"
+            )
+            self.a1_candidate_provider_summary.setVisible(True)
 
         m1_summary = dict((self.app_state.quality_summaries or {}).get("m1_material_proof") or {})
         selected_m1_package = next(

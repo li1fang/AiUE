@@ -174,3 +174,17 @@ def test_build_evidence_pack_renders_e2c_showcase_summary(tmp_path: Path):
     index_html = (pack["output_root"] / "index.html").read_text(encoding="utf-8")
     assert "E2C Showcase Polish" in index_html
     assert "compare 1" in index_html
+
+
+def test_build_evidence_pack_renders_a1_candidate_provider_summary(tmp_path: Path):
+    from tests.t2.helpers import build_fixture_pack
+
+    pack = build_fixture_pack(tmp_path, include_a1=True)
+    manifest = load_json(pack["output_root"] / "manifest.json")
+    a1_summary = dict((manifest.get("quality_summaries") or {}).get("a1_candidate_provider") or {})
+    assert a1_summary["status"] == "pass"
+    assert a1_summary["counts"]["passing_candidates"] == 1
+    assert a1_summary["candidate_sources"][0]["provider_name"] == "fixture_provider_v1"
+    index_html = (pack["output_root"] / "index.html").read_text(encoding="utf-8")
+    assert "A1 Action Candidate Provider" in index_html
+    assert "fixture_provider_v1:1" in index_html

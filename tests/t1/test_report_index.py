@@ -22,6 +22,7 @@ def test_report_index_classifies_active_and_platform_reports():
 
 def test_report_index_knows_new_e1_and_q5x_gates():
     assert classify_gate("showcase_demo_e1")[0] == "active_line"
+    assert classify_gate("action_candidate_provider_a1")[0] == "platform_line"
     assert classify_gate("material_texture_proof_m1")[0] == "platform_line"
     assert classify_gate("volumetric_fit_spatial_evidence_q5bx")[0] == "platform_line"
     assert classify_gate("volumetric_inspection_q5c_lite")[0] == "platform_line"
@@ -53,3 +54,14 @@ def test_report_index_classifies_dv2_governance_report(tmp_path: Path):
     report_index = build_report_index(verification_root)
     governance_gate_ids = [item["gate_id"] for item in report_index["categories"]["governance_line"]]
     assert governance_gate_ids == ["diversity_matrix_dv2"]
+
+
+def test_report_index_collects_external_candidate_sources(tmp_path: Path):
+    from tests.t2.helpers import write_fixture_a1_report
+
+    verification_root = tmp_path / "verification"
+    verification_root.mkdir(parents=True, exist_ok=True)
+    write_fixture_a1_report(verification_root)
+    report_index = build_report_index(verification_root)
+    assert report_index["categories"]["platform_line"][0]["gate_id"] == "action_candidate_provider_a1"
+    assert report_index["external_candidate_sources"][0]["provider_name"] == "fixture_provider_v1"

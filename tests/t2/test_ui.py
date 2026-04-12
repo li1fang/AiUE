@@ -140,6 +140,18 @@ def test_workbench_window_shows_e2c_showcase_summary(qtbot, tmp_path: Path):
     assert "compare yes" in window.demo_showcase_summary.text()
 
 
+def test_workbench_window_shows_a1_candidate_provider_summary(qtbot, tmp_path: Path):
+    pack = build_fixture_pack(tmp_path, include_a1=True)
+    window = WorkbenchWindow(manifest_path=pack["manifest_path"])
+    qtbot.addWidget(window)
+    window.show()
+    qtbot.waitUntil(lambda: window.current_dump_payload()["quality_summaries"]["a1_candidate_provider"]["status"] == "pass")
+    assert window.a1_candidate_provider_summary.isVisible() is True
+    assert "A1 Candidate Provider PASS" in window.a1_candidate_provider_summary.text()
+    assert "fixture_provider_v1" in window.a1_candidate_provider_summary.text()
+    assert "candidate candidate_MM_Attack_01" in window.a1_candidate_provider_summary.text()
+
+
 def test_workbench_window_demo_request_controls(qtbot, tmp_path: Path, monkeypatch):
     pack = build_fixture_pack(tmp_path)
     workspace_config_path = tmp_path / "local" / "pipeline_workspace.local.json"

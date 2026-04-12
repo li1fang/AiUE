@@ -139,6 +139,7 @@ class WorkbenchWindow(WorkbenchRenderMixin, WorkbenchDemoOpsMixin, QMainWindow):
             quality_summaries={
                 "diversity_matrix": {"status": "missing", "coverage_axes": []},
                 "e2c_showcase_polish": {"status": "missing", "packages": []},
+                "a1_candidate_provider": {"status": "missing", "packages": [], "candidate_sources": []},
                 "m1_material_proof": {"status": "missing", "packages": []},
                 "q5c_lite": {"status": "missing", "packages": [], "diagnostic_class_counts": {}},
                 "q5c_contrast": {"status": "missing", "packages": []},
@@ -268,6 +269,14 @@ class WorkbenchWindow(WorkbenchRenderMixin, WorkbenchDemoOpsMixin, QMainWindow):
         self.demo_showcase_summary.setStyleSheet("padding: 0 2px 6px 2px;")
         self.demo_showcase_summary.setVisible(False)
         root_layout.addWidget(self.demo_showcase_summary)
+
+        self.a1_candidate_provider_summary = QLabel("")
+        self.a1_candidate_provider_summary.setObjectName("a1CandidateProviderSummary")
+        self.a1_candidate_provider_summary.setWordWrap(True)
+        self.a1_candidate_provider_summary.setProperty("role", "muted")
+        self.a1_candidate_provider_summary.setStyleSheet("padding: 0 2px 6px 2px;")
+        self.a1_candidate_provider_summary.setVisible(False)
+        root_layout.addWidget(self.a1_candidate_provider_summary)
 
         self.diversity_matrix_summary = QLabel("")
         self.diversity_matrix_summary.setObjectName("diversityMatrixSummary")

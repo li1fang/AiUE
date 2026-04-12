@@ -1,0 +1,39 @@
+{
+  "schema_version": "a1_candidate_manifest_v1",
+  "provider_name": "fixture_provider_v1",
+  "source_id": "fixture_provider_from_session",
+  "source_kind": "fixture_session_derivation",
+  "generated_at_utc": "2026-04-12T03:20:00+00:00",
+  "source_session_manifest": "C:\\AiUE\\Saved\\demo\\e2\\latest\\playable_demo_e2_session.json",
+  "packages": [
+    {
+      "package_id": "pkg_alpha",
+      "sample_id": "fixture_alpha",
+      "slot_names": [
+        "weapon",
+        "clothing",
+        "fx"
+      ],
+      "reference_image_paths": {
+        "hero_before_image_path": "C:\\AiUE\\Saved\\verification\\fixture\\before.png",
+        "hero_after_image_path": "C:\\AiUE\\Saved\\verification\\fixture\\after.png"
+      },
+      "candidates": [
+        {
+          "candidate_id": "candidate_MM_Attack_01",
+          "candidate_payload_kind": "session_animation_preset_ref",
+          "selected_action_preset_id": "showcase_root_translate_and_turn",
+          "selected_animation_preset_id": "MM_Attack_01",
+          "family": "attack",
+          "requested_animation_asset_path": "/Game/CombatMagicAnims/Demo/Mannequins/Anims/Unarmed/Attack/MM_Attack_01",
+          "resolved_animation_asset_path": "/Game/RTG_MM_Attack_01_PMXPreview",
+          "source_gate_id": "demo_retargeted_animation_preview_d8",
+          "notes": [
+            "fixture_session_derivation",
+            "preferred_non_idle_pass_animation"
+          ]
+        }
+      ]
+    }
+  ]
+}

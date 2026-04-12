@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aiue.local/contracts/action_candidate_manifest_v1.schema.json",
+  "title": "AiUE Action Candidate Manifest v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "provider_name",
+    "source_id",
+    "source_kind",
+    "packages"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "a1_candidate_manifest_v1"
+    },
+    "provider_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_kind": {
+      "type": "string",
+      "minLength": 1
+    },
+    "generated_at_utc": {
+      "type": "string"
+    },
+    "source_session_manifest": {
+      "type": "string"
+    },
+    "packages": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "package_id",
+          "candidates"
+        ],
+        "properties": {
+          "package_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sample_id": {
+            "type": "string"
+          },
+          "slot_names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "reference_image_paths": {
+            "type": "object"
+          },
+          "current_slot_state": {
+            "type": "object"
+          },
+          "candidates": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": [
+                "candidate_id",
+                "candidate_payload_kind",
+                "selected_animation_preset_id"
+              ],
+              "properties": {
+                "candidate_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "candidate_payload_kind": {
+                  "const": "session_animation_preset_ref"
+                },
+                "selected_action_preset_id": {
+                  "type": "string"
+                },
+                "selected_animation_preset_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "family": {
+                  "type": "string"
+                },
+                "requested_animation_asset_path": {
+                  "type": "string"
+                },
+                "resolved_animation_asset_path": {
+                  "type": "string"
+                },
+                "source_gate_id": {
+                  "type": "string"
+                },
+                "notes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "additionalProperties": true
+            }
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

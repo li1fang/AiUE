@@ -233,3 +233,16 @@ def test_load_workbench_state_reads_e2c_showcase_summary(tmp_path: Path):
     assert e2c_summary["packages"][0]["package_id"] == "pkg_alpha"
     assert payload["quality_summaries"]["e2c_showcase_polish"]["status"] == "pass"
     assert "playable_demo_e2c_credible_showcase_polish" in payload["report_categories"]["historical_other"]
+
+
+def test_load_workbench_state_reads_a1_candidate_provider_summary(tmp_path: Path):
+    pack = build_fixture_pack(tmp_path, include_a1=True)
+    state = load_workbench_state(pack["manifest_path"])
+    payload = state.to_dump_payload(build_default_view_state(state))
+    a1_summary = state.quality_summaries["a1_candidate_provider"]
+    assert a1_summary["status"] == "pass"
+    assert a1_summary["counts"]["passing_candidates"] == 1
+    assert a1_summary["candidate_sources"][0]["provider_name"] == "fixture_provider_v1"
+    assert a1_summary["packages"][0]["candidate_id"] == "candidate_MM_Attack_01"
+    assert payload["quality_summaries"]["a1_candidate_provider"]["status"] == "pass"
+    assert "action_candidate_provider_a1" in payload["report_categories"]["platform_line"]

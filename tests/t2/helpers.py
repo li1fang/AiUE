@@ -349,6 +349,86 @@ def write_fixture_e2c_report(verification_root: Path, *, status: str = "pass") -
     return report_path
 
 
+def write_fixture_a1_report(verification_root: Path, *, status: str = "pass") -> Path:
+    verification_root.mkdir(parents=True, exist_ok=True)
+    front_image_path = str((FIXTURE_ROOT / "images" / "front.ppm").resolve())
+    after_image_path = str((FIXTURE_ROOT / "images" / "after.ppm").resolve())
+    report_path = verification_root / "latest_action_candidate_provider_a1_report.json"
+    write_json(
+        report_path,
+        {
+            "gate_id": "action_candidate_provider_a1",
+            "status": status,
+            "generated_at_utc": "2026-04-12T05:10:00+00:00",
+            "counts": {
+                "resolved_package_count": 1,
+                "passing_packages": 1,
+                "resolved_candidate_count": 1,
+                "passing_candidates": 1,
+                "candidate_source_count": 1,
+            },
+            "external_candidate_sources": [
+                {
+                    "provider_name": "fixture_provider_v1",
+                    "source_id": "fixture_provider_from_session",
+                    "source_kind": "fixture_session_derivation",
+                    "candidate_count": 1,
+                    "package_ids": ["pkg_alpha"],
+                }
+            ],
+            "artifacts": {
+                "provider_context_path": str((verification_root.parent / "Saved" / "demo" / "a1" / "latest" / "action_candidate_provider_context.json").resolve()),
+                "candidate_manifest_path": str((verification_root.parent / "Saved" / "demo" / "a1" / "latest" / "action_candidate_manifest.json").resolve()),
+                "provider_state_path": str((verification_root.parent / "Saved" / "demo" / "a1" / "latest" / "action_candidate_provider_state.json").resolve()),
+            },
+            "per_package_results": [
+                {
+                    "package_id": "pkg_alpha",
+                    "sample_id": "fixture_alpha",
+                    "candidate_id": "candidate_MM_Attack_01",
+                    "selected_animation_preset_id": "MM_Attack_01",
+                    "status": status,
+                    "warning_flags": [],
+                    "credibility_summary": {
+                        "subject_visible": True,
+                        "before_image_present": True,
+                        "after_image_present": True,
+                        "animation_pose_verified": True,
+                        "external_motion_verified": True,
+                        "warning_flags": [],
+                    },
+                }
+            ],
+            "per_candidate_results": [
+                {
+                    "package_id": "pkg_alpha",
+                    "sample_id": "fixture_alpha",
+                    "provider_name": "fixture_provider_v1",
+                    "source_id": "fixture_provider_from_session",
+                    "candidate_id": "candidate_MM_Attack_01",
+                    "candidate_payload_kind": "session_animation_preset_ref",
+                    "selected_animation_preset_id": "MM_Attack_01",
+                    "status": status,
+                    "warning_flags": [],
+                    "key_images": {
+                        "primary_before": front_image_path,
+                        "primary_after": after_image_path,
+                    },
+                    "credibility_summary": {
+                        "subject_visible": True,
+                        "before_image_present": True,
+                        "after_image_present": True,
+                        "animation_pose_verified": True,
+                        "external_motion_verified": True,
+                        "warning_flags": [],
+                    },
+                }
+            ],
+        },
+    )
+    return report_path
+
+
 def write_fixture_pv1_report(verification_root: Path, *, status: str = "attention") -> Path:
     verification_root.mkdir(parents=True, exist_ok=True)
     report_path = verification_root / "latest_manual_playable_demo_validation_pv1_report.json"
@@ -567,6 +647,7 @@ def build_fixture_pack(
     include_dv1: bool = False,
     include_dv2: bool = False,
     include_e2c: bool = False,
+    include_a1: bool = False,
     include_m1: bool = False,
     include_e2b: bool = False,
     include_pv1: bool = False,
@@ -580,6 +661,8 @@ def build_fixture_pack(
         write_fixture_dv2_report(verification_root)
     if include_e2c:
         write_fixture_e2c_report(verification_root)
+    if include_a1:
+        write_fixture_a1_report(verification_root)
     if include_m1:
         write_fixture_m1_report(verification_root)
     if include_e2b:

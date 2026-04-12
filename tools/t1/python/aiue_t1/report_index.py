@@ -16,6 +16,7 @@ ACTIVE_LINE_GATE_IDS = [
 ]
 
 PLATFORM_LINE_GATE_IDS = [
+    "action_candidate_provider_a1",
     "material_texture_proof_m1",
     "generic_slot_abstraction_p1",
     "clothing_vertical_slice_p2",
@@ -37,6 +38,24 @@ GOVERNANCE_LINE_GATE_IDS = [
     "diversity_matrix_dv1",
     "manual_playable_demo_validation_pv1",
 ]
+
+
+def _extract_external_candidate_sources(payload: dict, *, gate_id: str, report_path: Path) -> list[dict]:
+    normalized = []
+    for item in list(payload.get("external_candidate_sources") or []):
+        source = dict(item or {})
+        normalized.append(
+            {
+                "provider_name": str(source.get("provider_name") or ""),
+                "source_id": str(source.get("source_id") or ""),
+                "source_kind": str(source.get("source_kind") or ""),
+                "candidate_count": int(source.get("candidate_count") or 0),
+                "package_ids": [str(package_id) for package_id in list(source.get("package_ids") or []) if str(package_id)],
+                "gate_id": gate_id,
+                "report_path": str(report_path.resolve()),
+            }
+        )
+    return normalized
 
 
 def classify_gate(gate_id: str) -> tuple[str, int]:
@@ -73,6 +92,11 @@ def scan_latest_reports(verification_root: str | Path) -> list[dict]:
             continue
         gate_id = str(payload.get("gate_id") or "")
         category, category_order = classify_gate(gate_id)
+        external_candidate_sources = _extract_external_candidate_sources(
+            payload,
+            gate_id=gate_id,
+            report_path=report_path,
+        )
         entries.append(
             {
                 "name": report_path.name,
@@ -85,7 +109,7 @@ def scan_latest_reports(verification_root: str | Path) -> list[dict]:
                 "category": category,
                 "category_order": category_order,
                 "report": payload,
-                "external_candidate_sources": [],
+                "external_candidate_sources": external_candidate_sources,
             }
         )
     entries.sort(key=lambda item: (item["category"], item["category_order"], item["gate_id"], item["name"]))
@@ -112,5 +136,9 @@ def build_report_index(verification_root: str | Path) -> dict:
         },
         "categories": by_category,
         "reports_by_gate_id": {item["gate_id"]: item for item in reports if item.get("gate_id")},
-        "external_candidate_sources": [],
+        "external_candidate_sources": [
+            dict(source)
+            for item in reports
+            for source in list(item.get("external_candidate_sources") or [])
+        ],
     }
