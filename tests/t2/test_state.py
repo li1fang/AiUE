@@ -221,3 +221,15 @@ def test_load_workbench_state_reads_dv2_diversity_summary(tmp_path: Path):
     assert diversity_summary["gate_id"] == "diversity_matrix_dv2"
     assert diversity_summary["covered_axis_count"] == 6
     assert "diversity_matrix_dv2" in payload["report_categories"]["governance_line"]
+
+
+def test_load_workbench_state_reads_e2c_showcase_summary(tmp_path: Path):
+    pack = build_fixture_pack(tmp_path, include_e2c=True)
+    state = load_workbench_state(pack["manifest_path"])
+    payload = state.to_dump_payload(build_default_view_state(state))
+    e2c_summary = state.quality_summaries["e2c_showcase_polish"]
+    assert e2c_summary["status"] == "pass"
+    assert e2c_summary["counts"]["passing_packages"] == 1
+    assert e2c_summary["packages"][0]["package_id"] == "pkg_alpha"
+    assert payload["quality_summaries"]["e2c_showcase_polish"]["status"] == "pass"
+    assert "playable_demo_e2c_credible_showcase_polish" in payload["report_categories"]["historical_other"]

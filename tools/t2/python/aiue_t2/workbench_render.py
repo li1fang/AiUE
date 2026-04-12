@@ -123,6 +123,8 @@ class WorkbenchRenderMixin:
 
     def _render_quality_summaries(self) -> None:
         diversity_summary = dict((self.app_state.quality_summaries or {}).get("diversity_matrix") or {})
+        e2c_summary = dict((self.app_state.quality_summaries or {}).get("e2c_showcase_polish") or {})
+        selected_package_id = str(self.view_state.selected_package_id or "")
         if not diversity_summary or str(diversity_summary.get("status") or "missing") == "missing":
             self.diversity_matrix_summary.setVisible(False)
             self.diversity_matrix_summary.setText("")
@@ -143,8 +145,39 @@ class WorkbenchRenderMixin:
                 f"animations {int(distinct_counts.get('animation_variation') or 0)}"
             )
             self.diversity_matrix_summary.setVisible(True)
+
+        selected_e2c_package = next(
+            (
+                dict(item)
+                for item in list(e2c_summary.get("packages") or [])
+                if str(item.get("package_id") or "") == selected_package_id
+            ),
+            {},
+        )
+        if not e2c_summary or str(e2c_summary.get("status") or "missing") == "missing":
+            self.demo_showcase_summary.setVisible(False)
+            self.demo_showcase_summary.setText("")
+        else:
+            if not selected_e2c_package and list(e2c_summary.get("packages") or []):
+                selected_e2c_package = dict(list(e2c_summary.get("packages") or [])[0] or {})
+            counts = dict(e2c_summary.get("counts") or {})
+            package_label = str(selected_e2c_package.get("package_id") or selected_package_id or "n/a")
+            polish_summary = dict(selected_e2c_package.get("polish_summary") or {})
+            self.demo_showcase_summary.setText(
+                "E2C Showcase Polish "
+                f"{str(e2c_summary.get('status') or 'unknown').upper()} | "
+                f"passing {int(counts.get('passing_packages') or 0)}/{int(counts.get('resolved_package_count') or 0)} | "
+                f"package {package_label} | "
+                f"hero {'yes' if bool(polish_summary.get('hero_ready')) else 'no'} | "
+                f"material {'yes' if bool(polish_summary.get('material_ready')) else 'no'} | "
+                f"replay {'yes' if bool(polish_summary.get('replay_ready')) else 'no'} | "
+                f"compare {'yes' if bool(polish_summary.get('compare_ready')) else 'no'} | "
+                f"history {'yes' if bool(polish_summary.get('history_ready')) else 'no'} | "
+                f"diversity {'yes' if bool(polish_summary.get('diversity_ready')) else 'no'}"
+            )
+            self.demo_showcase_summary.setVisible(True)
+
         m1_summary = dict((self.app_state.quality_summaries or {}).get("m1_material_proof") or {})
-        selected_package_id = str(self.view_state.selected_package_id or "")
         selected_m1_package = next(
             (
                 dict(item)

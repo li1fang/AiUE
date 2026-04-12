@@ -161,3 +161,16 @@ def test_build_evidence_pack_renders_pv1_signoff_card(tmp_path: Path):
     assert "fixture_user" in index_html
     assert "Checked Packages:</strong> 1 | pkg_alpha" in index_html
     assert "pkg_alpha" in index_html
+
+
+def test_build_evidence_pack_renders_e2c_showcase_summary(tmp_path: Path):
+    from tests.t2.helpers import build_fixture_pack
+
+    pack = build_fixture_pack(tmp_path, include_e2c=True)
+    manifest = load_json(pack["output_root"] / "manifest.json")
+    e2c_summary = dict((manifest.get("quality_summaries") or {}).get("e2c_showcase_polish") or {})
+    assert e2c_summary["status"] == "pass"
+    assert e2c_summary["counts"]["passing_packages"] == 1
+    index_html = (pack["output_root"] / "index.html").read_text(encoding="utf-8")
+    assert "E2C Showcase Polish" in index_html
+    assert "compare 1" in index_html

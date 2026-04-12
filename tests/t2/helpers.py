@@ -292,6 +292,63 @@ def write_fixture_e2b_report(verification_root: Path) -> Path:
     return report_path
 
 
+def write_fixture_e2c_report(verification_root: Path, *, status: str = "pass") -> Path:
+    verification_root.mkdir(parents=True, exist_ok=True)
+    front_image_path = str((FIXTURE_ROOT / "images" / "front.ppm").resolve())
+    side_image_path = str((FIXTURE_ROOT / "images" / "side.ppm").resolve())
+    after_image_path = str((FIXTURE_ROOT / "images" / "after.ppm").resolve())
+    report_path = verification_root / "latest_playable_demo_e2c_credible_showcase_polish_report.json"
+    write_json(
+        report_path,
+        {
+            "gate_id": "playable_demo_e2c_credible_showcase_polish",
+            "status": status,
+            "generated_at_utc": "2026-04-12T04:10:00+00:00",
+            "counts": {
+                "resolved_package_count": 1,
+                "passing_packages": 1,
+                "compare_ready_packages": 1,
+                "replay_ready_packages": 1,
+                "history_ready_packages": 1,
+                "diversity_ready_packages": 1,
+                "packages_with_material_reference": 1,
+                "packages_with_hero_shots": 1,
+            },
+            "consumed_reports": {
+                "e2b": str((verification_root / "latest_playable_demo_e2b_credible_showcase_report.json").resolve()),
+                "dv2": str((verification_root / "latest_diversity_matrix_dv2_report.json").resolve()),
+            },
+            "artifacts": {
+                "polish_state_path": str((verification_root.parent / "Saved" / "demo" / "e2" / "latest" / "playable_demo_e2_polish_state.json").resolve()),
+            },
+            "per_package_results": [
+                {
+                    "package_id": "pkg_alpha",
+                    "sample_id": "fixture_alpha",
+                    "status": status,
+                    "key_images": {
+                        "hero_before": front_image_path,
+                        "hero_after": side_image_path,
+                        "action_after": after_image_path,
+                        "animation_after": side_image_path,
+                        "compare_action_after": after_image_path,
+                        "compare_animation_after": side_image_path,
+                    },
+                    "polish_summary": {
+                        "hero_ready": True,
+                        "material_ready": True,
+                        "replay_ready": True,
+                        "compare_ready": True,
+                        "history_ready": True,
+                        "diversity_ready": True,
+                    },
+                }
+            ],
+        },
+    )
+    return report_path
+
+
 def write_fixture_pv1_report(verification_root: Path, *, status: str = "attention") -> Path:
     verification_root.mkdir(parents=True, exist_ok=True)
     report_path = verification_root / "latest_manual_playable_demo_validation_pv1_report.json"
@@ -509,6 +566,7 @@ def build_fixture_pack(
     include_governance: bool = True,
     include_dv1: bool = False,
     include_dv2: bool = False,
+    include_e2c: bool = False,
     include_m1: bool = False,
     include_e2b: bool = False,
     include_pv1: bool = False,
@@ -520,6 +578,8 @@ def build_fixture_pack(
         write_fixture_dv1_report(verification_root)
     if include_dv2:
         write_fixture_dv2_report(verification_root)
+    if include_e2c:
+        write_fixture_e2c_report(verification_root)
     if include_m1:
         write_fixture_m1_report(verification_root)
     if include_e2b:

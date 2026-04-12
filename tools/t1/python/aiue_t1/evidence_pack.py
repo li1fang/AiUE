@@ -8,6 +8,7 @@ from pathlib import Path
 from aiue_core.schema_utils import write_json
 
 from aiue_t1.diversity_matrix import build_diversity_matrix_quality_summary, latest_diversity_matrix_entry
+from aiue_t1.e2c_showcase import build_e2c_showcase_polish_summary
 from aiue_t1.material_proof import build_material_proof_quality_summary
 from aiue_t1.q5c_lite import closest_margin_info, margin_to_failure_by_metric, risk_band_for_q5c_lite, risk_reason_for_q5c_lite
 from aiue_t1.report_index import build_report_index
@@ -235,6 +236,29 @@ def _collect_preview_artifacts(report_index: dict) -> list[dict]:
                         "section": "Showcase Demo",
                         "source_path": after_path,
                         "key": f"e1_{package_id}_{shot_id}_after",
+                    }
+                )
+
+    e2c_report = dict((reports_by_gate_id.get("playable_demo_e2c_credible_showcase_polish") or {}).get("report") or {})
+    for package in list(e2c_report.get("per_package_results") or []):
+        package_id = str(package.get("package_id") or "")
+        key_images = dict(package.get("key_images") or {})
+        for image_key, suffix in (
+            ("hero_before", "hero_before"),
+            ("hero_after", "hero_after"),
+            ("action_after", "action_after"),
+            ("animation_after", "animation_after"),
+            ("compare_action_after", "compare_action_after"),
+            ("compare_animation_after", "compare_animation_after"),
+        ):
+            image_path = str(key_images.get(image_key) or "")
+            if image_path:
+                artifacts.append(
+                    {
+                        "title": f"E2C {package_id} {suffix}",
+                        "section": "E2C Showcase Polish",
+                        "source_path": image_path,
+                        "key": f"e2c_{package_id}_{suffix}",
                     }
                 )
     return artifacts
@@ -751,6 +775,43 @@ def _render_diversity_matrix_summary(quality_summaries: dict) -> str:
     )
 
 
+def _render_e2c_showcase_summary(quality_summaries: dict) -> str:
+    summary = dict((quality_summaries or {}).get("e2c_showcase_polish") or {})
+    if not summary or str(summary.get("status") or "missing") == "missing":
+        return "<p class=\"muted\">No E2C showcase-polish summary was available.</p>"
+    counts = dict(summary.get("counts") or {})
+    package_rows = []
+    for package in list(summary.get("packages") or []):
+        polish_summary = dict(package.get("polish_summary") or {})
+        package_rows.append(
+            "<tr>"
+            f"<td><code>{html.escape(str(package.get('package_id') or ''))}</code></td>"
+            f"<td>{html.escape(str(package.get('status') or 'unknown'))}</td>"
+            f"<td>{'yes' if bool(polish_summary.get('hero_ready')) else 'no'}</td>"
+            f"<td>{'yes' if bool(polish_summary.get('material_ready')) else 'no'}</td>"
+            f"<td>{'yes' if bool(polish_summary.get('replay_ready')) else 'no'}</td>"
+            f"<td>{'yes' if bool(polish_summary.get('compare_ready')) else 'no'}</td>"
+            f"<td>{'yes' if bool(polish_summary.get('history_ready')) else 'no'}</td>"
+            f"<td>{'yes' if bool(polish_summary.get('diversity_ready')) else 'no'}</td>"
+            "</tr>"
+        )
+    return (
+        "<article class=\"card\">"
+        "<h3>E2C Credible Showcase Polish</h3>"
+        f"<p><strong>Status:</strong> {html.escape(str(summary.get('status') or 'unknown'))}</p>"
+        f"<p><strong>Counts:</strong> passing {int(counts.get('passing_packages') or 0)} / {int(counts.get('resolved_package_count') or 0)} | "
+        f"replay {int(counts.get('replay_ready_packages') or 0)} | "
+        f"compare {int(counts.get('compare_ready_packages') or 0)} | "
+        f"history {int(counts.get('history_ready_packages') or 0)} | "
+        f"diversity {int(counts.get('diversity_ready_packages') or 0)} | "
+        f"material {int(counts.get('packages_with_material_reference') or 0)}</p>"
+        "</article>"
+        "<table><thead><tr><th>Package</th><th>Status</th><th>Hero</th><th>Material</th><th>Replay</th><th>Compare</th><th>History</th><th>Diversity</th></tr></thead><tbody>"
+        + "".join(package_rows)
+        + "</tbody></table>"
+    )
+
+
 def _render_html(manifest: dict, *, report_index: dict | None = None) -> str:
     report_index = dict(report_index or manifest.get("report_index") or {})
     categories = dict(report_index.get("categories") or {})
@@ -774,6 +835,7 @@ def _render_html(manifest: dict, *, report_index: dict | None = None) -> str:
 <section class="section"><h2>Key Screenshot Previews</h2><div class="artifact-grid">{_render_preview_cards(preview_artifacts)}</div></section>
 <section class="section"><h2>Before / After Metrics</h2>{_render_r3_metrics(report_index)}</section>
 <section class="section"><h2>Diversity Matrix</h2>{_render_diversity_matrix_summary(quality_summaries)}</section>
+<section class="section"><h2>E2C Showcase Polish</h2>{_render_e2c_showcase_summary(quality_summaries)}</section>
 <section class="section"><h2>M1 Material / Texture Proof</h2>{_render_m1_material_summary(quality_summaries)}</section>
 <section class="section"><h2>Q5C-lite Quality Summary</h2>{_render_q5c_quality_summary(quality_summaries)}</section>
 <section class="section"><h2>Slot Debugger</h2>{_render_slot_debugger(slot_debugger)}</section>
@@ -797,6 +859,7 @@ def build_evidence_pack(*, verification_root: Path, output_root: Path | None, la
     copied_images = _copy_preview_images(preview_artifacts, images_dir)
     quality_summaries = {
         "diversity_matrix": build_diversity_matrix_quality_summary(report_index),
+        "e2c_showcase_polish": build_e2c_showcase_polish_summary(report_index),
         "m1_material_proof": build_material_proof_quality_summary(report_index),
         "q5c_lite": _build_q5c_quality_summary(report_index, copied_images),
     }

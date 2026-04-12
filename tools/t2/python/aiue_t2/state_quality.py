@@ -143,6 +143,7 @@ def load_quality_summaries(
 ) -> dict[str, Any]:
     payload = dict(manifest.get("quality_summaries") or {})
     diversity_summary = dict(payload.get("diversity_matrix") or {})
+    e2c_summary = dict(payload.get("e2c_showcase_polish") or {})
     q5c_summary = dict(payload.get("q5c_lite") or {})
     m1_summary = dict(payload.get("m1_material_proof") or {})
     preview_by_key = {
@@ -157,6 +158,7 @@ def load_quality_summaries(
     if not q5c_summary:
         return {
             "diversity_matrix": diversity_summary or {"status": "missing", "coverage_axes": []},
+            "e2c_showcase_polish": e2c_summary or {"status": "missing", "packages": []},
             "m1_material_proof": m1_summary or {"status": "missing", "packages": []},
             "q5c_lite": {"status": "missing", "packages": [], "diagnostic_class_counts": {}},
             "q5c_contrast": q5c_contrast_summary,
@@ -170,6 +172,7 @@ def load_quality_summaries(
         normalized_packages.append(normalized_package)
     return {
         "diversity_matrix": diversity_summary or {"status": "missing", "coverage_axes": []},
+        "e2c_showcase_polish": e2c_summary or {"status": "missing", "packages": []},
         "m1_material_proof": m1_summary or {"status": "missing", "packages": []},
         "q5c_lite": {
             **q5c_summary,
