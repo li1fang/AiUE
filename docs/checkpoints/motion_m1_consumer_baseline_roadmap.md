@@ -52,6 +52,18 @@ The next practical motion stage goal is:
   - `LeftArm`
   - `RightArm`
 
+Current status:
+
+- `M1` is now established on the controlled fixture
+- latest proof: `C:\AiUE\Saved\verification\latest_motion_consumer_baseline_m1_report.json`
+- current baseline counts:
+  - `iterations_requested = 3`
+  - `iterations_completed = 3`
+  - `iterations_passed = 3`
+  - `subject_visible_passes = 3`
+  - `pose_changed_passes = 3`
+  - `owner_none_passes = 3`
+
 ### Roadmap
 
 #### M1
@@ -130,10 +142,20 @@ Primary question:
 
 The current recommended next motion step is:
 
-`Continue M1.x`
+`Choose between M1.5 result-import readiness and M2 fixture diversity`
 
 Specifically:
 
-- keep `M0.5` rerunnable and green
-- further improve PMX source chain heuristics only where evidence shows real residual gaps
-- avoid expanding fixture count until the controlled baseline is comfortable and repeatable
+- use the now-stable baseline to verify toy-yard result-import expectations
+- or add the second controlled packet to test whether the seam is broader than one lucky sample
+- avoid widening motion semantics before either of those is real
+
+Current recommendation:
+
+- do `M1.5` first
+- then enter `M2`
+
+Reason:
+
+- `M1.5` turns the current baseline into a cleaner cross-repo roundtrip surface
+- `M2` should start after the first result surface is already import-ready
