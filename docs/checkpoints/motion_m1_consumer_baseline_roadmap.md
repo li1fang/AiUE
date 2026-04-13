@@ -169,6 +169,31 @@ Current status:
   - `handoff_ready = true`
   - `problem_owner = none`
 
+#### M3.5
+
+`M3.5 Motion Default Source Switch`
+
+Scope:
+
+- stands on top of `M3`
+- applies the motion default-source route as a real AiUE cutover node
+- replays one targeted package through the normalized toy-yard motion path
+
+Primary question:
+
+`Is motion default-source status now applied in practice, not only accepted in readiness reports?`
+
+Current status:
+
+- `M3.5` is now green on the curated diversity profile
+- latest proof: `C:\AiUE\Saved\verification\latest_motion_default_source_switch_m3_5_report.json`
+- current cutover snapshot:
+  - `default_source_applied = true`
+  - `selected_package_id = pkg_route-a-3s-turn-hand-ready-v0-2_a70fed1ad7`
+  - `owner = none`
+  - `subject_visible = true`
+  - `pose_changed = true`
+
 #### M4
 
 `M4 Motion Quality Line`
@@ -183,17 +208,28 @@ Primary question:
 
 `Is the motion path not only executable, but trustworthy as a reusable platform capability?`
 
+Current status:
+
+- `M4` is now green on the curated diversity profile
+- latest proof: `C:\AiUE\Saved\verification\latest_motion_quality_line_m4_report.json`
+- current quality counts:
+  - `package_count = 3`
+  - `quality_passes = 3`
+  - `retarget_successes = 3`
+  - `native_pose_changed_passes = 3`
+  - `unexpected_warning_packages = 0`
+
 ### Immediate Next Step
 
 The current recommended next motion step is:
 
-`Use the new M3 green state to decide whether to open motion default-source routing or enter a richer M4 quality line first.`
+`Use the new M3.5 and M4 green states to decide whether to normalize default routing further or widen motion quality scope.`
 
 Current recommendation:
 
 - keep the current `M0.5` single-fixture scope lock as historical baseline only
-- treat `M2 -> M2.5 -> M3` as the real new evidence ladder
+- treat `M2 -> M2.5 -> M3 -> M3.5 -> M4` as the real new evidence ladder
 - open the next discussion around:
   - motion default-source routing policy
   - richer multi-packet quality evidence
-  - whether `M4` should emphasize quality depth or route normalization first
+  - whether the next step should widen motion fixture diversity or deepen motion quality thresholds

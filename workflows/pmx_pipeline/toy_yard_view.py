@@ -84,6 +84,23 @@ def resolve_toy_yard_motion_communication_signal_path(workspace: dict) -> Path |
     return resolve_toy_yard_motion_view_file(workspace, "summary", "communication_signal.json")
 
 
+def resolve_toy_yard_motion_default_source_context(workspace: dict) -> dict[str, Path] | None:
+    root = resolve_toy_yard_motion_view_root(workspace)
+    summary_path = resolve_toy_yard_motion_summary_path(workspace)
+    registry_path = resolve_toy_yard_motion_registry_path(workspace)
+    packet_check_path = resolve_toy_yard_motion_packet_check_path(workspace)
+    communication_signal_path = resolve_toy_yard_motion_communication_signal_path(workspace)
+    if not all((root, summary_path, registry_path, packet_check_path, communication_signal_path)):
+        return None
+    return {
+        "view_root": root,
+        "summary_path": summary_path,
+        "registry_path": registry_path,
+        "packet_check_path": packet_check_path,
+        "communication_signal_path": communication_signal_path,
+    }
+
+
 def build_toy_yard_manifest_index(summary_path: Path) -> tuple[Path, dict[str, Path]]:
     conversion_root = summary_path.parent.parent / "conversion"
     if not conversion_root.exists():

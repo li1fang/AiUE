@@ -10,10 +10,14 @@
     "preflight_root": "C:\\path\\to\\_preflight_out\\mingchao",
     "conversion_root": "C:\\path\\to\\_fbx_out_fastloop\\mingchao",
     "toy_yard_pmx_view_root": "C:\\Projects\\toy-yard\\05_publish\\aiue_pmx\\default",
+    "toy_yard_motion_view_root": "C:\\Projects\\toy-yard\\05_publish\\aiue_motion\\default",
     "blender_python_exe": "C:\\Program Files\\Blender Foundation\\Blender 3.6\\3.6\\python\\bin\\python.exe",
     "unreal_editor_cmd": "C:\\Program Files\\Epic Games\\UE_5.7\\Engine\\Binaries\\Win64\\UnrealEditor-Cmd.exe",
     "unreal_editor_gui": "C:\\Program Files\\Epic Games\\UE_5.7\\Engine\\Binaries\\Win64\\UnrealEditor.exe",
     "asset_root": "/Game/AiUE/ImportedAssets",
+    "motion_asset_root": "/Game/AiUE/MotionPackets",
+    "motion_target_skeleton_asset_path": "/Game/Path/To/TargetSkeleton.TargetSkeleton",
+    "motion_preview_host_blueprint_asset_path": "/Game/Path/To/Preview/BP_Host",
     "visual_review_output_root": "C:\\path\\to\\UnrealProject\\Saved\\pmx_pipeline\\visual_review",
     "capability_probe_root": "C:\\path\\to\\UnrealProject\\Saved\\pmx_pipeline\\capabilities",
     "auto_ue_cli_output_root": "C:\\path\\to\\UnrealProject\\Saved\\pmx_pipeline\\auto_ue_cli"
@@ -32,6 +36,11 @@
     "camera_lateral_offset": -160.0,
     "camera_height": 120.0,
     "capture_delay_seconds": 0.2
+  },
+  "motion": {
+    "preview_level_path": "/Game/Levels/DefaultLevel",
+    "runtime_ready_only": true,
+    "preview_host_blueprint_asset_path": "/Game/Path/To/Preview/BP_Host"
   },
   "probe": {
     "default_mode": "cmd_nullrhi",
