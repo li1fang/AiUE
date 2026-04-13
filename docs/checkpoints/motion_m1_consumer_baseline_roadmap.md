@@ -111,18 +111,63 @@ Primary question:
 
 `Is the current motion consumer path real, or is it only lucky on one sample?`
 
+Current status:
+
+- `M2` is now green on the curated `trial-motion-m2-diversity` profile
+- latest proof: `C:\AiUE\Saved\verification\latest_motion_fixture_diversity_m2_report.json`
+- current counts:
+  - `package_count = 3`
+  - `package_passes = 3`
+  - `distinct_scenarios_executed = 3`
+
+#### M2.5
+
+`M2.5 Mixed-Profile Result Import Readiness`
+
+Scope:
+
+- stands on top of `M2`
+- does not rerun Unreal
+- checks whether mixed-profile package results are complete enough for cross-repo result import and roundtrip handling
+
+Primary question:
+
+`Do the current mixed-profile motion results carry enough stable evidence to roundtrip cleanly?`
+
+Current status:
+
+- `M2.5` is now established on the curated `trial-motion-m2-diversity` profile
+- latest proof: `C:\AiUE\Saved\verification\latest_motion_mixed_profile_result_import_readiness_m2_5_report.json`
+- current counts:
+  - `package_count = 3`
+  - `import_ready_packages = 3`
+  - `distinct_scenarios = 3`
+  - `distinct_samples = 3`
+
 #### M3
 
 `M3 Motion Default Source Readiness`
 
 Scope:
 
-- only enters after `M2` is green enough
+- only enters after `M2.5` is green enough
 - evaluates whether toy-yard motion export is ready to move from shadow-trial status toward default-source usage
 
 Primary question:
 
 `Can motion packet consumption become a normal path instead of a trial path?`
+
+Current status:
+
+- `M3` is now green on the curated diversity profile
+- latest proof: `C:\AiUE\Saved\verification\latest_motion_default_source_readiness_m3_report.json`
+- current candidate snapshot:
+  - `default_source_candidate = true`
+  - `package_count = 3`
+  - `distinct_samples = 3`
+  - `distinct_scenarios = 3`
+  - `handoff_ready = true`
+  - `problem_owner = none`
 
 #### M4
 
@@ -142,20 +187,13 @@ Primary question:
 
 The current recommended next motion step is:
 
-`Choose between M1.5 result-import readiness and M2 fixture diversity`
-
-Specifically:
-
-- use the now-stable baseline to verify toy-yard result-import expectations
-- or add the second controlled packet to test whether the seam is broader than one lucky sample
-- avoid widening motion semantics before either of those is real
+`Use the new M3 green state to decide whether to open motion default-source routing or enter a richer M4 quality line first.`
 
 Current recommendation:
 
-- do `M1.5` first
-- then enter `M2`
-
-Reason:
-
-- `M1.5` turns the current baseline into a cleaner cross-repo roundtrip surface
-- `M2` should start after the first result surface is already import-ready
+- keep the current `M0.5` single-fixture scope lock as historical baseline only
+- treat `M2 -> M2.5 -> M3` as the real new evidence ladder
+- open the next discussion around:
+  - motion default-source routing policy
+  - richer multi-packet quality evidence
+  - whether `M4` should emphasize quality depth or route normalization first
