@@ -10,6 +10,7 @@ COMMANDS = {
     "inspect-slot-runtime": {"module": "inspect_slot_runtime", "category": "probe", "workflow_pack": "pmx_pipeline", "destructive": False},
     "inspect-loadout": {"module": "inspect_loadout", "category": "probe", "workflow_pack": "pmx_pipeline", "destructive": False},
     "import-package": {"module": "import_package", "category": "workflow", "workflow_pack": "pmx_pipeline", "destructive": False},
+    "import-motion-packet": {"module": "import_motion_packet", "category": "workflow", "workflow_pack": "pmx_pipeline", "destructive": False},
     "build-equipment-registry": {"module": "build_equipment_registry", "category": "workflow", "workflow_pack": "pmx_pipeline", "destructive": False},
     "validate-package": {"module": "validate_package", "category": "workflow", "workflow_pack": "pmx_pipeline", "destructive": False},
     "run-suite": {"module": "run_suite", "category": "workflow", "workflow_pack": "pmx_pipeline", "destructive": False},

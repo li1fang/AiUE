@@ -12,7 +12,12 @@ if str(PMX_PIPELINE_ROOT) not in sys.path:
 from run_demo_gate_d1 import build_local_manifest_index, resolve_registry_path
 from run_editor_gate_g1 import resolve_equipment_report_path, resolve_summary_path
 from toy_yard_view import (
+    build_toy_yard_motion_manifest_index,
     build_toy_yard_manifest_index,
+    resolve_toy_yard_motion_communication_signal_path,
+    resolve_toy_yard_motion_packet_check_path,
+    resolve_toy_yard_motion_registry_path,
+    resolve_toy_yard_motion_summary_path,
     resolve_toy_yard_equipment_report_path,
     resolve_toy_yard_registry_path,
     resolve_toy_yard_summary_path,
@@ -25,6 +30,15 @@ def _workspace(view_root: Path) -> dict:
             "toy_yard_pmx_view_root": str(view_root),
             "auto_ue_cli_output_root": str(view_root / "_missing_auto"),
             "conversion_root": str(view_root / "_missing_conversion_root"),
+        }
+    }
+
+
+def _motion_workspace(view_root: Path) -> dict:
+    return {
+        "paths": {
+            "toy_yard_motion_view_root": str(view_root),
+            "auto_ue_cli_output_root": str(view_root / "_missing_auto"),
         }
     }
 
@@ -104,3 +118,39 @@ def test_build_toy_yard_manifest_index_ignores_invalid_manifest_json(tmp_path):
 
     assert conversion_root == conversion_dir.resolve()
     assert manifest_index == {"pkg_alpha": valid_manifest.resolve()}
+
+
+def test_toy_yard_motion_view_helpers_resolve_summary_registry_check_and_signal(tmp_path):
+    summary_dir = tmp_path / "summary"
+    summary_dir.mkdir(parents=True, exist_ok=True)
+    summary_path = summary_dir / "motion_suite_summary.json"
+    registry_path = summary_dir / "motion_clip_registry.json"
+    check_path = summary_dir / "motion_packet_check.json"
+    signal_path = summary_dir / "communication_signal.json"
+    summary_path.write_text(json.dumps({"clips": []}), encoding="utf-8")
+    registry_path.write_text(json.dumps({"clips": []}), encoding="utf-8")
+    check_path.write_text(json.dumps({"status": "pass"}), encoding="utf-8")
+    signal_path.write_text(json.dumps({"handoff_ready": True}), encoding="utf-8")
+
+    workspace = _motion_workspace(tmp_path)
+
+    assert resolve_toy_yard_motion_summary_path(workspace) == summary_path.resolve()
+    assert resolve_toy_yard_motion_registry_path(workspace) == registry_path.resolve()
+    assert resolve_toy_yard_motion_packet_check_path(workspace) == check_path.resolve()
+    assert resolve_toy_yard_motion_communication_signal_path(workspace) == signal_path.resolve()
+
+
+def test_build_toy_yard_motion_manifest_index_reads_clip_manifests(tmp_path):
+    summary_dir = tmp_path / "summary"
+    clips_dir = tmp_path / "clips" / "pkg_alpha"
+    summary_dir.mkdir(parents=True, exist_ok=True)
+    clips_dir.mkdir(parents=True, exist_ok=True)
+    summary_path = summary_dir / "motion_suite_summary.json"
+    manifest_path = clips_dir / "manifest.json"
+    summary_path.write_text(json.dumps({"clips": []}), encoding="utf-8")
+    manifest_path.write_text(json.dumps({"package_id": "pkg_alpha"}), encoding="utf-8")
+
+    clips_root, manifest_index = build_toy_yard_motion_manifest_index(summary_path)
+
+    assert clips_root == (tmp_path / "clips").resolve()
+    assert manifest_index["pkg_alpha"] == manifest_path.resolve()

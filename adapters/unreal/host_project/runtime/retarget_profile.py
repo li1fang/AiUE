@@ -890,7 +890,8 @@ def pick_best_bone_name(bone_names: list[str], alias_groups: list[list[str]]) ->
 
 def planned_source_chain_records(bone_names: list[str]) -> tuple[list[dict], list[str], dict]:
     planned = []
-    warnings = []
+    unresolved_chain_names = []
+    same_bone_skipped_records = []
     alias_match_records = []
     for spec in SOURCE_CHAIN_SPECS:
         start_bone = pick_best_bone_name(bone_names, spec["start_aliases"])
@@ -900,10 +901,15 @@ def planned_source_chain_records(bone_names: list[str]) -> tuple[list[dict], lis
         if not end_bone and start_bone and spec.get("allow_same_bone"):
             end_bone = start_bone
         if not start_bone or not end_bone:
-            warnings.append(f"source_chain_unresolved:{spec['chain_name']}")
+            unresolved_chain_names.append(str(spec["chain_name"]))
             continue
         if start_bone == end_bone and not spec.get("allow_same_bone"):
-            warnings.append(f"source_chain_same_bone_skipped:{spec['chain_name']}:{start_bone}")
+            same_bone_skipped_records.append(
+                {
+                    "chain_name": str(spec["chain_name"]),
+                    "bone_name": str(start_bone),
+                }
+            )
             continue
         planned.append(
             {
@@ -924,7 +930,6 @@ def planned_source_chain_records(bone_names: list[str]) -> tuple[list[dict], lis
 
     planned_by_name = {entry["chain_name"]: dict(entry) for entry in planned}
     pmx_fallback_plans, pmx_warnings, pmx_diagnostics = pmx_upper_body_fallback_chains(bone_names)
-    warnings.extend(pmx_warnings)
     for fallback in pmx_fallback_plans:
         chain_name = str(fallback.get("chain_name") or "")
         if chain_name and chain_name not in planned_by_name:
@@ -938,6 +943,23 @@ def planned_source_chain_records(bone_names: list[str]) -> tuple[list[dict], lis
     for chain_name, payload in planned_by_name.items():
         if chain_name not in preferred_order:
             planned.append(payload)
+
+    warnings = []
+    planned_chain_name_set = {str(item.get("chain_name") or "") for item in planned if str(item.get("chain_name") or "")}
+    for chain_name in unresolved_chain_names:
+        if chain_name and chain_name not in planned_chain_name_set:
+            warnings.append(f"source_chain_unresolved:{chain_name}")
+    for record in same_bone_skipped_records:
+        chain_name = str(record.get("chain_name") or "")
+        if chain_name and chain_name not in planned_chain_name_set:
+            warnings.append(f"source_chain_same_bone_skipped:{chain_name}:{record.get('bone_name') or ''}")
+    for warning in pmx_warnings:
+        warning_text = str(warning or "")
+        if warning_text.startswith("pmx_upper_body_fallback_right_arm_unresolved") and "RightArm" in planned_chain_name_set:
+            continue
+        if warning_text.startswith("pmx_upper_body_fallback_left_arm_unresolved") and "LeftArm" in planned_chain_name_set:
+            continue
+        warnings.append(warning_text)
 
     diagnostics = {
         "alias_match_records": alias_match_records,

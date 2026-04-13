@@ -39,6 +39,7 @@ function Get-HostProjectRoot {
     $projectRoot = Split-Path -Parent $configDirectory
     $defaultRoutes = @{
         "import-package" = "kernel"
+        "import-motion-packet" = "demo"
         "build-equipment-registry" = "kernel"
         "refresh-assets" = "kernel"
         "inspect-host" = "kernel"

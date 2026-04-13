@@ -1,0 +1,25 @@
+{
+  "schema_version": "motion_consumer_request_v0",
+  "operation": "import_motion_packet",
+  "packet_manifest_path": "C:\\Projects\\toy-yard\\05_publish\\aiue_motion\\trial-motion-turn-hand-ready\\clips\\pkg_route-a-3s-turn-hand-ready-v0-2_a70fed1ad7\\manifest.json",
+  "summary_path": "C:\\Projects\\toy-yard\\05_publish\\aiue_motion\\trial-motion-turn-hand-ready\\summary\\motion_suite_summary.json",
+  "registry_path": "C:\\Projects\\toy-yard\\05_publish\\aiue_motion\\trial-motion-turn-hand-ready\\summary\\motion_clip_registry.json",
+  "packet_check_path": "C:\\Projects\\toy-yard\\05_publish\\aiue_motion\\trial-motion-turn-hand-ready\\summary\\motion_packet_check.json",
+  "producer_signal_path": "C:\\Projects\\toy-yard\\05_publish\\aiue_motion\\trial-motion-turn-hand-ready\\summary\\communication_signal.json",
+  "host_key": "demo",
+  "target_package_id": "pkg_route-a-3s-turn-hand-ready-v0-2_a70fed1ad7",
+  "target_host_blueprint_asset_path": "/Game/AiUE/Hosts/BP_PMXCharacterHost_Demo.BP_PMXCharacterHost_Demo",
+  "target_skeleton_asset_path": "/Game/AiUE/ImportedAssets/sample_yidhari/SK_Yidhari.SK_Yidhari_Skeleton",
+  "motion_asset_root": "/Game/AiUE/MotionPackets",
+  "asset_root": "/Game/AiUE/ImportedAssets",
+  "preview_level_path": "/Game/DemoTemplate/_Core/Lvl_IntroRoom",
+  "runtime_ready_only": true,
+  "retarget_if_needed": true,
+  "consumer_context": {
+    "counterparty_system": "toy-yard",
+    "source_lane": "motion",
+    "default_source_required": true,
+    "raw_motion_discovery_allowed": false,
+    "toy_yard_sqlite_required": false
+  }
+}

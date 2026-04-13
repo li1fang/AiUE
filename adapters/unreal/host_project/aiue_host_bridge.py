@@ -799,7 +799,7 @@ def run_command(
     params = json.loads(params_json) if params_json else {}
 
     effective_mode = mode
-    if command in {"import-package", "load-level", "spawn-host", "capture-frame", "run-scene-sweep", "inspect-stage-anchors", "ensure-stage-anchors", "inspect-host-visual", "inspect-visible-conflict", "inspect-live-fx-visual-pair", "inspect-slot-runtime", "stage-capture", "action-preview", "animation-preview", "retarget-preflight", "retarget-bootstrap", "retarget-author-chains"} and not dry_run and mode != "editor_rendered":
+    if command in {"import-package", "import-motion-packet", "load-level", "spawn-host", "capture-frame", "run-scene-sweep", "inspect-stage-anchors", "ensure-stage-anchors", "inspect-host-visual", "inspect-visible-conflict", "inspect-live-fx-visual-pair", "inspect-slot-runtime", "stage-capture", "action-preview", "animation-preview", "retarget-preflight", "retarget-bootstrap", "retarget-author-chains"} and not dry_run and mode != "editor_rendered":
         effective_mode = "editor_rendered"
 
     if command == "run-scene-sweep":
@@ -810,7 +810,7 @@ def run_command(
             "warnings": list(result.get("warnings", [])),
             "errors": list(result.get("errors", [])),
         }
-    elif command in {"inspect-host", "inspect-host-visual", "inspect-visible-conflict", "inspect-live-fx-visual-pair", "inspect-slot-runtime", "list-assets", "debug-physics-api", "build-equipment-registry", "validate-package", "refresh-assets", "load-level", "spawn-host", "capture-frame", "stage-capture", "inspect-stage-anchors", "ensure-stage-anchors", "action-preview", "animation-preview", "retarget-preflight", "retarget-bootstrap", "retarget-author-chains"}:
+    elif command in {"inspect-host", "inspect-host-visual", "inspect-visible-conflict", "inspect-live-fx-visual-pair", "inspect-slot-runtime", "list-assets", "debug-physics-api", "build-equipment-registry", "validate-package", "refresh-assets", "load-level", "spawn-host", "capture-frame", "stage-capture", "inspect-stage-anchors", "ensure-stage-anchors", "action-preview", "animation-preview", "retarget-preflight", "retarget-bootstrap", "retarget-author-chains", "import-motion-packet"}:
         request = {"command": command, "asset_root": workspace["paths"]["asset_root"], **params}
         host_payload = run_unreal_python_request(workspace, effective_mode, request)
     elif command == "import-package" and dry_run:
@@ -833,7 +833,7 @@ def run_command(
             "warnings": [],
             "errors": [f"unsupported_command:{command}"],
         }
-    if effective_mode != mode and command != "import-package":
+    if effective_mode != mode and command not in {"import-package", "import-motion-packet"}:
         host_payload.setdefault("warnings", []).append(f"requested_mode_{mode}_promoted_to_{effective_mode}_for_live_scene_command")
 
     status = "pass" if host_payload.get("success") else "fail"

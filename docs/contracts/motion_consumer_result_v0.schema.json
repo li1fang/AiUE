@@ -1,0 +1,197 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aiue.local/contracts/motion_consumer_result_v0.schema.json",
+  "title": "AiUE Motion Consumer Result v0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "operation",
+    "packet_ref",
+    "communication_signal"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "fail"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "failure_class": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "motion_consumer_result_v0"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "fail"
+      ]
+    },
+    "operation": {
+      "type": "string",
+      "enum": [
+        "import_motion_packet",
+        "retarget_preflight",
+        "animation_preview"
+      ]
+    },
+    "packet_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "packet_manifest_path"
+      ],
+      "properties": {
+        "packet_manifest_path": {
+          "type": "string"
+        },
+        "package_id": {
+          "type": "string"
+        },
+        "sample_id": {
+          "type": "string"
+        },
+        "clip_id": {
+          "type": "string"
+        },
+        "pack_version": {
+          "type": "string"
+        }
+      }
+    },
+    "generated_assets": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "animation_asset_path": {
+          "type": "string"
+        },
+        "ik_rig_asset_path": {
+          "type": "string"
+        },
+        "retargeter_asset_path": {
+          "type": "string"
+        },
+        "retargeted_animation_asset_path": {
+          "type": "string"
+        }
+      }
+    },
+    "host_resolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "host_key": {
+          "type": "string"
+        },
+        "target_host_asset_path": {
+          "type": "string"
+        },
+        "target_skeleton_asset_path": {
+          "type": "string"
+        }
+      }
+    },
+    "preview_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "result_json_path": {
+          "type": "string"
+        },
+        "before_image_path": {
+          "type": "string"
+        },
+        "after_image_path": {
+          "type": "string"
+        },
+        "subject_visible": {
+          "type": "boolean"
+        },
+        "pose_changed": {
+          "type": "boolean"
+        },
+        "probe_delta": {
+          "type": "object"
+        }
+      }
+    },
+    "failure_class": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "producer_contract_issue",
+        "packet_artifact_missing",
+        "conversion_failed",
+        "target_resolution_failed",
+        "unreal_import_failed",
+        "retarget_failed",
+        "preview_failed",
+        "runtime_validation_failed",
+        null
+      ]
+    },
+    "communication_signal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "should_contact_toy_yard",
+        "owner",
+        "reason"
+      ],
+      "properties": {
+        "should_contact_toy_yard": {
+          "type": "boolean"
+        },
+        "owner": {
+          "type": "string",
+          "enum": [
+            "toy-yard",
+            "aiue",
+            "none"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "recommended_node": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "artifacts": {
+      "type": "object"
+    }
+  }
+}

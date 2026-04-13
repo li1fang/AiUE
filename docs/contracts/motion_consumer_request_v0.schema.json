@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aiue.local/contracts/motion_consumer_request_v0.schema.json",
+  "title": "AiUE Motion Consumer Request v0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "operation",
+    "packet_manifest_path"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "motion_consumer_request_v0"
+    },
+    "operation": {
+      "type": "string",
+      "enum": [
+        "import_motion_packet",
+        "retarget_preflight",
+        "animation_preview"
+      ]
+    },
+    "packet_manifest_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "summary_path": {
+      "type": "string"
+    },
+    "registry_path": {
+      "type": "string"
+    },
+    "packet_check_path": {
+      "type": "string"
+    },
+    "producer_signal_path": {
+      "type": "string"
+    },
+    "host_key": {
+      "type": "string",
+      "enum": [
+        "kernel",
+        "demo"
+      ]
+    },
+    "target_package_id": {
+      "type": "string"
+    },
+    "target_host_blueprint_asset_path": {
+      "type": "string"
+    },
+    "target_skeleton_asset_path": {
+      "type": "string"
+    },
+    "motion_asset_root": {
+      "type": "string"
+    },
+    "asset_root": {
+      "type": "string"
+    },
+    "preview_level_path": {
+      "type": "string"
+    },
+    "runtime_ready_only": {
+      "type": "boolean"
+    },
+    "retarget_if_needed": {
+      "type": "boolean"
+    },
+    "consumer_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "counterparty_system": {
+          "type": "string"
+        },
+        "source_lane": {
+          "type": "string",
+          "const": "motion"
+        },
+        "default_source_required": {
+          "type": "boolean"
+        },
+        "raw_motion_discovery_allowed": {
+          "type": "boolean"
+        },
+        "toy_yard_sqlite_required": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

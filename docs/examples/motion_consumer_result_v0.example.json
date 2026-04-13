@@ -1,0 +1,44 @@
+{
+  "schema_version": "motion_consumer_result_v0",
+  "status": "pass",
+  "operation": "animation_preview",
+  "packet_ref": {
+    "packet_manifest_path": "C:\\Projects\\toy-yard\\05_publish\\aiue_motion\\trial-motion-turn-hand-ready\\clips\\pkg_route-a-3s-turn-hand-ready-v0-2_a70fed1ad7\\manifest.json",
+    "package_id": "pkg_route-a-3s-turn-hand-ready-v0-2_a70fed1ad7",
+    "sample_id": "sample_route-a-3s-turn-hand-ready_797943f40a",
+    "clip_id": "route-a-3s-turn-hand-ready--20260412T180000Z",
+    "pack_version": "v0.2"
+  },
+  "generated_assets": {
+    "animation_asset_path": "/Game/AiUE/MotionPackets/sample_route-a-3s-turn-hand-ready_797943f40a/AN_pkg_route-a-3s-turn-hand-ready-v0-2_a70fed1ad7",
+    "retargeted_animation_asset_path": "/Game/AiUE/Generated/Retargeted/AN_pkg_route-a-3s-turn-hand-ready-v0-2_a70fed1ad7_RT"
+  },
+  "host_resolution": {
+    "host_key": "demo",
+    "target_host_asset_path": "/Game/AiUE/Hosts/BP_PMXCharacterHost_Demo.BP_PMXCharacterHost_Demo",
+    "target_skeleton_asset_path": "/Game/AiUE/ImportedAssets/sample_yidhari/SK_Yidhari.SK_Yidhari_Skeleton"
+  },
+  "preview_evidence": {
+    "result_json_path": "C:\\AiUE\\Saved\\verification\\demo_animation_preview_motion_v0\\result.json",
+    "before_image_path": "C:\\AiUE\\Saved\\verification\\demo_animation_preview_motion_v0\\before.png",
+    "after_image_path": "C:\\AiUE\\Saved\\verification\\demo_animation_preview_motion_v0\\after.png",
+    "subject_visible": true,
+    "pose_changed": true,
+    "probe_delta": {
+      "moving_bone_count": 27
+    }
+  },
+  "failure_class": null,
+  "communication_signal": {
+    "should_contact_toy_yard": false,
+    "owner": "none",
+    "reason": "motion_consumed_and_previewed",
+    "recommended_node": null
+  },
+  "warnings": [],
+  "errors": [],
+  "artifacts": {
+    "import_action_path": "C:\\AiUE\\Saved\\verification\\motion\\import_motion_packet.action.json",
+    "preview_action_path": "C:\\AiUE\\Saved\\verification\\motion\\animation_preview.action.json"
+  }
+}
