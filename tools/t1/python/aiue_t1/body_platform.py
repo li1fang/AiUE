@@ -232,10 +232,49 @@ def build_modular_morphology_inventory(source_root: str | Path) -> dict[str, Any
 
 def build_body_platform_quality_summary(report_index: dict[str, Any]) -> dict[str, Any]:
     reports_by_gate_id = dict(report_index.get("reports_by_gate_id") or {})
+    c2_entry = dict(reports_by_gate_id.get("canonical_fusion_fixture_c2") or {})
+    c2_report = dict(c2_entry.get("report") or {})
     c1_entry = dict(reports_by_gate_id.get("parametric_body_contract_c1") or {})
     c1_report = dict(c1_entry.get("report") or {})
     c0_entry = dict(reports_by_gate_id.get("modular_morphology_inventory_c0") or {})
     c0_report = dict(c0_entry.get("report") or {})
+    if c2_report:
+        source_inventory_summary = dict(c2_report.get("source_inventory_summary") or {})
+        fixture = dict(c2_report.get("canonical_fusion_fixture") or {})
+        family_rows = [
+            {
+                "family_id": str(item.get("family_id") or ""),
+                "module_count": int(item.get("module_count") or 0),
+                "classified_module_count": int(item.get("classified_module_count") or 0),
+                "module_kind_counts": dict(item.get("module_kind_counts") or {}),
+                "required_axes_present": dict(item.get("required_axes_present") or {}),
+                "optional_axes_present": dict(item.get("optional_axes_present") or {}),
+                "candidate_fixture_family": bool(item.get("candidate_fixture_family")),
+            }
+            for item in list(source_inventory_summary.get("per_family_results") or [])
+        ]
+        return {
+            "status": str(c2_report.get("status") or c2_entry.get("status") or "unknown"),
+            "gate_id": "canonical_fusion_fixture_c2",
+            "report_source_path": str(c2_entry.get("report_path") or ""),
+            "source_root": str(source_inventory_summary.get("source_root") or fixture.get("source_root") or ""),
+            "family_count": int(dict(source_inventory_summary.get("counts") or {}).get("family_count") or len(family_rows)),
+            "candidate_fixture_family_count": int(dict(source_inventory_summary.get("counts") or {}).get("candidate_fixture_family_count") or 0),
+            "classified_module_count": int(dict(source_inventory_summary.get("counts") or {}).get("classified_module_count") or 0),
+            "canonical_fixture_family_id": str(c2_report.get("body_family_id") or source_inventory_summary.get("canonical_fixture_family_id") or ""),
+            "module_kind_counts": dict(source_inventory_summary.get("module_kind_counts") or {}),
+            "families": family_rows,
+            "fixture_id": str(fixture.get("fixture_id") or c2_report.get("fixture_id") or ""),
+            "fixture_scope": str(fixture.get("fixture_scope") or ""),
+            "primary_mesh_relative_path": str(fixture.get("primary_mesh_relative_path") or ""),
+            "primary_mesh_format": str(fixture.get("primary_mesh_format") or ""),
+            "manifest_present": bool(fixture.get("manifest_present")),
+            "discovered_texture_count": int(dict(fixture.get("counts") or {}).get("discovered_texture_count") or 0),
+            "source_module_ids": list(fixture.get("source_module_ids") or []),
+            "fusion_recipe_id": str(fixture.get("fusion_recipe_id") or ""),
+            "rig_profile_id": str(fixture.get("rig_profile_id") or ""),
+            "material_profile_id": str(fixture.get("material_profile_id") or ""),
+        }
     if c1_report:
         contract = dict(c1_report.get("parametric_body_contract") or {})
         source_inventory_summary = dict(c1_report.get("source_inventory_summary") or {})

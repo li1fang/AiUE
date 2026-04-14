@@ -83,6 +83,20 @@ def test_workbench_window_prefers_c1_body_platform_summary(qtbot, tmp_path: Path
     assert "contract family_alpha::parametric_body_contract_c1" in window.body_platform_summary.text()
 
 
+def test_workbench_window_prefers_c2_body_platform_summary(qtbot, tmp_path: Path):
+    pack = build_fixture_pack(tmp_path, include_c2=True)
+    window = WorkbenchWindow(manifest_path=pack["manifest_path"])
+    qtbot.addWidget(window)
+    window.show()
+    qtbot.waitUntil(lambda: window.current_dump_payload()["quality_summaries"]["body_platform"]["gate_id"] == "canonical_fusion_fixture_c2")
+    assert window.summary_cards["body"].value_label.text() == "3"
+    assert window.body_platform_summary.isVisible() is True
+    assert "Body Platform | PASS" in window.body_platform_summary.text()
+    assert "canonical_fusion_fixture_c2" in window.body_platform_summary.text()
+    assert "fixture family_alpha::lower_body_core_hi" in window.body_platform_summary.text()
+    assert "scope lower_body_core" in window.body_platform_summary.text()
+
+
 def test_workbench_window_shows_pv1_signoff_summary(qtbot, tmp_path: Path):
     pack = build_fixture_pack(tmp_path, include_pv1=True, include_e2b=True)
     window = WorkbenchWindow(manifest_path=pack["manifest_path"])

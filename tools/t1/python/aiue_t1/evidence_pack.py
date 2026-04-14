@@ -674,6 +674,12 @@ def _render_body_platform_summary(quality_summaries: dict) -> str:
     supported_head_ids = [str(item) for item in list(summary.get("supported_head_ids") or []) if str(item)]
     supported_bust_classes = [str(item) for item in list(summary.get("supported_bust_classes") or []) if str(item)]
     supported_leg_profiles = [str(item) for item in list(summary.get("supported_leg_length_profiles") or []) if str(item)]
+    fixture_id = str(summary.get("fixture_id") or "")
+    fixture_scope = str(summary.get("fixture_scope") or "")
+    primary_mesh_relative_path = str(summary.get("primary_mesh_relative_path") or "")
+    primary_mesh_format = str(summary.get("primary_mesh_format") or "")
+    manifest_present = bool(summary.get("manifest_present"))
+    discovered_texture_count = int(summary.get("discovered_texture_count") or 0)
     rows = []
     for family in families:
         required_axes = dict(family.get("required_axes_present") or {})
@@ -713,6 +719,15 @@ def _render_body_platform_summary(quality_summaries: dict) -> str:
             f"<strong>Heads:</strong> {len(supported_head_ids)} | "
             f"<strong>Bust Classes:</strong> {len(supported_bust_classes)} | "
             f"<strong>Leg Profiles:</strong> {len(supported_leg_profiles)}</p>"
+        )
+    if fixture_id or fixture_scope or primary_mesh_relative_path:
+        header_parts.append(
+            f"<p><strong>Fixture:</strong> <code>{html.escape(fixture_id or 'n/a')}</code> | "
+            f"<strong>Scope:</strong> <code>{html.escape(fixture_scope or 'n/a')}</code> | "
+            f"<strong>Primary Mesh:</strong> <code>{html.escape(primary_mesh_relative_path or 'n/a')}</code> | "
+            f"<strong>Format:</strong> <code>{html.escape(primary_mesh_format or 'n/a')}</code> | "
+            f"<strong>Manifest:</strong> {html.escape(str(manifest_present))} | "
+            f"<strong>Textures:</strong> {discovered_texture_count}</p>"
         )
     header_parts.extend(
         [

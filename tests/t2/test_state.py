@@ -140,6 +140,24 @@ def test_load_workbench_state_prefers_c1_body_platform_summary(tmp_path: Path):
     assert payload["quality_summaries"]["body_platform"]["supported_head_ids"] == ["family_alpha/head/head_nohair"]
 
 
+def test_load_workbench_state_prefers_c2_body_platform_summary(tmp_path: Path):
+    pack = build_fixture_pack(tmp_path, include_c2=True)
+    state = load_workbench_state(pack["manifest_path"])
+    payload = state.to_dump_payload(build_default_view_state(state))
+    body_summary = state.quality_summaries["body_platform"]
+    assert state.summary_counts["body_platform_line_reports"] == 3
+    assert body_summary["status"] == "pass"
+    assert body_summary["gate_id"] == "canonical_fusion_fixture_c2"
+    assert body_summary["fixture_id"] == "family_alpha::lower_body_core_hi"
+    assert body_summary["fixture_scope"] == "lower_body_core"
+    assert body_summary["primary_mesh_format"] == "fbx"
+    assert payload["report_categories"]["body_platform_line"] == [
+        "modular_morphology_inventory_c0",
+        "parametric_body_contract_c1",
+        "canonical_fusion_fixture_c2",
+    ]
+
+
 def test_wait_for_manifest_path_tolerates_short_missing_latest(tmp_path: Path):
     manifest_path = tmp_path / "tooling" / "latest" / "manifest.json"
 

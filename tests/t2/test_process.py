@@ -142,6 +142,21 @@ def test_workbench_cli_prefers_c1_body_platform_summary(tmp_path: Path):
     assert payload["quality_summaries"]["body_platform"]["contract_id"] == "family_alpha::parametric_body_contract_c1"
 
 
+def test_workbench_cli_prefers_c2_body_platform_summary(tmp_path: Path):
+    pack = build_fixture_pack(tmp_path, include_c2=True)
+    completed, payload = run_workbench_process(manifest_path=pack["manifest_path"])
+    assert completed.returncode == 0, completed.stderr
+    assert payload["status"] == "pass"
+    assert payload["summary_counts"]["body_platform_line_reports"] == 3
+    assert payload["report_categories"]["body_platform_line"] == [
+        "modular_morphology_inventory_c0",
+        "parametric_body_contract_c1",
+        "canonical_fusion_fixture_c2",
+    ]
+    assert payload["quality_summaries"]["body_platform"]["gate_id"] == "canonical_fusion_fixture_c2"
+    assert payload["quality_summaries"]["body_platform"]["fixture_id"] == "family_alpha::lower_body_core_hi"
+
+
 def test_workbench_cli_demo_request_export_fixture(tmp_path: Path):
     pack = build_fixture_pack(tmp_path)
     completed, payload = run_workbench_process(

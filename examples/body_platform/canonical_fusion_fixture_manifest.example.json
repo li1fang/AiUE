@@ -1,0 +1,35 @@
+{
+  "fixture_id": "family_alpha::lower_body_core_hi",
+  "body_family_id": "family_alpha",
+  "fixture_scope": "lower_body_core",
+  "source_module_ids": [
+    "family_alpha/core_lower_body_hi"
+  ],
+  "primary_mesh_relative_path": "meshes/lower_body_core_hi.fbx",
+  "mesh_format": "fbx",
+  "material_bundle_relative_root": "materials",
+  "texture_relative_paths": [],
+  "fusion_recipe_id": "houdini_recipe::family_alpha::lower_body_core_v1",
+  "rig_profile_id": "rig_profile::family_alpha::pending",
+  "material_profile_id": "material_profile::family_alpha::scan_source_v1",
+  "exporter": {
+    "tool": "houdini",
+    "version": "20.5",
+    "network": "/obj/aiue_body_platform/c2_lower_body_core"
+  },
+  "coordinate_system": {
+    "linear_unit": "cm",
+    "up_axis": "z",
+    "forward_axis": "x"
+  },
+  "quality": {
+    "topology_state": "scan_raw_cleaned",
+    "uv_state": "source_preserved",
+    "watertight_expected": false,
+    "runtime_ready": false
+  },
+  "notes": [
+    "first-pass C2 artifact",
+    "qualified for offline body-platform handoff, not yet for runtime consumption"
+  ]
+}

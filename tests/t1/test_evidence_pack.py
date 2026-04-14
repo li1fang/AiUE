@@ -218,3 +218,20 @@ def test_build_evidence_pack_prefers_c1_body_platform_summary(tmp_path: Path):
     index_html = (pack["output_root"] / "index.html").read_text(encoding="utf-8")
     assert "parametric_body_contract_c1" in index_html
     assert "family_alpha::parametric_body_contract_c1" in index_html
+
+
+def test_build_evidence_pack_prefers_c2_body_platform_summary(tmp_path: Path):
+    from tests.t2.helpers import build_fixture_pack
+
+    pack = build_fixture_pack(tmp_path, include_c2=True)
+    manifest = load_json(pack["output_root"] / "manifest.json")
+    body_summary = dict((manifest.get("quality_summaries") or {}).get("body_platform") or {})
+    assert body_summary["gate_id"] == "canonical_fusion_fixture_c2"
+    assert body_summary["fixture_id"] == "family_alpha::lower_body_core_hi"
+    assert body_summary["fixture_scope"] == "lower_body_core"
+    assert body_summary["primary_mesh_format"] == "fbx"
+    assert manifest["report_index"]["counts"]["body_platform_line_reports"] == 3
+    index_html = (pack["output_root"] / "index.html").read_text(encoding="utf-8")
+    assert "canonical_fusion_fixture_c2" in index_html
+    assert "family_alpha::lower_body_core_hi" in index_html
+    assert "meshes/lower_body_core_hi.fbx" in index_html

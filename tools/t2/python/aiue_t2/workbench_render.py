@@ -247,6 +247,10 @@ class WorkbenchRenderMixin:
             module_kind_counts = dict(body_platform_summary.get("module_kind_counts") or {})
             contract_id = str(body_platform_summary.get("contract_id") or "")
             core_module_id = str(body_platform_summary.get("core_module_id") or "")
+            fixture_id = str(body_platform_summary.get("fixture_id") or "")
+            fixture_scope = str(body_platform_summary.get("fixture_scope") or "")
+            primary_mesh_relative_path = str(body_platform_summary.get("primary_mesh_relative_path") or "")
+            primary_mesh_format = str(body_platform_summary.get("primary_mesh_format") or "")
             summary_parts = [
                 "Body Platform",
                 str(body_platform_summary.get("status") or "unknown").upper(),
@@ -265,6 +269,14 @@ class WorkbenchRenderMixin:
                 summary_parts.append(f"contract {contract_id}")
             if core_module_id:
                 summary_parts.append(f"core {core_module_id}")
+            if fixture_id:
+                summary_parts.append(f"fixture {fixture_id}")
+            if fixture_scope:
+                summary_parts.append(f"scope {fixture_scope}")
+            if primary_mesh_relative_path:
+                summary_parts.append(f"mesh {primary_mesh_relative_path}")
+            if primary_mesh_format:
+                summary_parts.append(f"format {primary_mesh_format}")
             summary_parts.extend(
                 [
                     f"head {int(module_kind_counts.get('head') or 0)}",

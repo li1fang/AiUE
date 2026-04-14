@@ -10,6 +10,7 @@
     "preflight_root": "C:\\path\\to\\_preflight_out\\mingchao",
     "conversion_root": "C:\\path\\to\\_fbx_out_fastloop\\mingchao",
     "body_morphology_source_root": "C:\\path\\to\\body_platform\\source_root",
+    "body_fusion_fixture_root": "C:\\path\\to\\body_platform\\fusion_fixture_drop",
     "toy_yard_pmx_view_root": "C:\\Projects\\toy-yard\\05_publish\\aiue_pmx\\default",
     "toy_yard_motion_view_root": "C:\\Projects\\toy-yard\\05_publish\\aiue_motion\\default",
     "blender_python_exe": "C:\\Program Files\\Blender Foundation\\Blender 3.6\\3.6\\python\\bin\\python.exe",

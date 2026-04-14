@@ -717,6 +717,142 @@ def write_fixture_c1_report(verification_root: Path, *, status: str = "pass") ->
     return report_path
 
 
+def write_fixture_c2_report(verification_root: Path, *, status: str = "pass") -> Path:
+    verification_root.mkdir(parents=True, exist_ok=True)
+    report_path = verification_root / "latest_canonical_fusion_fixture_c2_report.json"
+    write_json(
+        report_path,
+        {
+            "gate_id": "canonical_fusion_fixture_c2",
+            "status": status,
+            "generated_at_utc": "2026-04-14T04:00:00+00:00",
+            "body_family_id": "family_alpha",
+            "fixture_id": "family_alpha::lower_body_core_hi",
+            "canonical_fusion_fixture": {
+                "source_root": str((verification_root.parent / "fusion_fixture_drop" / "family_alpha_lower_body").resolve()),
+                "manifest_path": str((verification_root.parent / "fusion_fixture_drop" / "family_alpha_lower_body" / "canonical_fusion_fixture_manifest.json").resolve()),
+                "manifest_present": True,
+                "fixture_id": "family_alpha::lower_body_core_hi",
+                "body_family_id": "family_alpha",
+                "fixture_scope": "lower_body_core",
+                "source_module_ids": ["family_alpha/core_lower_body_hi"],
+                "primary_mesh_relative_path": "meshes/lower_body_core_hi.fbx",
+                "primary_mesh_abs_path": str((verification_root.parent / "fusion_fixture_drop" / "family_alpha_lower_body" / "meshes" / "lower_body_core_hi.fbx").resolve()),
+                "primary_mesh_format": "fbx",
+                "discovered_mesh_relative_paths": ["meshes/lower_body_core_hi.fbx"],
+                "discovered_texture_relative_paths": [],
+                "material_bundle_relative_root": "materials",
+                "texture_relative_paths": [],
+                "exporter": {
+                    "tool": "houdini",
+                    "version": "20.5",
+                    "network": "/obj/aiue_body_platform/c2_lower_body_core",
+                },
+                "coordinate_system": {
+                    "linear_unit": "cm",
+                    "up_axis": "z",
+                    "forward_axis": "x",
+                },
+                "quality": {
+                    "topology_state": "scan_raw_cleaned",
+                    "uv_state": "source_preserved",
+                    "watertight_expected": False,
+                    "runtime_ready": False,
+                },
+                "fusion_recipe_id": "houdini_recipe::family_alpha::lower_body_core_v1",
+                "rig_profile_id": "rig_profile::family_alpha::pending",
+                "material_profile_id": "material_profile::family_alpha::scan_source_v1",
+                "counts": {
+                    "discovered_mesh_count": 1,
+                    "discovered_texture_count": 0,
+                    "declared_texture_count": 0,
+                    "source_module_count": 1,
+                },
+            },
+            "counts": {
+                "discovered_mesh_count": 1,
+                "discovered_texture_count": 0,
+                "declared_texture_count": 0,
+                "source_module_count": 1,
+            },
+            "source_inventory_summary": {
+                "source_root": str((verification_root.parent / "body_source").resolve()),
+                "counts": {
+                    "module_count": 6,
+                    "classified_module_count": 6,
+                    "unknown_module_count": 0,
+                    "family_count": 2,
+                    "candidate_fixture_family_count": 1,
+                },
+                "module_kind_counts": {
+                    "head": 2,
+                    "hair": 1,
+                    "bust_variant": 1,
+                    "core_torso_arm": 1,
+                    "leg_profile": 1,
+                },
+                "canonical_fixture_family_id": "family_alpha",
+                "per_family_results": [
+                    {
+                        "family_id": "family_alpha",
+                        "family_root": str((verification_root.parent / "body_source" / "family_alpha").resolve()),
+                        "module_count": 5,
+                        "classified_module_count": 5,
+                        "module_kind_counts": {
+                            "head": 1,
+                            "hair": 1,
+                            "bust_variant": 1,
+                            "core_torso_arm": 1,
+                            "leg_profile": 1,
+                        },
+                        "module_ids_by_kind": {
+                            "head": ["family_alpha/head/head_nohair"],
+                            "hair": ["family_alpha/hair/front_hair"],
+                            "bust_variant": ["family_alpha/bust/bust_large"],
+                            "core_torso_arm": ["family_alpha/core/core_torso_arm"],
+                            "leg_profile": ["family_alpha/legs/left_thigh"],
+                        },
+                        "required_axes_present": {
+                            "head": True,
+                            "bust_variant": True,
+                            "leg_profile": True,
+                            "core_torso_arm": True,
+                        },
+                        "optional_axes_present": {
+                            "hair": True,
+                        },
+                        "candidate_fixture_family": True,
+                    },
+                    {
+                        "family_id": "family_beta",
+                        "family_root": str((verification_root.parent / "body_source" / "family_beta").resolve()),
+                        "module_count": 1,
+                        "classified_module_count": 1,
+                        "module_kind_counts": {
+                            "head": 1,
+                        },
+                        "module_ids_by_kind": {
+                            "head": ["family_beta/head/head_alt"],
+                        },
+                        "required_axes_present": {
+                            "head": True,
+                            "bust_variant": False,
+                            "leg_profile": False,
+                            "core_torso_arm": False,
+                        },
+                        "optional_axes_present": {
+                            "hair": False,
+                        },
+                        "candidate_fixture_family": False,
+                    }
+                ]
+            },
+            "failed_requirements": [],
+        },
+    )
+    return report_path
+
+
 def write_fixture_dv1_report(verification_root: Path, *, status: str = "pass") -> Path:
     verification_root.mkdir(parents=True, exist_ok=True)
     front_image_path = str((FIXTURE_ROOT / "images" / "front.ppm").resolve())
@@ -909,6 +1045,7 @@ def build_fixture_pack(
     include_governance: bool = True,
     include_c0: bool = False,
     include_c1: bool = False,
+    include_c2: bool = False,
     include_dv1: bool = False,
     include_dv2: bool = False,
     include_e2c: bool = False,
@@ -926,6 +1063,12 @@ def build_fixture_pack(
         if not include_c0:
             write_fixture_c0_report(verification_root)
         write_fixture_c1_report(verification_root)
+    if include_c2:
+        if not include_c1:
+            if not include_c0:
+                write_fixture_c0_report(verification_root)
+            write_fixture_c1_report(verification_root)
+        write_fixture_c2_report(verification_root)
     if include_dv1:
         write_fixture_dv1_report(verification_root)
     if include_dv2:
