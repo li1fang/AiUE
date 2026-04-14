@@ -13,6 +13,7 @@ def test_report_index_classifies_active_and_platform_reports():
     assert report_index["counts"]["reports"] == 9
     assert report_index["counts"]["active_line_reports"] == 4
     assert report_index["counts"]["platform_line_reports"] == 3
+    assert report_index["counts"]["body_platform_line_reports"] == 0
     assert report_index["counts"]["governance_line_reports"] == 2
     assert report_index["reports_by_gate_id"]["visual_proof_v1"]["category"] == "active_line"
     assert report_index["reports_by_gate_id"]["generic_slot_abstraction_p1"]["category"] == "platform_line"
@@ -23,6 +24,11 @@ def test_report_index_classifies_active_and_platform_reports():
 def test_report_index_knows_new_e1_and_q5x_gates():
     assert classify_gate("showcase_demo_e1")[0] == "active_line"
     assert classify_gate("action_candidate_provider_a1")[0] == "platform_line"
+    assert classify_gate("modular_morphology_inventory_c0")[0] == "body_platform_line"
+    assert classify_gate("parametric_body_contract_c1")[0] == "body_platform_line"
+    assert classify_gate("canonical_fusion_fixture_c2")[0] == "body_platform_line"
+    assert classify_gate("skeletal_transfer_proof_c3")[0] == "body_platform_line"
+    assert classify_gate("runtime_body_assembly_proof_c4")[0] == "body_platform_line"
     assert classify_gate("material_texture_proof_m1")[0] == "platform_line"
     assert classify_gate("volumetric_fit_spatial_evidence_q5bx")[0] == "platform_line"
     assert classify_gate("volumetric_inspection_q5c_lite")[0] == "platform_line"

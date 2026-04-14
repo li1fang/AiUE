@@ -8,6 +8,7 @@ from pathlib import Path
 from aiue_core.schema_utils import write_json
 
 from aiue_t1.a1_candidate_provider import build_a1_candidate_provider_summary
+from aiue_t1.body_platform import build_body_platform_quality_summary
 from aiue_t1.diversity_matrix import build_diversity_matrix_quality_summary, latest_diversity_matrix_entry
 from aiue_t1.e2c_showcase import build_e2c_showcase_polish_summary
 from aiue_t1.material_proof import build_material_proof_quality_summary
@@ -428,7 +429,7 @@ def _build_q5c_quality_summary(report_index: dict, copied_images: list[dict]) ->
 
 def _copy_reports(report_index: dict, reports_dir: Path) -> list[dict]:
     copied = []
-    for category in ("active_line", "platform_line", "governance_line", "historical_other"):
+    for category in ("active_line", "platform_line", "body_platform_line", "governance_line", "historical_other"):
         for entry in list((report_index.get("categories") or {}).get(category) or []):
             report_path = str(entry.get("report_path") or "")
             if not report_path:
@@ -661,6 +662,52 @@ def _render_test_governance_summary(report_index: dict) -> str:
     )
 
 
+def _render_body_platform_summary(quality_summaries: dict) -> str:
+    summary = dict((quality_summaries or {}).get("body_platform") or {})
+    if not summary or str(summary.get("status") or "missing") == "missing":
+        return "<p class=\"muted\">No body-platform summary was available.</p>"
+    module_kind_counts = dict(summary.get("module_kind_counts") or {})
+    families = [dict(item) for item in list(summary.get("families") or [])]
+    rows = []
+    for family in families:
+        required_axes = dict(family.get("required_axes_present") or {})
+        optional_axes = dict(family.get("optional_axes_present") or {})
+        rows.append(
+            "<tr>"
+            f"<td><code>{html.escape(str(family.get('family_id') or ''))}</code></td>"
+            f"<td>{html.escape(str(bool(family.get('candidate_fixture_family'))))}</td>"
+            f"<td>{int(family.get('module_count') or 0)}</td>"
+            f"<td>{int(family.get('classified_module_count') or 0)}</td>"
+            f"<td>{'yes' if bool(required_axes.get('head')) else 'no'}</td>"
+            f"<td>{'yes' if bool(required_axes.get('bust_variant')) else 'no'}</td>"
+            f"<td>{'yes' if bool(required_axes.get('leg_profile')) else 'no'}</td>"
+            f"<td>{'yes' if bool(required_axes.get('core_torso_arm')) else 'no'}</td>"
+            f"<td>{'yes' if bool(optional_axes.get('hair')) else 'no'}</td>"
+            "</tr>"
+        )
+    counts_text = ", ".join(
+        f"{html.escape(str(key))}:{int(value)}"
+        for key, value in sorted(module_kind_counts.items())
+    ) or "none"
+    return (
+        "<article class=\"card\">"
+        f"<p><strong>Status:</strong> {html.escape(str(summary.get('status') or 'unknown'))}</p>"
+        f"<p><strong>Source Root:</strong> <code>{html.escape(str(summary.get('source_root') or ''))}</code></p>"
+        f"<p><strong>Families:</strong> {int(summary.get('family_count') or 0)} | "
+        f"<strong>Candidate Families:</strong> {int(summary.get('candidate_fixture_family_count') or 0)} | "
+        f"<strong>Canonical Fixture:</strong> <code>{html.escape(str(summary.get('canonical_fixture_family_id') or ''))}</code></p>"
+        f"<p><strong>Module Kinds:</strong> {counts_text}</p>"
+        "</article>"
+        + (
+            "<table><thead><tr><th>Family</th><th>Candidate</th><th>Modules</th><th>Classified</th><th>Head</th><th>Bust</th><th>Leg</th><th>Core</th><th>Hair</th></tr></thead><tbody>"
+            + "".join(rows)
+            + "</tbody></table>"
+            if rows
+            else ""
+        )
+    )
+
+
 def _render_slot_debugger(slot_debugger: dict) -> str:
     blocks = []
     for package in list(slot_debugger.get("packages") or []):
@@ -883,15 +930,17 @@ def _render_html(manifest: dict, *, report_index: dict | None = None) -> str:
 <body><main>
 <h1>AiUE T1 Evidence Pack</h1>
 <p class="muted">Generated at {html.escape(str(manifest.get('generated_at_utc') or ''))}</p>
-<section class="section"><h2>Summary</h2><div class="grid cards"><article class="card"><h3>Reports</h3><p>{int(counts.get('reports') or 0)}</p></article><article class="card"><h3>Active Line</h3><p>{int(counts.get('active_line_reports') or 0)}</p></article><article class="card"><h3>Platform Line</h3><p>{int(counts.get('platform_line_reports') or 0)}</p></article><article class="card"><h3>Governance Line</h3><p>{int(counts.get('governance_line_reports') or 0)}</p></article><article class="card"><h3>Passing Reports</h3><p>{int(counts.get('passing_reports') or 0)}</p></article></div></section>
+<section class="section"><h2>Summary</h2><div class="grid cards"><article class="card"><h3>Reports</h3><p>{int(counts.get('reports') or 0)}</p></article><article class="card"><h3>Active Line</h3><p>{int(counts.get('active_line_reports') or 0)}</p></article><article class="card"><h3>Platform Line</h3><p>{int(counts.get('platform_line_reports') or 0)}</p></article><article class="card"><h3>Body Platform Line</h3><p>{int(counts.get('body_platform_line_reports') or 0)}</p></article><article class="card"><h3>Governance Line</h3><p>{int(counts.get('governance_line_reports') or 0)}</p></article><article class="card"><h3>Passing Reports</h3><p>{int(counts.get('passing_reports') or 0)}</p></article></div></section>
 <section class="section"><h2>Governance</h2><div class="grid cards">{_render_balance_card(report_index)}{_render_test_governance_card(report_index)}{_render_pv1_signoff_card(report_index)}</div></section>
 <section class="section"><h2>Test Coverage / Blind Spots</h2>{_render_test_governance_summary(report_index)}</section>
 <section class="section"><h2>Active Line Reports</h2><div class="grid cards">{_render_report_cards(list(categories.get('active_line') or []))}</div></section>
 <section class="section"><h2>Platform Line Reports</h2><div class="grid cards">{_render_report_cards(list(categories.get('platform_line') or []))}</div></section>
+<section class="section"><h2>Body Platform Line Reports</h2><div class="grid cards">{_render_report_cards(list(categories.get('body_platform_line') or []))}</div></section>
 <section class="section"><h2>Governance Line Reports</h2><div class="grid cards">{_render_report_cards(list(categories.get('governance_line') or []))}</div></section>
 <section class="section"><h2>Historical / Other Reports</h2><div class="grid cards">{_render_report_cards(list(categories.get('historical_other') or []))}</div></section>
 <section class="section"><h2>Key Screenshot Previews</h2><div class="artifact-grid">{_render_preview_cards(preview_artifacts)}</div></section>
 <section class="section"><h2>Before / After Metrics</h2>{_render_r3_metrics(report_index)}</section>
+<section class="section"><h2>Body Platform Summary</h2>{_render_body_platform_summary(quality_summaries)}</section>
 <section class="section"><h2>Diversity Matrix</h2>{_render_diversity_matrix_summary(quality_summaries)}</section>
 <section class="section"><h2>E2C Showcase Polish</h2>{_render_e2c_showcase_summary(quality_summaries)}</section>
 <section class="section"><h2>A1 Candidate Provider</h2>{_render_a1_candidate_provider_summary(quality_summaries)}</section>
@@ -917,6 +966,7 @@ def build_evidence_pack(*, verification_root: Path, output_root: Path | None, la
     copied_reports = _copy_reports(report_index, reports_dir)
     copied_images = _copy_preview_images(preview_artifacts, images_dir)
     quality_summaries = {
+        "body_platform": build_body_platform_quality_summary(report_index),
         "diversity_matrix": build_diversity_matrix_quality_summary(report_index),
         "e2c_showcase_polish": build_e2c_showcase_polish_summary(report_index),
         "a1_candidate_provider": build_a1_candidate_provider_summary(report_index),

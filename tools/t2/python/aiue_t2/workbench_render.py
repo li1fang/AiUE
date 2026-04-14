@@ -51,6 +51,7 @@ class WorkbenchRenderMixin:
         self.summary_cards["reports"].set_value(int(counts.get("reports") or 0))
         self.summary_cards["active"].set_value(int(counts.get("active_line_reports") or 0))
         self.summary_cards["platform"].set_value(int(counts.get("platform_line_reports") or 0))
+        self.summary_cards["body"].set_value(int(counts.get("body_platform_line_reports") or 0))
         self.summary_cards["governance"].set_value(int(counts.get("governance_line_reports") or 0))
         self.summary_cards["passing"].set_value(int(counts.get("passing_reports") or 0))
         self._render_test_governance_summary()
@@ -213,6 +214,7 @@ class WorkbenchRenderMixin:
             self.a1_candidate_provider_summary.setVisible(True)
 
         m1_summary = dict((self.app_state.quality_summaries or {}).get("m1_material_proof") or {})
+        body_platform_summary = dict((self.app_state.quality_summaries or {}).get("body_platform") or {})
         selected_m1_package = next(
             (
                 dict(item)
@@ -238,6 +240,24 @@ class WorkbenchRenderMixin:
                 f"weapon slots {int(selected_m1_package.get('weapon_material_slot_count') or 0)}"
             )
             self.material_proof_summary.setVisible(True)
+        if not body_platform_summary or str(body_platform_summary.get("status") or "missing") == "missing":
+            self.body_platform_summary.setVisible(False)
+            self.body_platform_summary.setText("")
+        else:
+            module_kind_counts = dict(body_platform_summary.get("module_kind_counts") or {})
+            self.body_platform_summary.setText(
+                "Body Platform "
+                f"{str(body_platform_summary.get('status') or 'unknown').upper()} | "
+                f"families {int(body_platform_summary.get('family_count') or 0)} | "
+                f"candidates {int(body_platform_summary.get('candidate_fixture_family_count') or 0)} | "
+                f"canonical {str(body_platform_summary.get('canonical_fixture_family_id') or 'n/a')} | "
+                f"head {int(module_kind_counts.get('head') or 0)} | "
+                f"bust {int(module_kind_counts.get('bust_variant') or 0)} | "
+                f"leg {int(module_kind_counts.get('leg_profile') or 0)} | "
+                f"core {int(module_kind_counts.get('core_torso_arm') or 0)} | "
+                f"hair {int(module_kind_counts.get('hair') or 0)}"
+            )
+            self.body_platform_summary.setVisible(True)
         q5c_summary = dict((self.app_state.quality_summaries or {}).get("q5c_lite") or {})
         if not q5c_summary or str(q5c_summary.get("status") or "missing") == "missing":
             self.q5c_quality_summary.setVisible(False)

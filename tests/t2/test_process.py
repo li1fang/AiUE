@@ -54,6 +54,7 @@ def test_workbench_cli_seven_open_cycles(tmp_path: Path):
         assert payload["summary_counts"]["reports"] == 9
         assert payload["summary_counts"]["active_line_reports"] == 4
         assert payload["summary_counts"]["platform_line_reports"] == 3
+        assert payload["summary_counts"]["body_platform_line_reports"] == 0
         assert payload["summary_counts"]["governance_line_reports"] == 2
         assert payload["slot_debugger"]["package_count"] == 1
         assert payload["governance_balance"]["status"] == "attention"
@@ -74,7 +75,7 @@ def test_workbench_cli_seven_open_cycles(tmp_path: Path):
         assert payload["demo_review_compare_state"]["status"] == "missing"
         assert payload["demo_review_compare_focus"]["status"] == "missing"
         assert sorted(payload["demo_request"]["request_kinds"]) == ["action_preview", "animation_preview"]
-        assert set(payload["report_categories"]) == {"active_line", "platform_line", "governance_line", "historical_other"}
+        assert set(payload["report_categories"]) == {"active_line", "platform_line", "body_platform_line", "governance_line", "historical_other"}
 
 
 def test_workbench_cli_error_injections(tmp_path: Path):
@@ -101,9 +102,10 @@ def test_workbench_cli_reads_latest_manifest_smoke():
     completed, payload = run_workbench_process(latest=True)
     assert completed.returncode == 0, completed.stderr
     assert payload["status"] == "pass"
-    assert set(payload["report_categories"]) == {"active_line", "platform_line", "governance_line", "historical_other"}
+    assert set(payload["report_categories"]) == {"active_line", "platform_line", "body_platform_line", "governance_line", "historical_other"}
     assert payload["summary_counts"]["active_line_reports"] >= 1
     assert payload["summary_counts"]["platform_line_reports"] >= 1
+    assert payload["summary_counts"]["body_platform_line_reports"] >= 0
     assert payload["summary_counts"]["governance_line_reports"] >= 0
     assert payload["slot_debugger"]["package_count"] >= 1
     assert payload["governance_balance"]["status"] in {"pass", "attention", "missing"}
@@ -113,6 +115,17 @@ def test_workbench_cli_reads_latest_manifest_smoke():
     assert payload["demo_review_replay_state"]["status"] in {"pass", "missing", "error"}
     assert payload["demo_review_history_state"]["status"] in {"pass", "missing", "error"}
     assert payload["demo_review_compare_state"]["status"] in {"pass", "missing", "error"}
+
+
+def test_workbench_cli_reads_body_platform_summary(tmp_path: Path):
+    pack = build_fixture_pack(tmp_path, include_c0=True)
+    completed, payload = run_workbench_process(manifest_path=pack["manifest_path"])
+    assert completed.returncode == 0, completed.stderr
+    assert payload["status"] == "pass"
+    assert payload["summary_counts"]["body_platform_line_reports"] == 1
+    assert payload["report_categories"]["body_platform_line"] == ["modular_morphology_inventory_c0"]
+    assert payload["quality_summaries"]["body_platform"]["status"] == "pass"
+    assert payload["quality_summaries"]["body_platform"]["canonical_fixture_family_id"] == "family_alpha"
 
 
 def test_workbench_cli_demo_request_export_fixture(tmp_path: Path):

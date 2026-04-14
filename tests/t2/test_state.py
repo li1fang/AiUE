@@ -16,6 +16,7 @@ def test_load_workbench_state_reads_fixture_pack(tmp_path: Path):
     assert state.summary_counts["reports"] == 9
     assert state.summary_counts["active_line_reports"] == 4
     assert state.summary_counts["platform_line_reports"] == 3
+    assert state.summary_counts["body_platform_line_reports"] == 0
     assert state.summary_counts["governance_line_reports"] == 2
     assert state.slot_debugger["package_count"] == 1
     assert state.default_report_gate_id == "visual_proof_v1"
@@ -47,6 +48,7 @@ def test_dump_payload_exposes_expected_native_state(tmp_path: Path):
         "demo_cross_bundle_regression_d12",
         "multi_slot_quality_gate_q4",
     ]
+    assert payload["report_categories"]["body_platform_line"] == []
     assert payload["report_categories"]["governance_line"] == [
         "dynamic_balance_governance_progress",
         "test_governance_round1",
@@ -106,6 +108,19 @@ def test_load_workbench_state_handles_missing_governance_report(tmp_path: Path):
     assert state.summary_counts["governance_line_reports"] == 0
     assert state.governance_balance.status == "missing"
     assert state.test_governance.status == "missing"
+
+
+def test_load_workbench_state_reads_body_platform_summary(tmp_path: Path):
+    pack = build_fixture_pack(tmp_path, include_c0=True)
+    state = load_workbench_state(pack["manifest_path"])
+    payload = state.to_dump_payload(build_default_view_state(state))
+    body_summary = state.quality_summaries["body_platform"]
+    assert state.summary_counts["body_platform_line_reports"] == 1
+    assert body_summary["status"] == "pass"
+    assert body_summary["canonical_fixture_family_id"] == "family_alpha"
+    assert body_summary["candidate_fixture_family_count"] == 1
+    assert payload["report_categories"]["body_platform_line"] == ["modular_morphology_inventory_c0"]
+    assert payload["quality_summaries"]["body_platform"]["module_kind_counts"]["head"] == 2
 
 
 def test_wait_for_manifest_path_tolerates_short_missing_latest(tmp_path: Path):

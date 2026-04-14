@@ -142,6 +142,7 @@ def load_quality_summaries(
     preview_images: list[PreviewImageRecord],
 ) -> dict[str, Any]:
     payload = dict(manifest.get("quality_summaries") or {})
+    body_platform_summary = dict(payload.get("body_platform") or {})
     diversity_summary = dict(payload.get("diversity_matrix") or {})
     e2c_summary = dict(payload.get("e2c_showcase_polish") or {})
     a1_summary = dict(payload.get("a1_candidate_provider") or {})
@@ -158,6 +159,7 @@ def load_quality_summaries(
     )
     if not q5c_summary:
         return {
+            "body_platform": body_platform_summary or {"status": "missing", "families": []},
             "diversity_matrix": diversity_summary or {"status": "missing", "coverage_axes": []},
             "e2c_showcase_polish": e2c_summary or {"status": "missing", "packages": []},
             "a1_candidate_provider": a1_summary or {"status": "missing", "packages": [], "candidate_sources": []},
@@ -173,6 +175,7 @@ def load_quality_summaries(
         normalized_package["artifact_image_path"] = str(_artifact_path(pack_root, artifact_rel)) if artifact_rel else ""
         normalized_packages.append(normalized_package)
     return {
+        "body_platform": body_platform_summary or {"status": "missing", "families": []},
         "diversity_matrix": diversity_summary or {"status": "missing", "coverage_axes": []},
         "e2c_showcase_polish": e2c_summary or {"status": "missing", "packages": []},
         "a1_candidate_provider": a1_summary or {"status": "missing", "packages": [], "candidate_sources": []},

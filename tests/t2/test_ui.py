@@ -15,8 +15,9 @@ def test_workbench_window_renders_fixture_pack(qtbot, tmp_path: Path):
     window.show()
     qtbot.waitUntil(lambda: window.current_dump_payload()["summary_counts"]["reports"] == 9)
     assert window.summary_cards["reports"].value_label.text() == "9"
+    assert window.summary_cards["body"].value_label.text() == "0"
     assert window.summary_cards["governance"].value_label.text() == "2"
-    assert window.report_tree.topLevelItemCount() == 4
+    assert window.report_tree.topLevelItemCount() == 5
     assert window.metrics_table.rowCount() >= 1
     assert window.slot_table.rowCount() >= 3
     assert "visual_proof_v1" in window.details_text.toPlainText()
@@ -55,6 +56,18 @@ def test_workbench_window_renders_fixture_pack(qtbot, tmp_path: Path):
     assert window.q5c_contrast_case_list.isVisible() is False
     assert window.q5c_contrast_triptych.isVisible() is False
     assert window.q5c_contrast_compare_panel.isVisible() is False
+
+
+def test_workbench_window_shows_body_platform_summary(qtbot, tmp_path: Path):
+    pack = build_fixture_pack(tmp_path, include_c0=True)
+    window = WorkbenchWindow(manifest_path=pack["manifest_path"])
+    qtbot.addWidget(window)
+    window.show()
+    qtbot.waitUntil(lambda: window.current_dump_payload()["quality_summaries"]["body_platform"]["status"] == "pass")
+    assert window.summary_cards["body"].value_label.text() == "1"
+    assert window.body_platform_summary.isVisible() is True
+    assert "Body Platform PASS" in window.body_platform_summary.text()
+    assert "canonical family_alpha" in window.body_platform_summary.text()
 
 
 def test_workbench_window_shows_pv1_signoff_summary(qtbot, tmp_path: Path):

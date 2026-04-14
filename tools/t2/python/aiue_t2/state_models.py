@@ -5,10 +5,11 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 
-CATEGORY_ORDER = ["active_line", "platform_line", "governance_line", "historical_other"]
+CATEGORY_ORDER = ["active_line", "platform_line", "body_platform_line", "governance_line", "historical_other"]
 CATEGORY_LABELS = {
     "active_line": "Active Line",
     "platform_line": "Platform Line",
+    "body_platform_line": "Body Platform Line",
     "governance_line": "Governance Line",
     "historical_other": "Historical / Other",
 }

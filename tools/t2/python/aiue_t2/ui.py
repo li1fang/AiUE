@@ -137,6 +137,7 @@ class WorkbenchWindow(WorkbenchRenderMixin, WorkbenchDemoOpsMixin, QMainWindow):
             preview_images=[],
             r3_metrics=[],
             quality_summaries={
+                "body_platform": {"status": "missing", "families": []},
                 "diversity_matrix": {"status": "missing", "coverage_axes": []},
                 "e2c_showcase_polish": {"status": "missing", "packages": []},
                 "a1_candidate_provider": {"status": "missing", "packages": [], "candidate_sources": []},
@@ -231,6 +232,7 @@ class WorkbenchWindow(WorkbenchRenderMixin, WorkbenchDemoOpsMixin, QMainWindow):
             "reports": SummaryCard(title="Reports", object_name="summaryReportsCard"),
             "active": SummaryCard(title="Active Line", object_name="summaryActiveCard"),
             "platform": SummaryCard(title="Platform Line", object_name="summaryPlatformCard"),
+            "body": SummaryCard(title="Body Platform", object_name="summaryBodyCard"),
             "governance": SummaryCard(title="Governance Line", object_name="summaryGovernanceCard"),
             "passing": SummaryCard(title="Passing", object_name="summaryPassingCard"),
         }
@@ -261,6 +263,14 @@ class WorkbenchWindow(WorkbenchRenderMixin, WorkbenchDemoOpsMixin, QMainWindow):
         self.material_proof_summary.setStyleSheet("padding: 0 2px 6px 2px;")
         self.material_proof_summary.setVisible(False)
         root_layout.addWidget(self.material_proof_summary)
+
+        self.body_platform_summary = QLabel("")
+        self.body_platform_summary.setObjectName("bodyPlatformSummary")
+        self.body_platform_summary.setWordWrap(True)
+        self.body_platform_summary.setProperty("role", "muted")
+        self.body_platform_summary.setStyleSheet("padding: 0 2px 6px 2px;")
+        self.body_platform_summary.setVisible(False)
+        root_layout.addWidget(self.body_platform_summary)
 
         self.demo_showcase_summary = QLabel("")
         self.demo_showcase_summary.setObjectName("demoShowcaseSummary")

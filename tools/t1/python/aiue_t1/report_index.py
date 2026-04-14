@@ -31,6 +31,18 @@ PLATFORM_LINE_GATE_IDS = [
     "live_fx_visual_quality_r3",
 ]
 
+BODY_PLATFORM_LINE_GATE_IDS = [
+    "modular_morphology_inventory_c0",
+    "parametric_body_contract_c1",
+    "canonical_fusion_fixture_c2",
+    "skeletal_transfer_proof_c3",
+    "runtime_body_assembly_proof_c4",
+    "inertial_base_layer_h0",
+    "pose_traction_layer_h1",
+    "collision_constraint_layer_h2",
+    "runtime_surrogate_h3",
+]
+
 GOVERNANCE_LINE_GATE_IDS = [
     "dynamic_balance_governance_progress",
     "test_governance_round1",
@@ -63,6 +75,8 @@ def classify_gate(gate_id: str) -> tuple[str, int]:
         return "active_line", ACTIVE_LINE_GATE_IDS.index(gate_id)
     if gate_id in PLATFORM_LINE_GATE_IDS:
         return "platform_line", PLATFORM_LINE_GATE_IDS.index(gate_id)
+    if gate_id in BODY_PLATFORM_LINE_GATE_IDS:
+        return "body_platform_line", BODY_PLATFORM_LINE_GATE_IDS.index(gate_id)
     if gate_id in GOVERNANCE_LINE_GATE_IDS:
         return "governance_line", GOVERNANCE_LINE_GATE_IDS.index(gate_id)
     return "historical_other", 999
@@ -121,6 +135,7 @@ def build_report_index(verification_root: str | Path) -> dict:
     by_category = {
         "active_line": [item for item in reports if item["category"] == "active_line"],
         "platform_line": [item for item in reports if item["category"] == "platform_line"],
+        "body_platform_line": [item for item in reports if item["category"] == "body_platform_line"],
         "governance_line": [item for item in reports if item["category"] == "governance_line"],
         "historical_other": [item for item in reports if item["category"] == "historical_other"],
     }
@@ -130,6 +145,7 @@ def build_report_index(verification_root: str | Path) -> dict:
             "reports": len(reports),
             "active_line_reports": len(by_category["active_line"]),
             "platform_line_reports": len(by_category["platform_line"]),
+            "body_platform_line_reports": len(by_category["body_platform_line"]),
             "governance_line_reports": len(by_category["governance_line"]),
             "historical_other_reports": len(by_category["historical_other"]),
             "passing_reports": sum(1 for item in reports if item["status"] == "pass"),

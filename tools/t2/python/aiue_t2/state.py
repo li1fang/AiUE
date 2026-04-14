@@ -76,6 +76,7 @@ def _error_app_state(*, manifest_path: Path, code: str, message: str) -> AppStat
             "reports": 0,
             "active_line_reports": 0,
             "platform_line_reports": 0,
+            "body_platform_line_reports": 0,
             "governance_line_reports": 0,
             "historical_other_reports": 0,
             "passing_reports": 0,
@@ -85,6 +86,7 @@ def _error_app_state(*, manifest_path: Path, code: str, message: str) -> AppStat
         preview_images=[],
         r3_metrics=[],
         quality_summaries={
+            "body_platform": {"status": "missing", "families": []},
             "diversity_matrix": {"status": "missing", "coverage_axes": []},
             "e2c_showcase_polish": {"status": "missing", "packages": []},
             "a1_candidate_provider": {"status": "missing", "packages": [], "candidate_sources": []},
@@ -127,6 +129,7 @@ def _coerce_summary_counts(payload: dict[str, Any]) -> dict[str, int]:
         "reports": int(counts.get("reports") or 0),
         "active_line_reports": int(counts.get("active_line_reports") or 0),
         "platform_line_reports": int(counts.get("platform_line_reports") or 0),
+        "body_platform_line_reports": int(counts.get("body_platform_line_reports") or 0),
         "governance_line_reports": int(counts.get("governance_line_reports") or 0),
         "historical_other_reports": int(counts.get("historical_other_reports") or 0),
         "passing_reports": int(counts.get("passing_reports") or 0),

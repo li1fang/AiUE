@@ -188,3 +188,18 @@ def test_build_evidence_pack_renders_a1_candidate_provider_summary(tmp_path: Pat
     index_html = (pack["output_root"] / "index.html").read_text(encoding="utf-8")
     assert "A1 Action Candidate Provider" in index_html
     assert "fixture_provider_v1:1" in index_html
+
+
+def test_build_evidence_pack_renders_body_platform_summary(tmp_path: Path):
+    from tests.t2.helpers import build_fixture_pack
+
+    pack = build_fixture_pack(tmp_path, include_c0=True)
+    manifest = load_json(pack["output_root"] / "manifest.json")
+    body_summary = dict((manifest.get("quality_summaries") or {}).get("body_platform") or {})
+    assert body_summary["status"] == "pass"
+    assert body_summary["canonical_fixture_family_id"] == "family_alpha"
+    assert manifest["report_index"]["counts"]["body_platform_line_reports"] == 1
+    index_html = (pack["output_root"] / "index.html").read_text(encoding="utf-8")
+    assert "Body Platform Summary" in index_html
+    assert "Body Platform Line Reports" in index_html
+    assert "family_alpha" in index_html
