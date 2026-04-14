@@ -161,11 +161,14 @@ def build_modular_morphology_inventory(source_root: str | Path) -> dict[str, Any
                 "classified_module_count": 0,
                 "unknown_module_count": 0,
                 "module_kind_counts": {},
+                "module_ids_by_kind": {},
                 "representative_modules": [],
             },
         )
         family["module_count"] = int(family.get("module_count") or 0) + 1
         family["module_kind_counts"][module_kind] = int(family["module_kind_counts"].get(module_kind) or 0) + 1
+        family["module_ids_by_kind"].setdefault(module_kind, [])
+        family["module_ids_by_kind"][module_kind].append(_module_id_from_relative_path(relative_path))
         if module_kind == "unknown":
             family["unknown_module_count"] = int(family.get("unknown_module_count") or 0) + 1
         else:
@@ -184,9 +187,14 @@ def build_modular_morphology_inventory(source_root: str | Path) -> dict[str, Any
     family_rows: list[dict[str, Any]] = []
     for family in families_by_id.values():
         required_presence, optional_presence = _axis_presence(dict(family.get("module_kind_counts") or {}))
+        module_ids_by_kind = {
+            str(kind): sorted(str(module_id) for module_id in list(module_ids or []) if str(module_id))
+            for kind, module_ids in dict(family.get("module_ids_by_kind") or {}).items()
+        }
         family_rows.append(
             {
                 **family,
+                "module_ids_by_kind": module_ids_by_kind,
                 "required_axes_present": required_presence,
                 "optional_axes_present": optional_presence,
                 "candidate_fixture_family": all(required_presence.values()),
@@ -224,8 +232,45 @@ def build_modular_morphology_inventory(source_root: str | Path) -> dict[str, Any
 
 def build_body_platform_quality_summary(report_index: dict[str, Any]) -> dict[str, Any]:
     reports_by_gate_id = dict(report_index.get("reports_by_gate_id") or {})
-    entry = dict(reports_by_gate_id.get("modular_morphology_inventory_c0") or {})
-    report = dict(entry.get("report") or {})
+    c1_entry = dict(reports_by_gate_id.get("parametric_body_contract_c1") or {})
+    c1_report = dict(c1_entry.get("report") or {})
+    c0_entry = dict(reports_by_gate_id.get("modular_morphology_inventory_c0") or {})
+    c0_report = dict(c0_entry.get("report") or {})
+    if c1_report:
+        contract = dict(c1_report.get("parametric_body_contract") or {})
+        source_inventory_summary = dict(c1_report.get("source_inventory_summary") or {})
+        family_rows = [
+            {
+                "family_id": str(item.get("family_id") or ""),
+                "module_count": int(item.get("module_count") or 0),
+                "classified_module_count": int(item.get("classified_module_count") or 0),
+                "module_kind_counts": dict(item.get("module_kind_counts") or {}),
+                "required_axes_present": dict(item.get("required_axes_present") or {}),
+                "optional_axes_present": dict(item.get("optional_axes_present") or {}),
+                "candidate_fixture_family": bool(item.get("candidate_fixture_family")),
+            }
+            for item in list(source_inventory_summary.get("per_family_results") or [])
+        ]
+        return {
+            "status": str(c1_report.get("status") or c1_entry.get("status") or "unknown"),
+            "gate_id": "parametric_body_contract_c1",
+            "report_source_path": str(c1_entry.get("report_path") or ""),
+            "source_root": str(source_inventory_summary.get("source_root") or ""),
+            "family_count": int(dict(source_inventory_summary.get("counts") or {}).get("family_count") or len(family_rows)),
+            "candidate_fixture_family_count": int(dict(source_inventory_summary.get("counts") or {}).get("candidate_fixture_family_count") or 0),
+            "classified_module_count": int(dict(source_inventory_summary.get("counts") or {}).get("classified_module_count") or 0),
+            "canonical_fixture_family_id": str(c1_report.get("body_family_id") or contract.get("body_family_id") or ""),
+            "module_kind_counts": dict(source_inventory_summary.get("module_kind_counts") or {}),
+            "families": family_rows,
+            "contract_id": str(contract.get("contract_id") or ""),
+            "core_module_id": str(contract.get("core_module_id") or ""),
+            "supported_head_ids": list(contract.get("supported_head_ids") or []),
+            "supported_bust_classes": list(contract.get("supported_bust_classes") or []),
+            "supported_leg_length_profiles": list(contract.get("supported_leg_length_profiles") or []),
+            "compatible_hair_ids": list(contract.get("compatible_hair_ids") or []),
+        }
+    report = c0_report
+    entry = c0_entry
     if not report:
         return {
             "status": "missing",
@@ -264,4 +309,90 @@ def build_body_platform_quality_summary(report_index: dict[str, Any]) -> dict[st
         "canonical_fixture_family_id": str(report.get("canonical_fixture_family_id") or ""),
         "module_kind_counts": dict(report.get("module_kind_counts") or {}),
         "families": family_rows,
+    }
+
+
+def build_parametric_body_contract(source_inventory_report: dict[str, Any]) -> dict[str, Any]:
+    canonical_family_id = str(source_inventory_report.get("canonical_fixture_family_id") or "")
+    family_rows = [dict(item) for item in list(source_inventory_report.get("per_family_results") or [])]
+    selected_family = next(
+        (family for family in family_rows if str(family.get("family_id") or "") == canonical_family_id),
+        {},
+    )
+    module_ids_by_kind = {
+        str(kind): sorted(str(module_id) for module_id in list(module_ids or []) if str(module_id))
+        for kind, module_ids in dict(selected_family.get("module_ids_by_kind") or {}).items()
+    }
+    supported_head_ids = list(module_ids_by_kind.get("head") or [])
+    supported_bust_classes = list(module_ids_by_kind.get("bust_variant") or [])
+    supported_leg_length_profiles = list(module_ids_by_kind.get("leg_profile") or [])
+    compatible_hair_ids = list(module_ids_by_kind.get("hair") or [])
+    core_module_candidates = list(module_ids_by_kind.get("core_torso_arm") or [])
+    core_module_id = core_module_candidates[0] if core_module_candidates else ""
+    body_family_id = canonical_family_id
+    contract_id = f"{body_family_id}::parametric_body_contract_c1" if body_family_id else ""
+
+    return {
+        "contract_id": contract_id,
+        "contract_version": "c1",
+        "body_family_id": body_family_id,
+        "core_module_id": core_module_id,
+        "supported_head_ids": supported_head_ids,
+        "supported_bust_classes": supported_bust_classes,
+        "supported_leg_length_profiles": supported_leg_length_profiles,
+        "compatible_hair_ids": compatible_hair_ids,
+        "fusion_recipe_id": f"fusion_recipe::{body_family_id}::canonical_v1" if body_family_id else "",
+        "rig_profile_id": f"rig_profile::{body_family_id}::canonical_v1" if body_family_id else "",
+        "material_profile_id": f"material_profile::{body_family_id}::canonical_v1" if body_family_id else "",
+        "fixed_core": {
+            "module_kind": "core_torso_arm",
+            "runtime_module_swaps_supported": False,
+        },
+        "supported_axes": {
+            "head": {
+                "axis_id": "head",
+                "selection_kind": "discrete",
+                "required": True,
+                "supported_values": supported_head_ids,
+            },
+            "bust": {
+                "axis_id": "bust",
+                "selection_kind": "discrete",
+                "required": True,
+                "supported_values": supported_bust_classes,
+            },
+            "leg_length": {
+                "axis_id": "leg_length",
+                "selection_kind": "discrete",
+                "required": True,
+                "supported_values": supported_leg_length_profiles,
+            },
+            "hair": {
+                "axis_id": "hair",
+                "selection_kind": "discrete_optional",
+                "required": False,
+                "supported_values": compatible_hair_ids,
+            },
+        },
+        "combination_policy": {
+            "domain_profile": "narrow_beauty_family_only",
+            "runtime_raw_fragment_swaps_supported": False,
+            "hair_in_core_contract": False,
+            "notes": [
+                "core torso and arms stay fixed in C1",
+                "raw scan modules are not runtime-consumable in C1",
+                "all contract values are derived from the selected canonical family only",
+            ],
+        },
+        "selected_family_summary": {
+            "family_id": body_family_id,
+            "family_root": str(selected_family.get("family_root") or ""),
+            "module_count": int(selected_family.get("module_count") or 0),
+            "classified_module_count": int(selected_family.get("classified_module_count") or 0),
+            "module_kind_counts": dict(selected_family.get("module_kind_counts") or {}),
+            "module_ids_by_kind": module_ids_by_kind,
+            "required_axes_present": dict(selected_family.get("required_axes_present") or {}),
+            "optional_axes_present": dict(selected_family.get("optional_axes_present") or {}),
+            "candidate_fixture_family": bool(selected_family.get("candidate_fixture_family")),
+        },
     }

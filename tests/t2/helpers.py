@@ -483,6 +483,7 @@ def write_fixture_c0_report(verification_root: Path, *, status: str = "pass") ->
             "per_family_results": [
                 {
                     "family_id": "family_alpha",
+                    "family_root": str((verification_root.parent / "body_source" / "family_alpha").resolve()),
                     "module_count": 5,
                     "classified_module_count": 5,
                     "module_kind_counts": {
@@ -491,6 +492,13 @@ def write_fixture_c0_report(verification_root: Path, *, status: str = "pass") ->
                         "bust_variant": 1,
                         "core_torso_arm": 1,
                         "leg_profile": 1,
+                    },
+                    "module_ids_by_kind": {
+                        "head": ["family_alpha/head/head_nohair"],
+                        "hair": ["family_alpha/hair/front_hair"],
+                        "bust_variant": ["family_alpha/bust/bust_large"],
+                        "core_torso_arm": ["family_alpha/core/core_torso_arm"],
+                        "leg_profile": ["family_alpha/legs/left_thigh"],
                     },
                     "required_axes_present": {
                         "head": True,
@@ -505,10 +513,14 @@ def write_fixture_c0_report(verification_root: Path, *, status: str = "pass") ->
                 },
                 {
                     "family_id": "family_beta",
+                    "family_root": str((verification_root.parent / "body_source" / "family_beta").resolve()),
                     "module_count": 1,
                     "classified_module_count": 1,
                     "module_kind_counts": {
                         "head": 1,
+                    },
+                    "module_ids_by_kind": {
+                        "head": ["family_beta/head/head_alt"],
                     },
                     "required_axes_present": {
                         "head": True,
@@ -522,6 +534,183 @@ def write_fixture_c0_report(verification_root: Path, *, status: str = "pass") ->
                     "candidate_fixture_family": False,
                 },
             ],
+            "failed_requirements": [],
+        },
+    )
+    return report_path
+
+
+def write_fixture_c1_report(verification_root: Path, *, status: str = "pass") -> Path:
+    verification_root.mkdir(parents=True, exist_ok=True)
+    report_path = verification_root / "latest_parametric_body_contract_c1_report.json"
+    write_json(
+        report_path,
+        {
+            "gate_id": "parametric_body_contract_c1",
+            "status": status,
+            "generated_at_utc": "2026-04-14T03:00:00+00:00",
+            "body_family_id": "family_alpha",
+            "contract_id": "family_alpha::parametric_body_contract_c1",
+            "parametric_body_contract": {
+                "contract_id": "family_alpha::parametric_body_contract_c1",
+                "contract_version": "c1",
+                "body_family_id": "family_alpha",
+                "core_module_id": "family_alpha/core/core_torso_arm",
+                "supported_head_ids": ["family_alpha/head/head_nohair"],
+                "supported_bust_classes": ["family_alpha/bust/bust_large"],
+                "supported_leg_length_profiles": ["family_alpha/legs/left_thigh"],
+                "compatible_hair_ids": ["family_alpha/hair/front_hair"],
+                "fusion_recipe_id": "fusion_recipe::family_alpha::canonical_v1",
+                "rig_profile_id": "rig_profile::family_alpha::canonical_v1",
+                "material_profile_id": "material_profile::family_alpha::canonical_v1",
+                "fixed_core": {
+                    "module_kind": "core_torso_arm",
+                    "runtime_module_swaps_supported": False,
+                },
+                "supported_axes": {
+                    "head": {
+                        "axis_id": "head",
+                        "selection_kind": "discrete",
+                        "required": True,
+                        "supported_values": ["family_alpha/head/head_nohair"],
+                    },
+                    "bust": {
+                        "axis_id": "bust",
+                        "selection_kind": "discrete",
+                        "required": True,
+                        "supported_values": ["family_alpha/bust/bust_large"],
+                    },
+                    "leg_length": {
+                        "axis_id": "leg_length",
+                        "selection_kind": "discrete",
+                        "required": True,
+                        "supported_values": ["family_alpha/legs/left_thigh"],
+                    },
+                    "hair": {
+                        "axis_id": "hair",
+                        "selection_kind": "discrete_optional",
+                        "required": False,
+                        "supported_values": ["family_alpha/hair/front_hair"],
+                    },
+                },
+                "combination_policy": {
+                    "domain_profile": "narrow_beauty_family_only",
+                    "runtime_raw_fragment_swaps_supported": False,
+                    "hair_in_core_contract": False,
+                    "notes": [
+                        "core torso and arms stay fixed in C1",
+                        "raw scan modules are not runtime-consumable in C1",
+                    ],
+                },
+                "selected_family_summary": {
+                    "family_id": "family_alpha",
+                    "family_root": str((verification_root.parent / "body_source" / "family_alpha").resolve()),
+                    "module_count": 5,
+                    "classified_module_count": 5,
+                    "module_kind_counts": {
+                        "head": 1,
+                        "hair": 1,
+                        "bust_variant": 1,
+                        "core_torso_arm": 1,
+                        "leg_profile": 1,
+                    },
+                    "module_ids_by_kind": {
+                        "head": ["family_alpha/head/head_nohair"],
+                        "hair": ["family_alpha/hair/front_hair"],
+                        "bust_variant": ["family_alpha/bust/bust_large"],
+                        "core_torso_arm": ["family_alpha/core/core_torso_arm"],
+                        "leg_profile": ["family_alpha/legs/left_thigh"],
+                    },
+                    "required_axes_present": {
+                        "head": True,
+                        "bust_variant": True,
+                        "leg_profile": True,
+                        "core_torso_arm": True,
+                    },
+                    "optional_axes_present": {
+                        "hair": True,
+                    },
+                    "candidate_fixture_family": True,
+                },
+            },
+            "counts": {
+                "supported_head_count": 1,
+                "supported_bust_class_count": 1,
+                "supported_leg_length_profile_count": 1,
+                "compatible_hair_count": 1,
+            },
+            "source_inventory_summary": {
+                "source_root": str((verification_root.parent / "body_source").resolve()),
+                "counts": {
+                    "module_count": 6,
+                    "classified_module_count": 6,
+                    "unknown_module_count": 0,
+                    "family_count": 2,
+                    "candidate_fixture_family_count": 1,
+                },
+                "module_kind_counts": {
+                    "head": 2,
+                    "hair": 1,
+                    "bust_variant": 1,
+                    "core_torso_arm": 1,
+                    "leg_profile": 1,
+                },
+                "canonical_fixture_family_id": "family_alpha",
+                "per_family_results": [
+                    {
+                        "family_id": "family_alpha",
+                        "family_root": str((verification_root.parent / "body_source" / "family_alpha").resolve()),
+                        "module_count": 5,
+                        "classified_module_count": 5,
+                        "module_kind_counts": {
+                            "head": 1,
+                            "hair": 1,
+                            "bust_variant": 1,
+                            "core_torso_arm": 1,
+                            "leg_profile": 1,
+                        },
+                        "module_ids_by_kind": {
+                            "head": ["family_alpha/head/head_nohair"],
+                            "hair": ["family_alpha/hair/front_hair"],
+                            "bust_variant": ["family_alpha/bust/bust_large"],
+                            "core_torso_arm": ["family_alpha/core/core_torso_arm"],
+                            "leg_profile": ["family_alpha/legs/left_thigh"],
+                        },
+                        "required_axes_present": {
+                            "head": True,
+                            "bust_variant": True,
+                            "leg_profile": True,
+                            "core_torso_arm": True,
+                        },
+                        "optional_axes_present": {
+                            "hair": True,
+                        },
+                        "candidate_fixture_family": True,
+                    },
+                    {
+                        "family_id": "family_beta",
+                        "family_root": str((verification_root.parent / "body_source" / "family_beta").resolve()),
+                        "module_count": 1,
+                        "classified_module_count": 1,
+                        "module_kind_counts": {
+                            "head": 1,
+                        },
+                        "module_ids_by_kind": {
+                            "head": ["family_beta/head/head_alt"],
+                        },
+                        "required_axes_present": {
+                            "head": True,
+                            "bust_variant": False,
+                            "leg_profile": False,
+                            "core_torso_arm": False,
+                        },
+                        "optional_axes_present": {
+                            "hair": False,
+                        },
+                        "candidate_fixture_family": False,
+                    },
+                ],
+            },
             "failed_requirements": [],
         },
     )
@@ -719,6 +908,7 @@ def build_fixture_pack(
     *,
     include_governance: bool = True,
     include_c0: bool = False,
+    include_c1: bool = False,
     include_dv1: bool = False,
     include_dv2: bool = False,
     include_e2c: bool = False,
@@ -732,6 +922,10 @@ def build_fixture_pack(
     verification_root = materialize_report_fixtures(tmp_path / "verification", include_governance=include_governance)
     if include_c0:
         write_fixture_c0_report(verification_root)
+    if include_c1:
+        if not include_c0:
+            write_fixture_c0_report(verification_root)
+        write_fixture_c1_report(verification_root)
     if include_dv1:
         write_fixture_dv1_report(verification_root)
     if include_dv2:

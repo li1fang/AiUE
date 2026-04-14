@@ -668,6 +668,12 @@ def _render_body_platform_summary(quality_summaries: dict) -> str:
         return "<p class=\"muted\">No body-platform summary was available.</p>"
     module_kind_counts = dict(summary.get("module_kind_counts") or {})
     families = [dict(item) for item in list(summary.get("families") or [])]
+    gate_id = str(summary.get("gate_id") or "")
+    contract_id = str(summary.get("contract_id") or "")
+    core_module_id = str(summary.get("core_module_id") or "")
+    supported_head_ids = [str(item) for item in list(summary.get("supported_head_ids") or []) if str(item)]
+    supported_bust_classes = [str(item) for item in list(summary.get("supported_bust_classes") or []) if str(item)]
+    supported_leg_profiles = [str(item) for item in list(summary.get("supported_leg_length_profiles") or []) if str(item)]
     rows = []
     for family in families:
         required_axes = dict(family.get("required_axes_present") or {})
@@ -689,22 +695,37 @@ def _render_body_platform_summary(quality_summaries: dict) -> str:
         f"{html.escape(str(key))}:{int(value)}"
         for key, value in sorted(module_kind_counts.items())
     ) or "none"
-    return (
-        "<article class=\"card\">"
-        f"<p><strong>Status:</strong> {html.escape(str(summary.get('status') or 'unknown'))}</p>"
-        f"<p><strong>Source Root:</strong> <code>{html.escape(str(summary.get('source_root') or ''))}</code></p>"
-        f"<p><strong>Families:</strong> {int(summary.get('family_count') or 0)} | "
-        f"<strong>Candidate Families:</strong> {int(summary.get('candidate_fixture_family_count') or 0)} | "
-        f"<strong>Canonical Fixture:</strong> <code>{html.escape(str(summary.get('canonical_fixture_family_id') or ''))}</code></p>"
-        f"<p><strong>Module Kinds:</strong> {counts_text}</p>"
-        "</article>"
-        + (
-            "<table><thead><tr><th>Family</th><th>Candidate</th><th>Modules</th><th>Classified</th><th>Head</th><th>Bust</th><th>Leg</th><th>Core</th><th>Hair</th></tr></thead><tbody>"
-            + "".join(rows)
-            + "</tbody></table>"
-            if rows
-            else ""
+    header_parts = [
+        "<article class=\"card\">",
+        f"<p><strong>Status:</strong> {html.escape(str(summary.get('status') or 'unknown'))}</p>",
+        f"<p><strong>Gate:</strong> <code>{html.escape(gate_id or 'n/a')}</code></p>",
+        f"<p><strong>Source Root:</strong> <code>{html.escape(str(summary.get('source_root') or ''))}</code></p>",
+        (
+            f"<p><strong>Families:</strong> {int(summary.get('family_count') or 0)} | "
+            f"<strong>Candidate Families:</strong> {int(summary.get('candidate_fixture_family_count') or 0)} | "
+            f"<strong>Canonical Fixture:</strong> <code>{html.escape(str(summary.get('canonical_fixture_family_id') or ''))}</code></p>"
+        ),
+    ]
+    if contract_id or core_module_id:
+        header_parts.append(
+            f"<p><strong>Contract:</strong> <code>{html.escape(contract_id)}</code> | "
+            f"<strong>Core Module:</strong> <code>{html.escape(core_module_id or 'n/a')}</code> | "
+            f"<strong>Heads:</strong> {len(supported_head_ids)} | "
+            f"<strong>Bust Classes:</strong> {len(supported_bust_classes)} | "
+            f"<strong>Leg Profiles:</strong> {len(supported_leg_profiles)}</p>"
         )
+    header_parts.extend(
+        [
+            f"<p><strong>Module Kinds:</strong> {counts_text}</p>",
+            "</article>",
+        ]
+    )
+    return "".join(header_parts) + (
+        "<table><thead><tr><th>Family</th><th>Candidate</th><th>Modules</th><th>Classified</th><th>Head</th><th>Bust</th><th>Leg</th><th>Core</th><th>Hair</th></tr></thead><tbody>"
+        + "".join(rows)
+        + "</tbody></table>"
+        if rows
+        else ""
     )
 
 

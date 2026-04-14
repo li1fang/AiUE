@@ -66,8 +66,21 @@ def test_workbench_window_shows_body_platform_summary(qtbot, tmp_path: Path):
     qtbot.waitUntil(lambda: window.current_dump_payload()["quality_summaries"]["body_platform"]["status"] == "pass")
     assert window.summary_cards["body"].value_label.text() == "1"
     assert window.body_platform_summary.isVisible() is True
-    assert "Body Platform PASS" in window.body_platform_summary.text()
+    assert "Body Platform | PASS" in window.body_platform_summary.text()
     assert "canonical family_alpha" in window.body_platform_summary.text()
+
+
+def test_workbench_window_prefers_c1_body_platform_summary(qtbot, tmp_path: Path):
+    pack = build_fixture_pack(tmp_path, include_c1=True)
+    window = WorkbenchWindow(manifest_path=pack["manifest_path"])
+    qtbot.addWidget(window)
+    window.show()
+    qtbot.waitUntil(lambda: window.current_dump_payload()["quality_summaries"]["body_platform"]["gate_id"] == "parametric_body_contract_c1")
+    assert window.summary_cards["body"].value_label.text() == "2"
+    assert window.body_platform_summary.isVisible() is True
+    assert "Body Platform | PASS" in window.body_platform_summary.text()
+    assert "parametric_body_contract_c1" in window.body_platform_summary.text()
+    assert "contract family_alpha::parametric_body_contract_c1" in window.body_platform_summary.text()
 
 
 def test_workbench_window_shows_pv1_signoff_summary(qtbot, tmp_path: Path):

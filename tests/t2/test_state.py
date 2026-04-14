@@ -123,6 +123,23 @@ def test_load_workbench_state_reads_body_platform_summary(tmp_path: Path):
     assert payload["quality_summaries"]["body_platform"]["module_kind_counts"]["head"] == 2
 
 
+def test_load_workbench_state_prefers_c1_body_platform_summary(tmp_path: Path):
+    pack = build_fixture_pack(tmp_path, include_c1=True)
+    state = load_workbench_state(pack["manifest_path"])
+    payload = state.to_dump_payload(build_default_view_state(state))
+    body_summary = state.quality_summaries["body_platform"]
+    assert state.summary_counts["body_platform_line_reports"] == 2
+    assert body_summary["status"] == "pass"
+    assert body_summary["gate_id"] == "parametric_body_contract_c1"
+    assert body_summary["contract_id"] == "family_alpha::parametric_body_contract_c1"
+    assert body_summary["core_module_id"] == "family_alpha/core/core_torso_arm"
+    assert payload["report_categories"]["body_platform_line"] == [
+        "modular_morphology_inventory_c0",
+        "parametric_body_contract_c1",
+    ]
+    assert payload["quality_summaries"]["body_platform"]["supported_head_ids"] == ["family_alpha/head/head_nohair"]
+
+
 def test_wait_for_manifest_path_tolerates_short_missing_latest(tmp_path: Path):
     manifest_path = tmp_path / "tooling" / "latest" / "manifest.json"
 

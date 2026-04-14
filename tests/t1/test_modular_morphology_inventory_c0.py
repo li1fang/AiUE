@@ -53,6 +53,9 @@ def test_build_modular_morphology_inventory_finds_candidate_family(tmp_path: Pat
     assert inventory["module_kind_counts"]["core_torso_arm"] == 1
     assert inventory["module_kind_counts"]["leg_profile"] == 1
     assert inventory["module_kind_counts"]["hair"] == 1
+    family_alpha = next(item for item in inventory["per_family_results"] if item["family_id"] == "family_alpha")
+    assert family_alpha["module_ids_by_kind"]["head"] == ["family_alpha/head/head_nohair"]
+    assert family_alpha["module_ids_by_kind"]["core_torso_arm"] == ["family_alpha/core/core_torso_arm"]
 
 
 def test_modular_morphology_inventory_runner_writes_latest_report(tmp_path: Path):
@@ -121,3 +124,4 @@ def test_body_platform_quality_summary_reads_c0_report(tmp_path: Path):
     assert summary["candidate_fixture_family_count"] == 1
     assert summary["canonical_fixture_family_id"] == "family_alpha"
     assert summary["module_kind_counts"]["head"] == 2
+    assert summary["gate_id"] == "modular_morphology_inventory_c0"

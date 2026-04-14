@@ -245,17 +245,37 @@ class WorkbenchRenderMixin:
             self.body_platform_summary.setText("")
         else:
             module_kind_counts = dict(body_platform_summary.get("module_kind_counts") or {})
+            contract_id = str(body_platform_summary.get("contract_id") or "")
+            core_module_id = str(body_platform_summary.get("core_module_id") or "")
+            summary_parts = [
+                "Body Platform",
+                str(body_platform_summary.get("status") or "unknown").upper(),
+            ]
+            gate_id = str(body_platform_summary.get("gate_id") or "")
+            if gate_id:
+                summary_parts.append(gate_id)
+            summary_parts.extend(
+                [
+                    f"families {int(body_platform_summary.get('family_count') or 0)}",
+                    f"candidates {int(body_platform_summary.get('candidate_fixture_family_count') or 0)}",
+                    f"canonical {str(body_platform_summary.get('canonical_fixture_family_id') or 'n/a')}",
+                ]
+            )
+            if contract_id:
+                summary_parts.append(f"contract {contract_id}")
+            if core_module_id:
+                summary_parts.append(f"core {core_module_id}")
+            summary_parts.extend(
+                [
+                    f"head {int(module_kind_counts.get('head') or 0)}",
+                    f"bust {int(module_kind_counts.get('bust_variant') or 0)}",
+                    f"leg {int(module_kind_counts.get('leg_profile') or 0)}",
+                    f"core {int(module_kind_counts.get('core_torso_arm') or 0)}",
+                    f"hair {int(module_kind_counts.get('hair') or 0)}",
+                ]
+            )
             self.body_platform_summary.setText(
-                "Body Platform "
-                f"{str(body_platform_summary.get('status') or 'unknown').upper()} | "
-                f"families {int(body_platform_summary.get('family_count') or 0)} | "
-                f"candidates {int(body_platform_summary.get('candidate_fixture_family_count') or 0)} | "
-                f"canonical {str(body_platform_summary.get('canonical_fixture_family_id') or 'n/a')} | "
-                f"head {int(module_kind_counts.get('head') or 0)} | "
-                f"bust {int(module_kind_counts.get('bust_variant') or 0)} | "
-                f"leg {int(module_kind_counts.get('leg_profile') or 0)} | "
-                f"core {int(module_kind_counts.get('core_torso_arm') or 0)} | "
-                f"hair {int(module_kind_counts.get('hair') or 0)}"
+                " | ".join(summary_parts)
             )
             self.body_platform_summary.setVisible(True)
         q5c_summary = dict((self.app_state.quality_summaries or {}).get("q5c_lite") or {})

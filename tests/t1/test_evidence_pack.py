@@ -203,3 +203,18 @@ def test_build_evidence_pack_renders_body_platform_summary(tmp_path: Path):
     assert "Body Platform Summary" in index_html
     assert "Body Platform Line Reports" in index_html
     assert "family_alpha" in index_html
+
+
+def test_build_evidence_pack_prefers_c1_body_platform_summary(tmp_path: Path):
+    from tests.t2.helpers import build_fixture_pack
+
+    pack = build_fixture_pack(tmp_path, include_c1=True)
+    manifest = load_json(pack["output_root"] / "manifest.json")
+    body_summary = dict((manifest.get("quality_summaries") or {}).get("body_platform") or {})
+    assert body_summary["gate_id"] == "parametric_body_contract_c1"
+    assert body_summary["contract_id"] == "family_alpha::parametric_body_contract_c1"
+    assert body_summary["core_module_id"] == "family_alpha/core/core_torso_arm"
+    assert manifest["report_index"]["counts"]["body_platform_line_reports"] == 2
+    index_html = (pack["output_root"] / "index.html").read_text(encoding="utf-8")
+    assert "parametric_body_contract_c1" in index_html
+    assert "family_alpha::parametric_body_contract_c1" in index_html
