@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Accepted
 
 ## Context
 
@@ -221,7 +221,15 @@ That is better than waiting for "full motion validation" before boundary alignme
 
 ## Follow-Up
 
-If `v0` proves stable, later versions may add:
+The seam is now considered proven enough to serve as the active motion boundary for the current controlled profile.
+
+What made that true:
+
+- `M3.5` established default-source cutover on the AiUE side
+- `M4` established a first reusable motion quality line
+- `M4.5` establishes a single roundtrip handoff bundle for toy-yard result import
+
+If later evolution is needed, future versions may still add:
 
 - direct `motion_fbx` preference rules in the packet registry
 - explicit target skeleton profile negotiation
