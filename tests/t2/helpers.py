@@ -32,10 +32,14 @@ def write_fixture_feature_ledger(repo_root: Path) -> Path:
                     "items": [
                         {
                             "item_id": "q5a_edge_band_burial_detection",
-                            "title_cn": "Q5A 黄边边缘压埋检测",
+                            "title_cn": "Q5A.x 红绿黄三色可见穿模检测",
                             "status": "规划",
                             "priority": "未知",
                             "triage_state": "待分诊",
+                            "idea_kind": "质检实验",
+                            "entry_mode": "问题驱动",
+                            "promotion_rule_cn": "单夹具可重复评估后再升级为开发中。",
+                            "fixture_scope_cn": "body=红、clothing=绿、edge band=黄。",
                             "evidence_gate_ids": ["visible_conflict_inspection_q5a", "volumetric_inspection_q5c_lite"],
                         }
                     ],

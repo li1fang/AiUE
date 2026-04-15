@@ -123,6 +123,7 @@ def test_build_evidence_pack_generates_static_bundle(tmp_path: Path):
     assert q5c_summary["focus_metric"]
     assert manifest["feature_ledger"]["status"] == "pass"
     assert manifest["feature_ledger"]["summary"]["item_count"] == 2
+    assert manifest["feature_ledger"]["summary"]["experimental_item_count"] == 1
     assert manifest["feature_ledger"]["unknown_priority_items"][0]["item_id"] == "q5a_edge_band_burial_detection"
     assert any(str(item.get("artifact_image_relative_path") or "").startswith("images/q5c_") for item in list(q5c_summary.get("packages") or []))
     index_html = (output_root / "index.html").read_text(encoding="utf-8")

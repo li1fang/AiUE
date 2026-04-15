@@ -24,6 +24,7 @@ def test_load_workbench_state_reads_fixture_pack(tmp_path: Path):
     assert state.governance_balance.recommended_next_round_kind == "flexible"
     assert state.test_governance.status == "attention"
     assert state.feature_ledger.status == "pass"
+    assert state.feature_ledger.experimental_item_count == 1
     assert state.feature_ledger.unknown_priority_count == 1
     assert state.feature_ledger.pending_triage_count == 1
     assert state.feature_ledger.unknown_priority_item_ids == ["q5a_edge_band_burial_detection"]
@@ -64,6 +65,7 @@ def test_dump_payload_exposes_expected_native_state(tmp_path: Path):
     assert payload["test_governance"]["status"] == "attention"
     assert payload["feature_ledger"]["status"] == "pass"
     assert payload["feature_ledger"]["item_count"] == 2
+    assert payload["feature_ledger"]["experimental_item_count"] == 1
     assert payload["feature_ledger"]["unknown_priority_item_ids"] == ["q5a_edge_band_burial_detection"]
     assert payload["feature_ledger"]["pending_triage_item_ids"] == ["q5a_edge_band_burial_detection"]
     assert payload["test_governance"]["checkpoint_ready"] is False

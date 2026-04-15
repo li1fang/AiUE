@@ -201,6 +201,7 @@ def load_workbench_state(
     feature_ledger = FeatureLedgerRecord(
         status=str(feature_ledger_payload.get("status") or "missing"),
         item_count=int(feature_ledger_summary.get("item_count") or 0),
+        experimental_item_count=int(feature_ledger_summary.get("experimental_item_count") or 0),
         unknown_priority_count=len(list(feature_ledger_payload.get("unknown_priority_items") or [])),
         pending_triage_count=len(list(feature_ledger_payload.get("pending_triage_items") or [])),
         ledger_path=str(feature_ledger_payload.get("ledger_path") or ""),

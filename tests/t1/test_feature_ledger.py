@@ -12,7 +12,7 @@ for candidate in (T1_ROOT, CORE_ROOT):
     if text not in sys.path:
         sys.path.insert(0, text)
 
-from aiue_t1.feature_ledger import load_feature_ledger, summarize_feature_ledger, validate_feature_ledger  # noqa: E402
+from aiue_t1.feature_ledger import build_feature_ledger_summary, load_feature_ledger, summarize_feature_ledger, validate_feature_ledger  # noqa: E402
 
 
 def test_feature_ledger_cn_v1_is_valid():
@@ -33,6 +33,9 @@ def test_feature_ledger_summary_has_expected_shape():
     assert summary["status_counts"]["规划"] >= 1
     assert summary["priority_counts"]["未知"] >= 1
     assert summary["triage_counts"]["待分诊"] >= 1
+    assert summary["experimental_item_count"] >= 1
+    assert summary["idea_kind_counts"]["质检实验"] >= 1
+    assert summary["entry_mode_counts"]["问题驱动"] >= 1
 
 
 def test_feature_ledger_contains_unknown_priority_edge_band_task():
@@ -47,7 +50,26 @@ def test_feature_ledger_contains_unknown_priority_edge_band_task():
         if target:
             break
     assert target is not None
+    assert target["title_cn"] == "Q5A.x 红绿黄三色可见穿模检测"
     assert target["status"] == "规划"
     assert target["priority"] == "未知"
     assert target["triage_state"] == "待分诊"
+    assert target["idea_kind"] == "质检实验"
+    assert target["entry_mode"] == "问题驱动"
+    assert "单夹具可重复评估" in str(target.get("promotion_rule_cn") or "")
+    assert "body=红" in str(target.get("fixture_scope_cn") or "")
     assert "visible_conflict_inspection_q5a" in list(target.get("depends_on") or [])
+
+
+def test_build_feature_ledger_summary_surfaces_experiment_metadata():
+    summary = build_feature_ledger_summary(REPO_ROOT)
+    assert summary["status"] == "pass"
+    assert summary["summary"]["experimental_item_count"] >= 1
+    assert summary["unknown_priority_items"]
+    target = next(
+        item for item in list(summary["unknown_priority_items"] or [])
+        if str(item.get("item_id") or "") == "q5a_edge_band_burial_detection"
+    )
+    assert target["idea_kind"] == "质检实验"
+    assert target["entry_mode"] == "问题驱动"
+    assert "三色" in target["title_cn"]

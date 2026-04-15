@@ -60,6 +60,7 @@ def test_workbench_cli_seven_open_cycles(tmp_path: Path):
         assert payload["governance_balance"]["status"] == "attention"
         assert payload["test_governance"]["status"] == "attention"
         assert payload["feature_ledger"]["status"] == "pass"
+        assert payload["feature_ledger"]["experimental_item_count"] == 1
         assert payload["feature_ledger"]["unknown_priority_count"] == 1
         assert payload["feature_ledger"]["pending_triage_count"] == 1
         assert payload["test_governance"]["checkpoint_ready"] is False

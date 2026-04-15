@@ -675,6 +675,7 @@ def _render_feature_ledger_summary(feature_ledger: dict) -> str:
     parts = [
         f"<p><strong>Status:</strong> {html.escape(str(feature_ledger.get('status') or 'unknown'))}</p>",
         f"<p><strong>Items:</strong> {int(summary.get('item_count') or 0)} | "
+        f"<strong>Experimental Items:</strong> {int(summary.get('experimental_item_count') or 0)} | "
         f"<strong>Unknown Priority:</strong> {len(unknown_items)} | "
         f"<strong>Pending Triage:</strong> {len(pending_items)}</p>",
         f"<p><strong>Unknown Priority IDs:</strong> {html.escape(', '.join(unknown_ids) or 'none')}</p>",

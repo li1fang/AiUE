@@ -116,6 +116,7 @@ class WorkbenchRenderMixin:
         self.feature_ledger_summary.setText(
             "Feature Ledger "
             f"{summary.status.upper()} | items {summary.item_count} | "
+            f"experimental_items {summary.experimental_item_count} | "
             f"unknown_priority {summary.unknown_priority_count} | "
             f"pending_triage {summary.pending_triage_count} | "
             f"unknown_ids {unknown_ids} | pending_ids {pending_ids}"

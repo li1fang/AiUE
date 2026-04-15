@@ -244,6 +244,7 @@ class TestGovernanceRecord:
 class FeatureLedgerRecord:
     status: str
     item_count: int = 0
+    experimental_item_count: int = 0
     unknown_priority_count: int = 0
     pending_triage_count: int = 0
     ledger_path: str = ""
@@ -255,6 +256,7 @@ class FeatureLedgerRecord:
         return {
             "status": self.status,
             "item_count": int(self.item_count),
+            "experimental_item_count": int(self.experimental_item_count),
             "unknown_priority_count": int(self.unknown_priority_count),
             "pending_triage_count": int(self.pending_triage_count),
             "ledger_path": self.ledger_path,

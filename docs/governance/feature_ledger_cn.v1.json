@@ -86,6 +86,46 @@
       "meaning_cn": "对已经稳定或归档的能力，不再强调分诊状态。"
     }
   ],
+  "idea_kind_taxonomy": [
+    {
+      "idea_kind": "平台能力",
+      "meaning_cn": "偏底层运行时、宿主、数据合同或平台骨架的能力项。"
+    },
+    {
+      "idea_kind": "质检实验",
+      "meaning_cn": "偏检测、证据、QA 方法学的实验性或待收敛项。"
+    },
+    {
+      "idea_kind": "展示能力",
+      "meaning_cn": "偏 demo、showcase、演示编排与体验层的能力项。"
+    },
+    {
+      "idea_kind": "治理工具",
+      "meaning_cn": "偏 evidence、台账、治理、工具链与开发体验的能力项。"
+    },
+    {
+      "idea_kind": "外部集成",
+      "meaning_cn": "偏 toy-yard、motion、第三方来源或跨仓协同的对接项。"
+    }
+  ],
+  "entry_mode_taxonomy": [
+    {
+      "entry_mode": "灵感",
+      "meaning_cn": "先由创意或直觉提出，再决定是否进入实现。"
+    },
+    {
+      "entry_mode": "问题驱动",
+      "meaning_cn": "由当前验证盲区、失败案例或方法学缺口触发。"
+    },
+    {
+      "entry_mode": "回归修补",
+      "meaning_cn": "由已有能力回归、摇摆或诊断不足触发。"
+    },
+    {
+      "entry_mode": "外部输入",
+      "meaning_cn": "由外部仓库、协作者、上游素材或外部建议引入。"
+    }
+  ],
   "lines": [
     {
       "line_id": "validation_quality",
@@ -141,10 +181,12 @@
         },
         {
           "item_id": "q5a_edge_band_burial_detection",
-          "title_cn": "Q5A 黄边边缘压埋检测",
+          "title_cn": "Q5A.x 红绿黄三色可见穿模检测",
           "status": "规划",
           "priority": "未知",
           "triage_state": "待分诊",
+          "idea_kind": "质检实验",
+          "entry_mode": "问题驱动",
           "evidence_gate_ids": [
             "visible_conflict_edge_band_q5a2"
           ],
@@ -152,8 +194,10 @@
             "visible_conflict_inspection_q5a",
             "volumetric_inspection_q5c_lite"
           ],
+          "promotion_rule_cn": "先在固定 body vs clothing 夹具上完成单夹具可重复评估，再升级为开发中，并视结果拆成独立 gate / runner。",
+          "fixture_scope_cn": "当前只覆盖 body=红、clothing=绿、clothing edge band=黄 的可见检测；主要服务固定 clothing fixture 与受控镜头。",
           "scheduling_hint_cn": "先作为 Q5A.x 的可见冲突扩展项记录，等现有 Q5A/Q5C 主线评估后再正式定优先级。",
-          "notes_cn": "思路是 body=红、clothing=绿，再给服装边缘加等宽黄带；检测黄带是否被压窄、覆盖或宽度失真。它更准确地属于可见穿模/边缘压埋检测，而不是防穿模本身。"
+          "notes_cn": "红绿层负责检测身体是否从服装主体表面穿出；黄边层负责检测服装边缘是否被压窄、覆盖、埋入或出现宽度失真。三色合起来更接近可见表面 + 可见边缘的穿模检测，但仍不替代体积质检。"
         },
         {
           "item_id": "r_series_real_fx",
