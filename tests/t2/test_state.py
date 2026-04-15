@@ -23,6 +23,10 @@ def test_load_workbench_state_reads_fixture_pack(tmp_path: Path):
     assert state.governance_balance.status == "attention"
     assert state.governance_balance.recommended_next_round_kind == "flexible"
     assert state.test_governance.status == "attention"
+    assert state.feature_ledger.status == "pass"
+    assert state.feature_ledger.unknown_priority_count == 1
+    assert state.feature_ledger.pending_triage_count == 1
+    assert state.feature_ledger.unknown_priority_item_ids == ["q5a_edge_band_burial_detection"]
     assert state.test_governance.checkpoint_ready is False
     assert state.test_governance.automation_checkpoint_ready is False
     assert state.test_governance.signoff_checkpoint_ready is False
@@ -58,6 +62,10 @@ def test_dump_payload_exposes_expected_native_state(tmp_path: Path):
     assert payload["governance_balance"]["status"] == "attention"
     assert payload["governance_balance"]["recommended_next_round_kind"] == "flexible"
     assert payload["test_governance"]["status"] == "attention"
+    assert payload["feature_ledger"]["status"] == "pass"
+    assert payload["feature_ledger"]["item_count"] == 2
+    assert payload["feature_ledger"]["unknown_priority_item_ids"] == ["q5a_edge_band_burial_detection"]
+    assert payload["feature_ledger"]["pending_triage_item_ids"] == ["q5a_edge_band_burial_detection"]
     assert payload["test_governance"]["checkpoint_ready"] is False
     assert payload["test_governance"]["automation_checkpoint_ready"] is False
     assert payload["test_governance"]["signoff_checkpoint_ready"] is False
@@ -108,6 +116,7 @@ def test_load_workbench_state_handles_missing_governance_report(tmp_path: Path):
     assert state.summary_counts["governance_line_reports"] == 0
     assert state.governance_balance.status == "missing"
     assert state.test_governance.status == "missing"
+    assert state.feature_ledger.status == "pass"
 
 
 def test_load_workbench_state_reads_body_platform_summary(tmp_path: Path):

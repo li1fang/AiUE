@@ -18,6 +18,48 @@ DEFAULT_E2_SESSION_NAME = "playable_demo_e2_session.json"
 DEFAULT_E2_CONTROL_STATE_NAME = "playable_demo_e2_control_state.json"
 
 
+def write_fixture_feature_ledger(repo_root: Path) -> Path:
+    ledger_path = repo_root / "docs" / "governance" / "feature_ledger_cn.v1.json"
+    ledger_path.parent.mkdir(parents=True, exist_ok=True)
+    write_json(
+        ledger_path,
+        {
+            "ledger_version": "v1",
+            "lines": [
+                {
+                    "line_id": "validation_quality",
+                    "title_cn": "验证与质量线",
+                    "items": [
+                        {
+                            "item_id": "q5a_edge_band_burial_detection",
+                            "title_cn": "Q5A 黄边边缘压埋检测",
+                            "status": "规划",
+                            "priority": "未知",
+                            "triage_state": "待分诊",
+                            "evidence_gate_ids": ["visible_conflict_inspection_q5a", "volumetric_inspection_q5c_lite"],
+                        }
+                    ],
+                },
+                {
+                    "line_id": "body_platform",
+                    "title_cn": "参数化人体平台线",
+                    "items": [
+                        {
+                            "item_id": "c2_canonical_fusion_fixture",
+                            "title_cn": "C2 Canonical Fusion Fixture",
+                            "status": "开发中",
+                            "priority": "P1",
+                            "triage_state": "进行中",
+                            "evidence_gate_ids": ["canonical_fusion_fixture_c2"],
+                        }
+                    ],
+                },
+            ],
+        },
+    )
+    return ledger_path
+
+
 def materialize_report_fixtures(target_root: Path, *, include_governance: bool = True) -> Path:
     target_root.mkdir(parents=True, exist_ok=True)
     placeholder_root = str(FIXTURE_ROOT).replace("\\", "/")
@@ -1057,6 +1099,7 @@ def build_fixture_pack(
     include_q5c_contrast: bool = False,
 ) -> dict:
     verification_root = materialize_report_fixtures(tmp_path / "verification", include_governance=include_governance)
+    write_fixture_feature_ledger(tmp_path)
     if include_c0:
         write_fixture_c0_report(verification_root)
     if include_c1:

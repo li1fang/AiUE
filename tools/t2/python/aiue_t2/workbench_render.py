@@ -55,6 +55,7 @@ class WorkbenchRenderMixin:
         self.summary_cards["governance"].set_value(int(counts.get("governance_line_reports") or 0))
         self.summary_cards["passing"].set_value(int(counts.get("passing_reports") or 0))
         self._render_test_governance_summary()
+        self._render_feature_ledger_summary()
         self._render_pv1_signoff_summary()
         self._render_quality_summaries()
         self._render_report_tree()
@@ -103,6 +104,23 @@ class WorkbenchRenderMixin:
             f"signoff blind spots {signoff_blind_spot_text}"
         )
         self.test_governance_summary.setVisible(True)
+
+    def _render_feature_ledger_summary(self) -> None:
+        summary = self.app_state.feature_ledger
+        if summary.status == "missing":
+            self.feature_ledger_summary.setVisible(False)
+            self.feature_ledger_summary.setText("")
+            return
+        unknown_ids = ", ".join(summary.unknown_priority_item_ids) if summary.unknown_priority_item_ids else "none"
+        pending_ids = ", ".join(summary.pending_triage_item_ids) if summary.pending_triage_item_ids else "none"
+        self.feature_ledger_summary.setText(
+            "Feature Ledger "
+            f"{summary.status.upper()} | items {summary.item_count} | "
+            f"unknown_priority {summary.unknown_priority_count} | "
+            f"pending_triage {summary.pending_triage_count} | "
+            f"unknown_ids {unknown_ids} | pending_ids {pending_ids}"
+        )
+        self.feature_ledger_summary.setVisible(True)
 
     def _render_pv1_signoff_summary(self) -> None:
         summary = self.app_state.pv1_signoff

@@ -111,3 +111,61 @@ def summarize_feature_ledger(payload: dict[str, Any]) -> dict[str, Any]:
         "priority_counts": priority_counts,
         "triage_counts": triage_counts,
     }
+
+
+def _iter_ledger_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for line in list(payload.get("lines") or []):
+        line_id = str(line.get("line_id") or "")
+        line_title_cn = str(line.get("title_cn") or "")
+        for item in list(line.get("items") or []):
+            rows.append(
+                {
+                    "line_id": line_id,
+                    "line_title_cn": line_title_cn,
+                    "item_id": str(item.get("item_id") or ""),
+                    "title_cn": str(item.get("title_cn") or ""),
+                    "status": str(item.get("status") or ""),
+                    "priority": str(item.get("priority") or ""),
+                    "triage_state": str(item.get("triage_state") or ""),
+                    "scheduling_hint_cn": str(item.get("scheduling_hint_cn") or ""),
+                }
+            )
+    return rows
+
+
+def build_feature_ledger_summary(repo_root: str | Path) -> dict[str, Any]:
+    resolved_repo_root = Path(repo_root).expanduser().resolve()
+    ledger_path = resolved_repo_root / "docs" / "governance" / "feature_ledger_cn.v1.json"
+    if not ledger_path.exists():
+        return {
+            "status": "missing",
+            "ledger_path": str(ledger_path),
+            "summary": {},
+            "validation_errors": [],
+            "unknown_priority_items": [],
+            "pending_triage_items": [],
+        }
+    try:
+        payload = load_feature_ledger(ledger_path)
+    except Exception as exc:
+        return {
+            "status": "error",
+            "ledger_path": str(ledger_path),
+            "summary": {},
+            "validation_errors": [f"failed to load feature ledger: {exc}"],
+            "unknown_priority_items": [],
+            "pending_triage_items": [],
+        }
+    validation_errors = validate_feature_ledger(payload)
+    rows = _iter_ledger_items(payload)
+    unknown_priority_items = [dict(row) for row in rows if str(row.get("priority") or "") == "未知"]
+    pending_triage_items = [dict(row) for row in rows if str(row.get("triage_state") or "") == "待分诊"]
+    return {
+        "status": "pass" if not validation_errors else "error",
+        "ledger_path": str(ledger_path),
+        "summary": summarize_feature_ledger(payload),
+        "validation_errors": validation_errors,
+        "unknown_priority_items": unknown_priority_items,
+        "pending_triage_items": pending_triage_items,
+    }

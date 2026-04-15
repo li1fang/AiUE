@@ -241,6 +241,30 @@ class TestGovernanceRecord:
 
 
 @dataclass
+class FeatureLedgerRecord:
+    status: str
+    item_count: int = 0
+    unknown_priority_count: int = 0
+    pending_triage_count: int = 0
+    ledger_path: str = ""
+    validation_errors: list[str] = field(default_factory=list)
+    unknown_priority_item_ids: list[str] = field(default_factory=list)
+    pending_triage_item_ids: list[str] = field(default_factory=list)
+
+    def to_dump_dict(self) -> dict[str, Any]:
+        return {
+            "status": self.status,
+            "item_count": int(self.item_count),
+            "unknown_priority_count": int(self.unknown_priority_count),
+            "pending_triage_count": int(self.pending_triage_count),
+            "ledger_path": self.ledger_path,
+            "validation_errors": list(self.validation_errors),
+            "unknown_priority_item_ids": list(self.unknown_priority_item_ids),
+            "pending_triage_item_ids": list(self.pending_triage_item_ids),
+        }
+
+
+@dataclass
 class Pv1SignoffRecord:
     status: str
     requested_signoff_status: str = ""
@@ -285,6 +309,7 @@ class AppState:
     slot_debugger: dict[str, Any]
     governance_balance: GovernanceBalanceRecord
     test_governance: TestGovernanceRecord
+    feature_ledger: FeatureLedgerRecord
     pv1_signoff: Pv1SignoffRecord
     demo_session: DemoSessionRecord
     demo_request: DemoRequestRecord
@@ -333,6 +358,7 @@ class AppState:
             },
             "governance_balance": self.governance_balance.to_dump_dict(),
             "test_governance": self.test_governance.to_dump_dict(),
+            "feature_ledger": self.feature_ledger.to_dump_dict(),
             "pv1_signoff": self.pv1_signoff.to_dump_dict(),
             "q5c_contrast_focus": build_q5c_contrast_focus(
                 self.quality_summaries,

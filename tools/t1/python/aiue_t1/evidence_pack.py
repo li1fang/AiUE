@@ -11,6 +11,7 @@ from aiue_t1.a1_candidate_provider import build_a1_candidate_provider_summary
 from aiue_t1.body_platform import build_body_platform_quality_summary
 from aiue_t1.diversity_matrix import build_diversity_matrix_quality_summary, latest_diversity_matrix_entry
 from aiue_t1.e2c_showcase import build_e2c_showcase_polish_summary
+from aiue_t1.feature_ledger import build_feature_ledger_summary
 from aiue_t1.material_proof import build_material_proof_quality_summary
 from aiue_t1.q5c_lite import closest_margin_info, margin_to_failure_by_metric, risk_band_for_q5c_lite, risk_reason_for_q5c_lite
 from aiue_t1.report_index import build_report_index
@@ -662,6 +663,28 @@ def _render_test_governance_summary(report_index: dict) -> str:
     )
 
 
+def _render_feature_ledger_summary(feature_ledger: dict) -> str:
+    summary = dict(feature_ledger.get("summary") or {})
+    if str(feature_ledger.get("status") or "missing") == "missing":
+        return "<p class=\"muted\">No feature ledger was available.</p>"
+    validation_errors = [str(item) for item in list(feature_ledger.get("validation_errors") or []) if str(item)]
+    unknown_items = [dict(item) for item in list(feature_ledger.get("unknown_priority_items") or [])]
+    pending_items = [dict(item) for item in list(feature_ledger.get("pending_triage_items") or [])]
+    unknown_ids = [str(item.get("item_id") or "") for item in unknown_items if str(item.get("item_id") or "")]
+    pending_ids = [str(item.get("item_id") or "") for item in pending_items if str(item.get("item_id") or "")]
+    parts = [
+        f"<p><strong>Status:</strong> {html.escape(str(feature_ledger.get('status') or 'unknown'))}</p>",
+        f"<p><strong>Items:</strong> {int(summary.get('item_count') or 0)} | "
+        f"<strong>Unknown Priority:</strong> {len(unknown_items)} | "
+        f"<strong>Pending Triage:</strong> {len(pending_items)}</p>",
+        f"<p><strong>Unknown Priority IDs:</strong> {html.escape(', '.join(unknown_ids) or 'none')}</p>",
+        f"<p><strong>Pending Triage IDs:</strong> {html.escape(', '.join(pending_ids) or 'none')}</p>",
+    ]
+    if validation_errors:
+        parts.append(f"<p><strong>Validation Errors:</strong> {html.escape('; '.join(validation_errors))}</p>")
+    return "".join(parts)
+
+
 def _render_body_platform_summary(quality_summaries: dict) -> str:
     summary = dict((quality_summaries or {}).get("body_platform") or {})
     if not summary or str(summary.get("status") or "missing") == "missing":
@@ -959,6 +982,7 @@ def _render_html(manifest: dict, *, report_index: dict | None = None) -> str:
     preview_artifacts = list(manifest.get("artifacts", {}).get("preview_images") or [])
     slot_debugger = dict(manifest.get("slot_debugger") or {})
     quality_summaries = dict(manifest.get("quality_summaries") or {})
+    feature_ledger = dict(manifest.get("feature_ledger") or {})
     counts = dict(report_index.get("counts") or {})
     return f"""<!doctype html>
 <html lang="en">
@@ -969,6 +993,7 @@ def _render_html(manifest: dict, *, report_index: dict | None = None) -> str:
 <section class="section"><h2>Summary</h2><div class="grid cards"><article class="card"><h3>Reports</h3><p>{int(counts.get('reports') or 0)}</p></article><article class="card"><h3>Active Line</h3><p>{int(counts.get('active_line_reports') or 0)}</p></article><article class="card"><h3>Platform Line</h3><p>{int(counts.get('platform_line_reports') or 0)}</p></article><article class="card"><h3>Body Platform Line</h3><p>{int(counts.get('body_platform_line_reports') or 0)}</p></article><article class="card"><h3>Governance Line</h3><p>{int(counts.get('governance_line_reports') or 0)}</p></article><article class="card"><h3>Passing Reports</h3><p>{int(counts.get('passing_reports') or 0)}</p></article></div></section>
 <section class="section"><h2>Governance</h2><div class="grid cards">{_render_balance_card(report_index)}{_render_test_governance_card(report_index)}{_render_pv1_signoff_card(report_index)}</div></section>
 <section class="section"><h2>Test Coverage / Blind Spots</h2>{_render_test_governance_summary(report_index)}</section>
+<section class="section"><h2>Feature Ledger</h2>{_render_feature_ledger_summary(feature_ledger)}</section>
 <section class="section"><h2>Active Line Reports</h2><div class="grid cards">{_render_report_cards(list(categories.get('active_line') or []))}</div></section>
 <section class="section"><h2>Platform Line Reports</h2><div class="grid cards">{_render_report_cards(list(categories.get('platform_line') or []))}</div></section>
 <section class="section"><h2>Body Platform Line Reports</h2><div class="grid cards">{_render_report_cards(list(categories.get('body_platform_line') or []))}</div></section>
@@ -1001,6 +1026,7 @@ def build_evidence_pack(*, verification_root: Path, output_root: Path | None, la
     preview_artifacts = _collect_preview_artifacts(report_index)
     copied_reports = _copy_reports(report_index, reports_dir)
     copied_images = _copy_preview_images(preview_artifacts, images_dir)
+    feature_ledger = build_feature_ledger_summary(repo_root)
     quality_summaries = {
         "body_platform": build_body_platform_quality_summary(report_index),
         "diversity_matrix": build_diversity_matrix_quality_summary(report_index),
@@ -1016,6 +1042,7 @@ def build_evidence_pack(*, verification_root: Path, output_root: Path | None, la
         "tooling_phase": "T1",
         "verification_root": str(verification_root.resolve()),
         "external_candidate_sources": [dict(item) for item in list(report_index.get("external_candidate_sources") or [])],
+        "feature_ledger": feature_ledger,
         "quality_summaries": quality_summaries,
         "report_index": {
             **report_index,

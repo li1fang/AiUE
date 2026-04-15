@@ -5,6 +5,7 @@ from pathlib import Path
 
 from aiue_core.schema_utils import load_json, write_json
 from aiue_t1.evidence_pack import build_evidence_pack
+from tests.t2.helpers import write_fixture_feature_ledger
 
 
 FIXTURE_ROOT = Path(__file__).resolve().parents[1] / "fixtures"
@@ -24,6 +25,7 @@ def _materialize_reports(target_root: Path) -> Path:
 
 def test_build_evidence_pack_generates_static_bundle(tmp_path: Path):
     verification_root = _materialize_reports(tmp_path / "verification")
+    write_fixture_feature_ledger(tmp_path)
     q5c_report_path = verification_root / "latest_volumetric_inspection_q5c_lite_report.json"
     preview_image_path = str((FIXTURE_ROOT / "images" / "front.ppm").resolve())
     if q5c_report_path.exists():
@@ -119,12 +121,17 @@ def test_build_evidence_pack_generates_static_bundle(tmp_path: Path):
     assert "pkg_alpha" in q5c_summary["watchlist_package_ids"]
     assert q5c_summary["focus_package_id"]
     assert q5c_summary["focus_metric"]
+    assert manifest["feature_ledger"]["status"] == "pass"
+    assert manifest["feature_ledger"]["summary"]["item_count"] == 2
+    assert manifest["feature_ledger"]["unknown_priority_items"][0]["item_id"] == "q5a_edge_band_burial_detection"
     assert any(str(item.get("artifact_image_relative_path") or "").startswith("images/q5c_") for item in list(q5c_summary.get("packages") or []))
     index_html = (output_root / "index.html").read_text(encoding="utf-8")
     assert "Test Governance" in index_html
+    assert "Feature Ledger" in index_html
     assert "Automation Ready" in index_html
     assert "Signoff Ready" in index_html
     assert "manual_playable_demo_validation" in index_html
+    assert "q5a_edge_band_burial_detection" in index_html
 
 
 def test_build_evidence_pack_renders_diversity_matrix_summary(tmp_path: Path):

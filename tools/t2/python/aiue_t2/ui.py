@@ -24,6 +24,7 @@ from aiue_t2.state import (
     AppState,
     DemoRequestRecord,
     DemoSessionRecord,
+    FeatureLedgerRecord,
     GovernanceBalanceRecord,
     Pv1SignoffRecord,
     TestGovernanceRecord,
@@ -148,6 +149,7 @@ class WorkbenchWindow(WorkbenchRenderMixin, WorkbenchDemoOpsMixin, QMainWindow):
             slot_debugger={"package_count": 0, "packages": []},
             governance_balance=GovernanceBalanceRecord(status="missing"),
             test_governance=TestGovernanceRecord(status="missing"),
+            feature_ledger=FeatureLedgerRecord(status="missing"),
             pv1_signoff=Pv1SignoffRecord(status="missing"),
             demo_session=DemoSessionRecord(
                 status="missing",
@@ -247,6 +249,14 @@ class WorkbenchWindow(WorkbenchRenderMixin, WorkbenchDemoOpsMixin, QMainWindow):
         self.test_governance_summary.setStyleSheet("padding: 0 2px 6px 2px;")
         self.test_governance_summary.setVisible(False)
         root_layout.addWidget(self.test_governance_summary)
+
+        self.feature_ledger_summary = QLabel("")
+        self.feature_ledger_summary.setObjectName("featureLedgerSummary")
+        self.feature_ledger_summary.setWordWrap(True)
+        self.feature_ledger_summary.setProperty("role", "muted")
+        self.feature_ledger_summary.setStyleSheet("padding: 0 2px 6px 2px;")
+        self.feature_ledger_summary.setVisible(False)
+        root_layout.addWidget(self.feature_ledger_summary)
 
         self.pv1_signoff_summary = QLabel("")
         self.pv1_signoff_summary.setObjectName("pv1SignoffSummary")

@@ -27,6 +27,9 @@ def test_workbench_window_renders_fixture_pack(qtbot, tmp_path: Path):
     assert window.current_dump_payload()["test_governance"]["status"] == "attention"
     assert window.test_governance_summary.isVisible() is True
     assert "Test Governance ATTENTION" in window.test_governance_summary.text()
+    assert window.feature_ledger_summary.isVisible() is True
+    assert "Feature Ledger PASS" in window.feature_ledger_summary.text()
+    assert "q5a_edge_band_burial_detection" in window.feature_ledger_summary.text()
     assert "automation_ready False" in window.test_governance_summary.text()
     assert "signoff_ready False" in window.test_governance_summary.text()
     assert "manual_playable_demo_validation" in window.test_governance_summary.text()

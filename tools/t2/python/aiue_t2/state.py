@@ -15,6 +15,7 @@ from aiue_t2.state_models import (
     DemoRequestRecord,
     DemoSessionRecord,
     ErrorRecord,
+    FeatureLedgerRecord,
     GovernanceBalanceRecord,
     Pv1SignoffRecord,
     PreviewImageRecord,
@@ -97,6 +98,7 @@ def _error_app_state(*, manifest_path: Path, code: str, message: str) -> AppStat
         slot_debugger={"package_count": 0, "packages": []},
         governance_balance=GovernanceBalanceRecord(status="missing"),
         test_governance=TestGovernanceRecord(status="missing"),
+        feature_ledger=FeatureLedgerRecord(status="missing"),
         pv1_signoff=Pv1SignoffRecord(status="missing"),
         demo_session=DemoSessionRecord(
             status="missing",
@@ -194,6 +196,26 @@ def load_workbench_state(
     slot_packages = list(slot_debugger.get("packages") or [])
     governance_balance = extract_governance_balance(reports_by_gate_id)
     test_governance = extract_test_governance(reports_by_gate_id)
+    feature_ledger_payload = dict(manifest.get("feature_ledger") or {})
+    feature_ledger_summary = dict(feature_ledger_payload.get("summary") or {})
+    feature_ledger = FeatureLedgerRecord(
+        status=str(feature_ledger_payload.get("status") or "missing"),
+        item_count=int(feature_ledger_summary.get("item_count") or 0),
+        unknown_priority_count=len(list(feature_ledger_payload.get("unknown_priority_items") or [])),
+        pending_triage_count=len(list(feature_ledger_payload.get("pending_triage_items") or [])),
+        ledger_path=str(feature_ledger_payload.get("ledger_path") or ""),
+        validation_errors=[str(item) for item in list(feature_ledger_payload.get("validation_errors") or []) if str(item)],
+        unknown_priority_item_ids=[
+            str(item.get("item_id") or "")
+            for item in list(feature_ledger_payload.get("unknown_priority_items") or [])
+            if str(item.get("item_id") or "")
+        ],
+        pending_triage_item_ids=[
+            str(item.get("item_id") or "")
+            for item in list(feature_ledger_payload.get("pending_triage_items") or [])
+            if str(item.get("item_id") or "")
+        ],
+    )
     pv1_signoff = extract_pv1_signoff(reports_by_gate_id)
     default_package_id = (
         demo_session.default_package_id
@@ -236,6 +258,7 @@ def load_workbench_state(
         slot_debugger=slot_debugger,
         governance_balance=governance_balance,
         test_governance=test_governance,
+        feature_ledger=feature_ledger,
         pv1_signoff=pv1_signoff,
         demo_session=demo_session,
         demo_request=demo_request,
