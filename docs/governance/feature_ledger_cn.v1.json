@@ -1,0 +1,428 @@
+{
+  "ledger_version": "v1",
+  "title_cn": "AiUE 功能台账",
+  "updated_at_utc": "2026-04-15T04:30:00+00:00",
+  "storage_policy": {
+    "primary_source_of_truth": "git_tracked_json_plus_markdown",
+    "sqlite_policy": "defer",
+    "sqlite_reason_cn": [
+      "当前更需要稳定可读、可 diff、可 code review 的真相源，而不是查询引擎。",
+      "当前功能数量和维护人数还不足以证明必须引入 SQLite 作为主存储。",
+      "后续如果需要复杂查询，可以从 JSON 派生生成 SQLite，而不是反过来。"
+    ],
+    "sqlite_enable_conditions_cn": [
+      "需要跨多轮自动查询台账与运行历史的联表结果。",
+      "需要 T2 原生工具做本地快速筛选、排序、聚合，并且 JSON 读取明显变慢。",
+      "需要多种衍生视图，但又不希望把复杂逻辑硬写进 T1/T2。"
+    ]
+  },
+  "status_taxonomy": [
+    {
+      "status": "稳定",
+      "meaning_cn": "已完成并进入当前可信主线或常规回归，可作为当前能力判断依据。"
+    },
+    {
+      "status": "实验",
+      "meaning_cn": "已有实现和证据，但仍主要服务探索，不宜当成最高权威。"
+    },
+    {
+      "status": "开发中",
+      "meaning_cn": "已经开始落地，但尚未形成稳定 checkpoint 或明确通过标准。"
+    },
+    {
+      "status": "规划",
+      "meaning_cn": "方向与边界已明确，但尚未开始正式实现。"
+    },
+    {
+      "status": "暂停",
+      "meaning_cn": "确认有价值，但当前不投入主线资源。"
+    },
+    {
+      "status": "归档",
+      "meaning_cn": "历史能力或历史路线，保留记录，但不再作为 active line。"
+    }
+  ],
+  "priority_taxonomy": [
+    {
+      "priority": "P0",
+      "meaning_cn": "当前必须优先处理，否则会阻断主线。"
+    },
+    {
+      "priority": "P1",
+      "meaning_cn": "当前主线的重要推进项，应尽快安排。"
+    },
+    {
+      "priority": "P2",
+      "meaning_cn": "有价值但不阻断主线，可排入后续轮次。"
+    },
+    {
+      "priority": "P3",
+      "meaning_cn": "低优先级储备项，可长期保留。"
+    },
+    {
+      "priority": "未知",
+      "meaning_cn": "已确认值得记录，但尚未完成正式分诊。"
+    }
+  ],
+  "triage_taxonomy": [
+    {
+      "triage_state": "待分诊",
+      "meaning_cn": "先入台账，后续再决定优先级、归属和切入方式。"
+    },
+    {
+      "triage_state": "已分诊",
+      "meaning_cn": "归属、优先级和依赖关系已经明确。"
+    },
+    {
+      "triage_state": "进行中",
+      "meaning_cn": "已经成为当前或近期执行项。"
+    },
+    {
+      "triage_state": "冻结",
+      "meaning_cn": "先记录，但暂不投入开发资源。"
+    },
+    {
+      "triage_state": "不适用",
+      "meaning_cn": "对已经稳定或归档的能力，不再强调分诊状态。"
+    }
+  ],
+  "lines": [
+    {
+      "line_id": "validation_quality",
+      "title_cn": "验证与质量线",
+      "items": [
+        {
+          "item_id": "v1_visual_proof",
+          "title_cn": "V1 可视化证明",
+          "status": "稳定",
+          "evidence_gate_ids": ["visual_proof_v1"],
+          "notes_cn": "角色与武器真实可见的基础证明已经建立。"
+        },
+        {
+          "item_id": "d1_demo_onboarding",
+          "title_cn": "D1 Demo 宿主接入",
+          "status": "稳定",
+          "evidence_gate_ids": ["demo_stage_d1_onboarding"],
+          "notes_cn": "Demo 宿主最小截图与加载能力已经稳定。"
+        },
+        {
+          "item_id": "d12_cross_bundle_regression",
+          "title_cn": "D12 跨 bundle 回归",
+          "status": "稳定",
+          "evidence_gate_ids": ["demo_cross_bundle_regression_d12"],
+          "notes_cn": "当前 ready bundle 基础回归能力已形成。"
+        },
+        {
+          "item_id": "q1_to_q4_quality_gates",
+          "title_cn": "Q1-Q4 画面与组合质量门槛",
+          "status": "稳定",
+          "evidence_gate_ids": [
+            "demo_shot_quality_gate_q1",
+            "demo_composition_quality_gate_q2",
+            "demo_semantic_framing_gate_q3",
+            "multi_slot_quality_gate_q4"
+          ],
+          "notes_cn": "截图、构图、语义取景、多槽位质量闸门已经成线。"
+        },
+        {
+          "item_id": "q5_series",
+          "title_cn": "Q5 系列空间与体积质量线",
+          "status": "实验",
+          "priority": "P1",
+          "triage_state": "已分诊",
+          "evidence_gate_ids": [
+            "visible_conflict_inspection_q5a",
+            "volumetric_fit_inspection_q5b",
+            "volumetric_fit_spatial_evidence_q5bx",
+            "volumetric_inspection_q5c_lite",
+            "q5c_lite_contrast_lab"
+          ],
+          "notes_cn": "Q5 已经很强，但整体仍偏平台实验线，尚不是最终形态。"
+        },
+        {
+          "item_id": "q5a_edge_band_burial_detection",
+          "title_cn": "Q5A 黄边边缘压埋检测",
+          "status": "规划",
+          "priority": "未知",
+          "triage_state": "待分诊",
+          "evidence_gate_ids": [
+            "visible_conflict_edge_band_q5a2"
+          ],
+          "depends_on": [
+            "visible_conflict_inspection_q5a",
+            "volumetric_inspection_q5c_lite"
+          ],
+          "scheduling_hint_cn": "先作为 Q5A.x 的可见冲突扩展项记录，等现有 Q5A/Q5C 主线评估后再正式定优先级。",
+          "notes_cn": "思路是 body=红、clothing=绿，再给服装边缘加等宽黄带；检测黄带是否被压窄、覆盖或宽度失真。它更准确地属于可见穿模/边缘压埋检测，而不是防穿模本身。"
+        },
+        {
+          "item_id": "r_series_real_fx",
+          "title_cn": "R1-R3 真实 FX 线",
+          "status": "稳定",
+          "priority": "P2",
+          "triage_state": "不适用",
+          "evidence_gate_ids": [
+            "real_fx_item_kind_r2",
+            "live_fx_visual_quality_r3"
+          ],
+          "notes_cn": "FX item kind 与基础可见性能力已成立。"
+        }
+      ]
+    },
+    {
+      "line_id": "asset_platform",
+      "title_cn": "资产与宿主平台线",
+      "items": [
+        {
+          "item_id": "p1_generic_slot",
+          "title_cn": "P1 通用 Slot 抽象",
+          "status": "稳定",
+          "priority": "P1",
+          "triage_state": "不适用",
+          "evidence_gate_ids": ["generic_slot_abstraction_p1"],
+          "notes_cn": "武器中心抽象已升级为可扩展 slot 平台。"
+        },
+        {
+          "item_id": "p2_clothing",
+          "title_cn": "P2 服装纵切片",
+          "status": "稳定",
+          "evidence_gate_ids": ["clothing_vertical_slice_p2"],
+          "notes_cn": "服装作为第二装备轴已经打通。"
+        },
+        {
+          "item_id": "p3_fx",
+          "title_cn": "P3 FX 纵切片",
+          "status": "稳定",
+          "evidence_gate_ids": ["fx_vertical_slice_p3"],
+          "notes_cn": "FX 作为第三轴已经进入平台能力面。"
+        },
+        {
+          "item_id": "p4_multi_slot",
+          "title_cn": "P4 多槽位组合",
+          "status": "稳定",
+          "evidence_gate_ids": ["multi_slot_composition_p4"],
+          "notes_cn": "多槽位共存与组合验证已成立。"
+        },
+        {
+          "item_id": "m1_material_proof",
+          "title_cn": "M1 材质与贴图证明",
+          "status": "稳定",
+          "evidence_gate_ids": ["material_texture_proof_m1"],
+          "notes_cn": "材质/贴图已导入、已挂载、已进入宿主证据面。"
+        },
+        {
+          "item_id": "a1_action_candidates",
+          "title_cn": "A1 动作候选提供者接口",
+          "status": "稳定",
+          "evidence_gate_ids": ["action_candidate_provider_a1"],
+          "notes_cn": "动作候选 provider contract 已经存在，可继续扩。"
+        }
+      ]
+    },
+    {
+      "line_id": "demo_line",
+      "title_cn": "Demo 与可玩演示线",
+      "items": [
+        {
+          "item_id": "e1_showcase",
+          "title_cn": "E1 证据型 Showcase Demo",
+          "status": "稳定",
+          "evidence_gate_ids": ["showcase_demo_e1"],
+          "notes_cn": "E1 已能证明可信展示，不依赖人工解释。"
+        },
+        {
+          "item_id": "e2_native_control",
+          "title_cn": "E2 原生控制闭环",
+          "status": "稳定",
+          "evidence_gate_ids": [
+            "playable_demo_e2_bootstrap",
+            "playable_demo_e2_credibility",
+            "playable_demo_e2_session_roundtrip",
+            "playable_demo_e2_curated_review"
+          ],
+          "notes_cn": "T2 已能读、能控、能回读 demo 结果。"
+        },
+        {
+          "item_id": "e2c_polish",
+          "title_cn": "E2C 可信展示打磨",
+          "status": "稳定",
+          "evidence_gate_ids": ["playable_demo_e2c_credible_showcase_polish"],
+          "notes_cn": "已形成更厚的证据型展示，但仍不是主验证权威。"
+        },
+        {
+          "item_id": "playable_demo_productization",
+          "title_cn": "可玩 Demo 产品化",
+          "status": "实验",
+          "evidence_gate_ids": [],
+          "notes_cn": "已有可玩的闭环，但还未做真实大范围试玩与产品化包装。"
+        }
+      ]
+    },
+    {
+      "line_id": "motion_line",
+      "title_cn": "Motion 线",
+      "items": [
+        {
+          "item_id": "m0_5_shadow_trial",
+          "title_cn": "M0.5 Motion Shadow Trial",
+          "status": "稳定",
+          "evidence_gate_ids": ["motion_shadow_packet_trial_m0_5"],
+          "notes_cn": "motion seam 与 owner routing 已建立。"
+        },
+        {
+          "item_id": "m1_baseline",
+          "title_cn": "M1 Motion Consumer Baseline",
+          "status": "稳定",
+          "evidence_gate_ids": ["motion_consumer_baseline_m1", "motion_result_import_readiness_m1_5"],
+          "notes_cn": "consumer baseline 与 result import readiness 已形成。"
+        },
+        {
+          "item_id": "m2_diversity",
+          "title_cn": "M2 Motion Fixture Diversity",
+          "status": "稳定",
+          "evidence_gate_ids": [
+            "motion_fixture_diversity_readiness_m2",
+            "motion_fixture_diversity_m2",
+            "motion_mixed_profile_result_import_readiness_m2_5"
+          ],
+          "notes_cn": "motion fixture 多样性已经进入受控范围。"
+        },
+        {
+          "item_id": "m3_default_source",
+          "title_cn": "M3 Motion 默认源切换",
+          "status": "稳定",
+          "evidence_gate_ids": [
+            "motion_default_source_readiness_m3",
+            "motion_default_source_switch_m3_5"
+          ],
+          "notes_cn": "toy-yard motion 默认源切换已成立。"
+        },
+        {
+          "item_id": "m4_quality_line",
+          "title_cn": "M4 Motion 质量线",
+          "status": "稳定",
+          "evidence_gate_ids": [
+            "motion_quality_line_m4",
+            "motion_roundtrip_handoff_m4_5"
+          ],
+          "notes_cn": "motion 已从单点试跑进入可持续维护状态。"
+        }
+      ]
+    },
+    {
+      "line_id": "body_platform",
+      "title_cn": "参数化人体平台线",
+      "items": [
+        {
+          "item_id": "c0_inventory",
+          "title_cn": "C0 模块化人体盘点",
+          "status": "稳定",
+          "evidence_gate_ids": ["modular_morphology_inventory_c0"],
+          "notes_cn": "模块识别、候选 family 选择和 T1/T2 消费已建立。"
+        },
+        {
+          "item_id": "c1_contract",
+          "title_cn": "C1 参数化人体合同",
+          "status": "稳定",
+          "evidence_gate_ids": ["parametric_body_contract_c1"],
+          "notes_cn": "head / bust / leg_length / fixed core 的第一版窄合同已成立。"
+        },
+        {
+          "item_id": "c2_fusion_fixture",
+          "title_cn": "C2 Canonical Fusion Fixture",
+          "status": "开发中",
+          "priority": "P1",
+          "triage_state": "进行中",
+          "evidence_gate_ids": ["canonical_fusion_fixture_c2"],
+          "notes_cn": "C2 foundation 与 Houdini handoff contract 已落地，但第一个真实合格产物还未 pass。"
+        },
+        {
+          "item_id": "c3_skeletal_transfer",
+          "title_cn": "C3 Skeletal Transfer Proof",
+          "status": "规划",
+          "priority": "P2",
+          "triage_state": "已分诊",
+          "evidence_gate_ids": ["skeletal_transfer_proof_c3"],
+          "notes_cn": "等待 C2 先出现第一个可信 fused fixture。"
+        },
+        {
+          "item_id": "c4_runtime_body_assembly",
+          "title_cn": "C4 Runtime Body Assembly Proof",
+          "status": "规划",
+          "priority": "P2",
+          "triage_state": "已分诊",
+          "evidence_gate_ids": ["runtime_body_assembly_proof_c4"],
+          "notes_cn": "等待 C3 先证明 rig transfer。"
+        },
+        {
+          "item_id": "h_layers",
+          "title_cn": "H0-H3 软组织与次级运动分层",
+          "status": "规划",
+          "priority": "P2",
+          "triage_state": "已分诊",
+          "evidence_gate_ids": [
+            "inertial_base_layer_h0",
+            "pose_traction_layer_h1",
+            "collision_constraint_layer_h2",
+            "runtime_surrogate_h3"
+          ],
+          "notes_cn": "方向明确，但不应早于 C4。"
+        }
+      ]
+    },
+    {
+      "line_id": "governance_tooling",
+      "title_cn": "治理与工具线",
+      "items": [
+        {
+          "item_id": "t1_tooling",
+          "title_cn": "T1 指标与证据基础",
+          "status": "稳定",
+          "evidence_gate_ids": [],
+          "notes_cn": "静态 evidence pack、图像指标、report index 已进入日常使用。"
+        },
+        {
+          "item_id": "t2_native_workbench",
+          "title_cn": "T2 Windows Native Workbench",
+          "status": "稳定",
+          "evidence_gate_ids": [],
+          "notes_cn": "原生只读/半控制工作台已成形，测试治理也已接入。"
+        },
+        {
+          "item_id": "dynamic_balance",
+          "title_cn": "Dynamic Balance 软信号",
+          "status": "实验",
+          "evidence_gate_ids": ["dynamic_balance_governance_progress"],
+          "notes_cn": "机制已经存在，但更像治理信号，不是权威门槛。"
+        },
+        {
+          "item_id": "tg1_test_governance",
+          "title_cn": "TG1 测试优先治理",
+          "status": "稳定",
+          "evidence_gate_ids": ["test_governance_round1"],
+          "notes_cn": "覆盖盲区和最低 lane 已能被机器读出来。"
+        }
+      ]
+    },
+    {
+      "line_id": "archived_routes",
+      "title_cn": "历史与归档路线",
+      "items": [
+        {
+          "item_id": "g1_editor_core_closure",
+          "title_cn": "G1 Editor Core Closure",
+          "status": "归档",
+          "evidence_gate_ids": ["editor_core_closure_g1"],
+          "notes_cn": "保留历史价值，但不再作为当前主推进线。"
+        },
+        {
+          "item_id": "g2_fixed_stage",
+          "title_cn": "G2 Fixed Stage",
+          "status": "归档",
+          "evidence_gate_ids": ["editor_fixed_stage_g2"],
+          "notes_cn": "已退役，不能再混入 active line 判断。"
+        }
+      ]
+    }
+  ]
+}
