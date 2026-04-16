@@ -73,3 +73,24 @@ def test_build_feature_ledger_summary_surfaces_experiment_metadata():
     assert target["idea_kind"] == "质检实验"
     assert target["entry_mode"] == "问题驱动"
     assert "三色" in target["title_cn"]
+
+
+def test_feature_ledger_tracks_real_clothing_input_gap():
+    ledger_path = REPO_ROOT / "docs" / "governance" / "feature_ledger_cn.v1.json"
+    payload = load_feature_ledger(ledger_path)
+    target = None
+    for line in list(payload.get("lines") or []):
+        for item in list(line.get("items") or []):
+            if str(item.get("item_id") or "") == "real_clothing_and_nude_fixture_supply":
+                target = item
+                break
+        if target:
+            break
+    assert target is not None
+    assert target["status"] == "规划"
+    assert target["priority"] == "未知"
+    assert target["triage_state"] == "待分诊"
+    assert target["idea_kind"] == "外部集成"
+    assert target["entry_mode"] == "问题驱动"
+    assert "可分离的真实衣物素材" in str(target.get("promotion_rule_cn") or "")
+    assert "裸体/近裸体 body baseline" in str(target.get("notes_cn") or "")

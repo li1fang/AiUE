@@ -234,6 +234,20 @@
           "notes_cn": "服装作为第二装备轴已经打通。"
         },
         {
+          "item_id": "real_clothing_and_nude_fixture_supply",
+          "title_cn": "真实服装素材与裸体基线补齐",
+          "status": "规划",
+          "priority": "未知",
+          "triage_state": "待分诊",
+          "idea_kind": "外部集成",
+          "entry_mode": "问题驱动",
+          "evidence_gate_ids": [],
+          "promotion_rule_cn": "至少拿到一组可分离的真实衣物素材，以及一组可对应的裸体或近裸体 body baseline 后，再升级为开发中。",
+          "fixture_scope_cn": "当前只要求服务真实 clothing proof 的最小输入夹具，不要求一上来覆盖全量服装类型或完整换装系统。",
+          "scheduling_hint_cn": "先把缺口显式记录下来；若后续优先推进真实服装实验，再转成受控素材收集与导入任务。",
+          "notes_cn": "当前 clothing 主线已经能跑，但主要仍依赖固定夹具而不是真实可拆衣物。若要进入真实衣服实验，仍缺少可分离衣物素材、可对应的裸体/近裸体 body baseline，以及更明确的 body-vs-clothing 资产合同。"
+        },
+        {
           "item_id": "p3_fx",
           "title_cn": "P3 FX 纵切片",
           "status": "稳定",
