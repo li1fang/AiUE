@@ -102,10 +102,15 @@ def test_provider_ready_handoff_check_passes_for_manifested_fixture(tmp_path: Pa
     assert completed.returncode == 0, completed.stdout + completed.stderr
     payload = json.loads(latest_report_path.read_text(encoding="utf-8"))
     assert payload["status"] == "pass"
+    assert payload["bodypaint_intake_summary"]["provider_ready_source_handoff"] is True
+    assert payload["bodypaint_intake_summary"]["ready_for_bodypaint"] is True
+    assert payload["bodypaint_intake_summary"]["blocking_issue_ids"] == []
+    assert payload["package_inventory"]["discovered_mesh_count"] == 1
     assert payload["provider_preview"]["status"] == "ready"
     assert payload["provider_preview"]["consumer_hints"]["ready_for_bodypaint"] is True
     checklist = {item["item_id"]: item for item in payload["checklist"]}
     assert checklist["manifest_present"]["status"] == "pass"
+    assert payload["next_actions"] == []
     provider_payload = json.loads(latest_provider_path.read_text(encoding="utf-8"))
     assert provider_payload["status"] == "ready"
 
@@ -145,8 +150,12 @@ def test_provider_ready_handoff_check_flags_missing_manifest(tmp_path: Path):
     payload = json.loads(latest_report_path.read_text(encoding="utf-8"))
     assert payload["status"] == "attention"
     assert any(item["id"] == "c2_manifest_missing" for item in payload["failed_requirements"])
+    assert payload["bodypaint_intake_summary"]["provider_ready_source_handoff"] is False
+    assert payload["bodypaint_intake_summary"]["ready_for_bodypaint"] is False
+    assert "c2_manifest_missing" in payload["bodypaint_intake_summary"]["blocking_issue_ids"]
     checklist = {item["item_id"]: item for item in payload["checklist"]}
     assert checklist["manifest_present"]["status"] == "attention"
+    assert any(item["issue_id"] == "c2_manifest_missing" for item in payload["next_actions"])
     provider_payload = json.loads(latest_provider_path.read_text(encoding="utf-8"))
     assert provider_payload["status"] == "missing_manifest"
 

@@ -7,7 +7,12 @@ from _bootstrap import ensure_aiue_paths
 
 REPO_ROOT = ensure_aiue_paths()
 
-from _c2_handoff_common import build_provider_ready_checklist, evaluate_provider_ready_source_handoff  # noqa: E402
+from _c2_handoff_common import (  # noqa: E402
+    build_provider_ready_checklist,
+    build_provider_ready_inventory,
+    build_provider_ready_next_actions,
+    evaluate_provider_ready_source_handoff,
+)
 from _gate_common import default_latest_report_path, default_output_root, now_utc, repo_root_from_workspace  # noqa: E402
 from aiue_core.report_writer import make_compatibility_block, with_report_envelope  # noqa: E402
 from aiue_core.schema_utils import load_workspace_config, write_json  # noqa: E402
@@ -91,6 +96,8 @@ def main() -> int:
     )
     failed_ids = {str(item.get("id") or "") for item in failed_requirements}
     checklist = build_provider_ready_checklist(fixture_payload, failed_ids=failed_ids)
+    inventory = build_provider_ready_inventory(fixture_payload)
+    next_actions = build_provider_ready_next_actions(failed_ids)
 
     provider_seed_report = {
         "gate_id": "canonical_fusion_fixture_c2",
@@ -106,6 +113,12 @@ def main() -> int:
         provider_seed_report,
         report_source_path=output_root / "c2_provider_ready_source_handoff_report.json",
     )
+    bodypaint_intake_summary = {
+        "provider_ready_source_handoff": status == "pass",
+        "ready_for_bodypaint": bool(((provider_payload.get("consumer_hints") or {}).get("ready_for_bodypaint"))),
+        "supported_primary_format": str((provider_payload.get("primary_asset") or {}).get("format") or "") in {"fbx", "glb"},
+        "blocking_issue_ids": sorted(item for item in failed_ids if item),
+    }
 
     report_payload = with_report_envelope(
         {
@@ -115,8 +128,12 @@ def main() -> int:
             "workspace_config": str(Path(args.workspace_config).expanduser().resolve()),
             "source_input_path": str(fixture_input_path),
             "provider_ready_source_handoff": fixture_payload,
+            "package_inventory": inventory,
             "provider_preview": provider_payload,
+            "bodypaint_intake_summary": bodypaint_intake_summary,
             "checklist": checklist,
+            "blocking_issue_ids": sorted(item for item in failed_ids if item),
+            "next_actions": next_actions,
             "failed_requirements": failed_requirements,
             "artifacts": {
                 "report_root": str(output_root),

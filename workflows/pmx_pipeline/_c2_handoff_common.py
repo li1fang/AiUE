@@ -9,6 +9,20 @@ ALLOWED_FIXTURE_SCOPES = {
     "lower_body_core",
 }
 
+REMEDIATION_BY_ISSUE_ID = {
+    "c2_manifest_missing": "Add canonical_fusion_fixture_manifest.json beside the exported mesh.",
+    "c2_primary_mesh_missing": "Ensure primary_mesh_relative_path resolves to exactly one real mesh artifact.",
+    "c2_fixture_id_missing": "Declare a stable fixture_id in the manifest.",
+    "c2_body_family_missing": "Declare a stable body_family_id in the manifest.",
+    "c2_fixture_scope_missing": "Declare fixture_scope in the manifest.",
+    "c2_fixture_scope_invalid": "Change fixture_scope to one of the currently approved scopes.",
+    "c2_source_module_ids_missing": "Populate source_module_ids so downstream tools can trace the fused artifact back to source modules.",
+    "c2_exporter_not_houdini": "Set exporter.tool = houdini and keep exporter metadata explicit.",
+    "c2_linear_unit_invalid": "Export with UE-facing centimeter metadata and write linear_unit = cm.",
+    "c2_up_axis_invalid": "Export with explicit Z-up metadata and write up_axis = z.",
+    "c2_fusion_recipe_missing": "Declare a stable fusion_recipe_id for deterministic replay.",
+}
+
 
 FailedRequirementFactory = Callable[..., dict[str, Any]]
 
@@ -195,3 +209,31 @@ def build_provider_ready_checklist(fixture: dict[str, Any], *, failed_ids: set[s
             passes="c2_fusion_recipe_missing" not in failed_ids,
         ),
     ]
+
+
+def build_provider_ready_inventory(fixture: dict[str, Any]) -> dict[str, Any]:
+    discovered_mesh_relative_paths = list(fixture.get("discovered_mesh_relative_paths") or [])
+    discovered_texture_relative_paths = list(fixture.get("discovered_texture_relative_paths") or [])
+    counts = dict(fixture.get("counts") or {})
+    return {
+        "manifest_present": bool(fixture.get("manifest_present")),
+        "primary_mesh_relative_path": str(fixture.get("primary_mesh_relative_path") or ""),
+        "primary_mesh_format": str(fixture.get("primary_mesh_format") or ""),
+        "discovered_mesh_count": int(counts.get("discovered_mesh_count") or len(discovered_mesh_relative_paths)),
+        "discovered_mesh_relative_paths": discovered_mesh_relative_paths,
+        "discovered_texture_count": int(counts.get("discovered_texture_count") or len(discovered_texture_relative_paths)),
+        "discovered_texture_relative_paths": discovered_texture_relative_paths,
+        "declared_source_module_count": int(counts.get("source_module_count") or len(list(fixture.get("source_module_ids") or []))),
+    }
+
+
+def build_provider_ready_next_actions(failed_ids: set[str]) -> list[dict[str, str]]:
+    actions: list[dict[str, str]] = []
+    for issue_id in sorted(item for item in failed_ids if item):
+        actions.append(
+            {
+                "issue_id": issue_id,
+                "action": REMEDIATION_BY_ISSUE_ID.get(issue_id, "Review the failing requirement and update the handoff package accordingly."),
+            }
+        )
+    return actions
