@@ -4,7 +4,8 @@ param(
     [string]$FixtureZip = "",
     [string]$FixtureRoot = "",
     [string]$OutputRoot = "",
-    [string]$LatestReportPath = ""
+    [string]$LatestReportPath = "",
+    [string]$LatestProviderPath = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -23,6 +24,7 @@ if ($FixtureZip) { $arguments += @("--fixture-zip", $FixtureZip) }
 if ($FixtureRoot) { $arguments += @("--fixture-root", $FixtureRoot) }
 if ($OutputRoot) { $arguments += @("--output-root", $OutputRoot) }
 if ($LatestReportPath) { $arguments += @("--latest-report-path", $LatestReportPath) }
+if ($LatestProviderPath) { $arguments += @("--latest-provider-path", $LatestProviderPath) }
 
 & $pythonExe @arguments
 exit $LASTEXITCODE

@@ -19,6 +19,11 @@ from _gate_common import (  # noqa: E402
 from aiue_core.report_writer import make_compatibility_block, with_report_envelope  # noqa: E402
 from aiue_core.schema_utils import load_json, load_workspace_config, write_json  # noqa: E402
 from aiue_t1.canonical_fusion import inspect_canonical_fusion_fixture, stage_canonical_fusion_source  # noqa: E402
+from aiue_t1.converted_model_provider import (  # noqa: E402
+    build_converted_model_provider_from_c2_report,
+    default_latest_converted_model_provider_path,
+    write_converted_model_provider,
+)
 
 
 GATE_ID = "canonical_fusion_fixture_c2"
@@ -38,6 +43,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--fixture-root")
     parser.add_argument("--output-root")
     parser.add_argument("--latest-report-path")
+    parser.add_argument("--latest-provider-path")
     return parser.parse_args()
 
 
@@ -204,7 +210,13 @@ def main() -> int:
     workspace = load_workspace_config(args.workspace_config)
     output_root = Path(args.output_root).expanduser().resolve() if args.output_root else default_output_root(workspace, REPO_ROOT, GATE_ID)
     latest_report_path = Path(args.latest_report_path).expanduser().resolve() if args.latest_report_path else default_latest_report_path(workspace, REPO_ROOT, GATE_ID)
+    latest_provider_path = (
+        Path(args.latest_provider_path).expanduser().resolve()
+        if args.latest_provider_path
+        else default_latest_converted_model_provider_path(REPO_ROOT)
+    )
     output_root.mkdir(parents=True, exist_ok=True)
+    latest_provider_path.parent.mkdir(parents=True, exist_ok=True)
 
     previous_report = load_json(latest_report_path) if latest_report_path.exists() else None
 
@@ -277,8 +289,19 @@ def main() -> int:
 
     report_path = output_root / "canonical_fusion_fixture_report.json"
     latest_alias_path = output_root / "canonical_fusion_fixture_latest.json"
+    provider_path = output_root / "converted_model_provider.json"
+    provider_latest_alias_path = output_root / "converted_model_provider_latest.json"
+    report_payload["artifacts"]["converted_model_provider_path"] = str(provider_path)
+    report_payload["artifacts"]["latest_provider_path"] = str(latest_provider_path)
     write_report_pair(report_payload, report_path, latest_report_path)
     write_json(latest_alias_path, report_payload)
+    provider_payload = build_converted_model_provider_from_c2_report(
+        report_payload,
+        report_source_path=report_path,
+    )
+    write_converted_model_provider(provider_path, provider_payload)
+    write_converted_model_provider(provider_latest_alias_path, provider_payload)
+    write_converted_model_provider(latest_provider_path, provider_payload)
     print(f"C2 canonical fusion fixture report written to: {report_path}")
     return 0
 

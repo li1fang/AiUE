@@ -125,6 +125,7 @@ def test_c2_runner_passes_with_manifested_zip_fixture(tmp_path: Path):
     fixture_zip = tmp_path / "scan-model-hi.zip"
     output_root = tmp_path / "verification" / "c2_run"
     latest_report_path = tmp_path / "verification" / "latest_canonical_fusion_fixture_c2_report.json"
+    latest_provider_path = tmp_path / "body_platform" / "latest" / "converted_model_provider_v0_1.json"
 
     workspace_path.write_text(json.dumps(_workspace_payload(), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     source_report_path.write_text(json.dumps(_c1_source_report(), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -144,6 +145,8 @@ def test_c2_runner_passes_with_manifested_zip_fixture(tmp_path: Path):
             str(output_root),
             "--latest-report-path",
             str(latest_report_path),
+            "--latest-provider-path",
+            str(latest_provider_path),
         ],
         cwd=str(REPO_ROOT),
         capture_output=True,
@@ -157,6 +160,12 @@ def test_c2_runner_passes_with_manifested_zip_fixture(tmp_path: Path):
     assert payload["fixture_id"] == "family_alpha::lower_body_core_hi"
     assert payload["canonical_fusion_fixture"]["primary_mesh_format"] == "fbx"
     assert payload["canonical_fusion_fixture"]["manifest_present"] is True
+    assert payload["artifacts"]["converted_model_provider_path"].endswith("converted_model_provider.json")
+    assert payload["artifacts"]["latest_provider_path"] == str(latest_provider_path)
+    provider_payload = json.loads(latest_provider_path.read_text(encoding="utf-8"))
+    assert provider_payload["status"] == "ready"
+    assert provider_payload["consumer_hints"]["ready_for_bodypaint"] is True
+    assert provider_payload["consumer_hints"]["ready_for_ue"] is False
 
 
 def test_c2_runner_marks_raw_zip_as_attention_when_manifest_is_missing(tmp_path: Path):
@@ -165,6 +174,7 @@ def test_c2_runner_marks_raw_zip_as_attention_when_manifest_is_missing(tmp_path:
     fixture_zip = tmp_path / "scan-model-hi.zip"
     output_root = tmp_path / "verification" / "c2_run"
     latest_report_path = tmp_path / "verification" / "latest_canonical_fusion_fixture_c2_report.json"
+    latest_provider_path = tmp_path / "body_platform" / "latest" / "converted_model_provider_v0_1.json"
 
     workspace_path.write_text(json.dumps(_workspace_payload(), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     source_report_path.write_text(json.dumps(_c1_source_report(), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -184,6 +194,8 @@ def test_c2_runner_marks_raw_zip_as_attention_when_manifest_is_missing(tmp_path:
             str(output_root),
             "--latest-report-path",
             str(latest_report_path),
+            "--latest-provider-path",
+            str(latest_provider_path),
         ],
         cwd=str(REPO_ROOT),
         capture_output=True,
@@ -196,6 +208,8 @@ def test_c2_runner_marks_raw_zip_as_attention_when_manifest_is_missing(tmp_path:
     assert payload["status"] == "attention"
     assert payload["canonical_fusion_fixture"]["manifest_present"] is False
     assert any(item["id"] == "c2_manifest_missing" for item in payload["failed_requirements"])
+    provider_payload = json.loads(latest_provider_path.read_text(encoding="utf-8"))
+    assert provider_payload["status"] == "missing_manifest"
 
 
 def test_body_platform_quality_summary_prefers_c2_when_available(tmp_path: Path):
