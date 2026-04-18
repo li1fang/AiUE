@@ -36,6 +36,14 @@ The payload follows:
 - optional `companions`
 - lineage and conversion provenance
 - lightweight `consumer_hints`
+- a small `body_platform` block with stable handoff identity:
+  - `source_gate_id`
+  - `body_family_id`
+  - `fixture_id`
+  - `fixture_scope`
+  - `fusion_recipe_id`
+  - `rig_profile_id`
+  - `material_profile_id`
 
 ## Current Source
 
@@ -62,6 +70,23 @@ It does not mean:
 - rig complete
 - runtime-ready avatar
 - final material quality approved
+
+## BodyPaint Boundary
+
+The provider intentionally exposes only upstream converted-model facts:
+
+- what the converted model is
+- where the primary asset is
+- which companion artifacts travel with it
+- how it was produced
+- which body-platform fixture it belongs to
+
+It intentionally does not expose BodyPaint-owned concepts such as:
+
+- `resolved_axes`
+- `regions`
+- `paint_strategy`
+- `manual_overrides`
 
 ## Resolver Entry
 

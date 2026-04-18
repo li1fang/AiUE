@@ -66,8 +66,10 @@ def build_converted_model_provider_from_c2_report(
     primary_mesh_format = str(fixture.get("primary_mesh_format") or "").lower()
     body_family_id = str(c2_report.get("body_family_id") or fixture.get("body_family_id") or "")
     fixture_id = str(c2_report.get("fixture_id") or fixture.get("fixture_id") or "")
+    fixture_scope = str(fixture.get("fixture_scope") or "")
     source_root = str(fixture.get("source_root") or "")
     source_module_ids = [str(item) for item in list(fixture.get("source_module_ids") or []) if str(item)]
+    source_gate_id = "canonical_fusion_fixture_c2"
 
     companions: list[dict[str, Any]] = []
     manifest_path = str(fixture.get("manifest_path") or "")
@@ -136,6 +138,8 @@ def build_converted_model_provider_from_c2_report(
             "sample_id": body_family_id,
             "package_id": fixture_id,
             "profile": body_family_id,
+            "body_family_id": body_family_id,
+            "fixture_id": fixture_id,
         },
         "primary_asset": {
             "path": primary_mesh_path,
@@ -149,12 +153,24 @@ def build_converted_model_provider_from_c2_report(
             "source_root": str(source_inventory_summary.get("source_root") or source_root),
             "source_format": "body_platform_module_family",
             "source_module_ids": source_module_ids,
+            "body_family_id": body_family_id,
+            "fixture_scope": fixture_scope,
+            "source_gate_id": source_gate_id,
         },
         "conversion": {
             "tool": str(exporter.get("tool") or ""),
             "tool_version": str(exporter.get("version") or ""),
             "generated_at_utc": str(c2_report.get("generated_at_utc") or ""),
-            "source_gate_id": "canonical_fusion_fixture_c2",
+            "source_gate_id": source_gate_id,
+        },
+        "body_platform": {
+            "source_gate_id": source_gate_id,
+            "body_family_id": body_family_id,
+            "fixture_id": fixture_id,
+            "fixture_scope": fixture_scope,
+            "fusion_recipe_id": str(fixture.get("fusion_recipe_id") or ""),
+            "rig_profile_id": str(fixture.get("rig_profile_id") or ""),
+            "material_profile_id": str(fixture.get("material_profile_id") or ""),
         },
         "warnings": warnings,
         "notes": notes,

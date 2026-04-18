@@ -45,6 +45,7 @@ def _build_c2_report(
         "canonical_fusion_fixture": {
             "fixture_id": "family_alpha::lower_body_core_hi",
             "body_family_id": "family_alpha",
+            "fixture_scope": "lower_body_core",
             "primary_mesh_abs_path": str(mesh_path.resolve()),
             "primary_mesh_relative_path": "meshes/lower_body_core_hi.fbx",
             "primary_mesh_format": "fbx",
@@ -61,6 +62,9 @@ def _build_c2_report(
             "quality": {
                 "runtime_ready": runtime_ready,
             },
+            "fusion_recipe_id": "houdini_recipe::family_alpha::lower_body_core_v1",
+            "rig_profile_id": "rig_profile::family_alpha::pending",
+            "material_profile_id": "material_profile::family_alpha::scan_source_v1",
         },
         "source_inventory_summary": {
             "source_root": str((tmp_path / "source_inventory").resolve()),
@@ -83,7 +87,15 @@ def test_provider_marks_passing_c2_fixture_ready_for_bodypaint(tmp_path: Path):
     assert provider["consumer_hints"]["ready_for_bodypaint"] is True
     assert provider["consumer_hints"]["ready_for_ue"] is False
     assert provider["identity"]["package_id"] == "family_alpha::lower_body_core_hi"
+    assert provider["identity"]["body_family_id"] == "family_alpha"
+    assert provider["identity"]["fixture_id"] == "family_alpha::lower_body_core_hi"
     assert provider["primary_asset"]["format"] == "fbx"
+    assert provider["body_platform"]["source_gate_id"] == "canonical_fusion_fixture_c2"
+    assert provider["body_platform"]["body_family_id"] == "family_alpha"
+    assert provider["body_platform"]["fixture_scope"] == "lower_body_core"
+    assert provider["body_platform"]["fusion_recipe_id"] == "houdini_recipe::family_alpha::lower_body_core_v1"
+    assert provider["lineage"]["fixture_scope"] == "lower_body_core"
+    assert provider["conversion"]["source_gate_id"] == "canonical_fusion_fixture_c2"
     assert any(item["role"] == "upstream_manifest" for item in provider["companions"])
     assert any(item["role"] == "textures_root" for item in provider["companions"])
     assert any(item["role"] == "body_platform_report" for item in provider["companions"])
@@ -143,6 +155,7 @@ def test_resolver_writes_not_found_provider_when_c2_report_is_missing(tmp_path: 
     payload = json.loads(output_path.read_text(encoding="utf-8"))
     assert payload["status"] == "not_found"
     assert payload["consumer_hints"]["ready_for_bodypaint"] is False
+    assert payload["body_platform"]["source_gate_id"] == "canonical_fusion_fixture_c2"
     assert "c2 report not found" in payload["notes"][0]
     latest_payload = json.loads(latest_output_path.read_text(encoding="utf-8"))
     assert latest_payload["status"] == "not_found"
