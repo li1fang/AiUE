@@ -1,5 +1,9 @@
 # C2 Houdini First Fixture Playbook
 
+This playbook now has a narrower, more practical goal:
+
+`produce a provider-ready source handoff that can later become BodyPaint's upstream input`
+
 ## First Real Sample
 
 Current sample:
@@ -15,6 +19,22 @@ Current observed shape:
 - no lineage metadata
 
 This means the sample is already a useful raw source drop, but it is **not yet** a qualified `C2` handoff package.
+
+It is also not yet a `provider-ready source handoff`.
+
+## What "Provider-Ready" Means
+
+At this stage, the target is not the final downstream `C2` deliverable.
+
+The current target is smaller:
+
+- AiUE can validate the package shape
+- AiUE can derive a provider JSON
+- the provider reports:
+  - `status = ready`
+  - `consumer_hints.ready_for_bodypaint = true`
+
+That is enough for BodyPaint to begin real consumer-side integration.
 
 ## First Qualified Target
 
@@ -73,6 +93,8 @@ The first fixture should only answer:
 The first package should ship with:
 
 - [canonical_fusion_fixture_manifest.example.json](C:/AiUE/examples/body_platform/canonical_fusion_fixture_manifest.example.json)
+- [canonical_fusion_fixture_manifest.v0.schema.json](C:/AiUE/schemas/canonical_fusion_fixture_manifest.v0.schema.json)
+- [c2_provider_ready_source_handoff_checklist.md](C:/AiUE/docs/checkpoints/c2_provider_ready_source_handoff_checklist.md)
 
 At minimum, fill:
 
@@ -99,6 +121,27 @@ Recommended first layout:
 
 If there are no textures yet, keep `materials/` empty and say so in the manifest.
 
+## Fast Self-Check
+
+Before asking AiUE to treat a package as a real handoff, run:
+
+- [run_check_c2_provider_ready_source_handoff.ps1](C:/AiUE/run_check_c2_provider_ready_source_handoff.ps1)
+
+That check answers:
+
+- does the package itself look like a provider-ready source handoff?
+- if not, which package-level fields are still missing?
+
+It intentionally does not require the full repository-integrated `C2` context.
+
+## Full AiUE Gate
+
+After the package-level self-check turns green, run:
+
+- [run_canonical_fusion_fixture_c2.ps1](C:/AiUE/run_canonical_fusion_fixture_c2.ps1)
+
+That is the stricter repository-integrated gate.
+
 ## Acceptance For First Qualified C2 Package
 
 AiUE should be able to run:
@@ -108,6 +151,17 @@ AiUE should be able to run:
 and get:
 
 - `status = pass`
+
+The package-level self-check should also be able to run:
+
+- [run_check_c2_provider_ready_source_handoff.ps1](C:/AiUE/run_check_c2_provider_ready_source_handoff.ps1)
+
+and get:
+
+- `status = pass`
+- a provider preview with:
+  - `status = ready`
+  - `consumer_hints.ready_for_bodypaint = true`
 
 The package does **not** need to be:
 

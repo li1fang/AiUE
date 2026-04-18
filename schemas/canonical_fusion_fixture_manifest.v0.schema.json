@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aiue.local/schemas/canonical_fusion_fixture_manifest.v0.schema.json",
+  "title": "Canonical Fusion Fixture Manifest v0",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "fixture_id",
+    "body_family_id",
+    "fixture_scope",
+    "source_module_ids",
+    "primary_mesh_relative_path",
+    "mesh_format",
+    "fusion_recipe_id",
+    "exporter",
+    "coordinate_system"
+  ],
+  "properties": {
+    "fixture_id": { "type": "string", "minLength": 1 },
+    "body_family_id": { "type": "string", "minLength": 1 },
+    "fixture_scope": {
+      "type": "string",
+      "enum": ["lower_body_core", "full_body", "canonical_fused_body"]
+    },
+    "source_module_ids": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "primary_mesh_relative_path": { "type": "string", "minLength": 1 },
+    "mesh_format": {
+      "type": "string",
+      "enum": ["abc", "fbx", "obj", "usd", "usda", "usdc"]
+    },
+    "material_bundle_relative_root": { "type": "string" },
+    "texture_relative_paths": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "fusion_recipe_id": { "type": "string", "minLength": 1 },
+    "rig_profile_id": { "type": "string" },
+    "material_profile_id": { "type": "string" },
+    "exporter": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["tool", "version"],
+      "properties": {
+        "tool": { "type": "string", "const": "houdini" },
+        "version": { "type": "string", "minLength": 1 },
+        "network": { "type": "string" }
+      }
+    },
+    "coordinate_system": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["linear_unit", "up_axis", "forward_axis"],
+      "properties": {
+        "linear_unit": {
+          "type": "string",
+          "enum": ["cm", "centimeter", "centimeters"]
+        },
+        "up_axis": { "type": "string", "enum": ["z"] },
+        "forward_axis": { "type": "string", "minLength": 1 }
+      }
+    },
+    "quality": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "topology_state": { "type": "string" },
+        "uv_state": { "type": "string" },
+        "watertight_expected": { "type": "boolean" },
+        "runtime_ready": { "type": "boolean" }
+      }
+    },
+    "notes": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

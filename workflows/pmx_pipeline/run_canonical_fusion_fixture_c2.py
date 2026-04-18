@@ -7,6 +7,7 @@ from _bootstrap import ensure_aiue_paths
 
 REPO_ROOT = ensure_aiue_paths()
 
+from _c2_handoff_common import ALLOWED_FIXTURE_SCOPES, evaluate_provider_ready_source_handoff  # noqa: E402
 from _gate_common import (  # noqa: E402
     build_discussion_signal,
     default_latest_report_path,
@@ -28,11 +29,6 @@ from aiue_t1.converted_model_provider import (  # noqa: E402
 
 GATE_ID = "canonical_fusion_fixture_c2"
 SOURCE_GATE_ID = "parametric_body_contract_c1"
-ALLOWED_FIXTURE_SCOPES = {
-    "canonical_fused_body",
-    "full_body",
-    "lower_body_core",
-}
 
 
 def parse_args() -> argparse.Namespace:
@@ -79,7 +75,10 @@ def resolve_fixture_input_path(workspace: dict, *, explicit_zip: str | None, exp
 
 
 def evaluate_fixture(fixture: dict, *, c1_report: dict | None, source_report_path: Path | None) -> tuple[str, list[dict]]:
-    failed_requirements: list[dict] = []
+    _, failed_requirements = evaluate_provider_ready_source_handoff(
+        fixture,
+        make_failed_requirement=make_failed_requirement,
+    )
     source_status = str((c1_report or {}).get("status") or "")
     source_body_family_id = str((c1_report or {}).get("body_family_id") or "")
     fixture_body_family_id = str(fixture.get("body_family_id") or "")
@@ -102,103 +101,13 @@ def evaluate_fixture(fixture: dict, *, c1_report: dict | None, source_report_pat
             )
         )
 
-    if not bool(fixture.get("manifest_present")):
-        failed_requirements.append(
-            make_failed_requirement(
-                "c2_manifest_missing",
-                "A qualified C2 handoff requires a canonical fusion manifest beside the Houdini mesh export.",
-                source_root=str(fixture.get("source_root") or ""),
-            )
-        )
-    if not str(fixture.get("primary_mesh_abs_path") or ""):
-        failed_requirements.append(
-            make_failed_requirement(
-                "c2_primary_mesh_missing",
-                "C2 requires exactly one resolvable primary mesh file.",
-                source_root=str(fixture.get("source_root") or ""),
-            )
-        )
-
-    fixture_scope = str(fixture.get("fixture_scope") or "")
-    if not fixture_scope:
-        failed_requirements.append(
-            make_failed_requirement(
-                "c2_fixture_scope_missing",
-                "C2 requires an explicit fixture_scope in the Houdini manifest.",
-            )
-        )
-    elif fixture_scope not in ALLOWED_FIXTURE_SCOPES:
-        failed_requirements.append(
-            make_failed_requirement(
-                "c2_fixture_scope_invalid",
-                "C2 only accepts the current narrow body scopes.",
-                fixture_scope=fixture_scope,
-                allowed_scopes=sorted(ALLOWED_FIXTURE_SCOPES),
-            )
-        )
-
-    if not fixture_body_family_id:
-        failed_requirements.append(
-            make_failed_requirement(
-                "c2_body_family_missing",
-                "C2 requires a body_family_id so the Houdini output can be routed back into the body-platform line.",
-            )
-        )
-    elif source_body_family_id and fixture_body_family_id != source_body_family_id:
+    if source_body_family_id and fixture_body_family_id and fixture_body_family_id != source_body_family_id:
         failed_requirements.append(
             make_failed_requirement(
                 "c2_body_family_mismatch",
                 "C2 fixture body_family_id must match the selected C1 contract family.",
                 fixture_body_family_id=fixture_body_family_id,
                 c1_body_family_id=source_body_family_id,
-            )
-        )
-
-    if not list(fixture.get("source_module_ids") or []):
-        failed_requirements.append(
-            make_failed_requirement(
-                "c2_source_module_ids_missing",
-                "C2 requires source_module_ids so the fused artifact can be traced back to modular inputs.",
-            )
-        )
-
-    exporter = dict(fixture.get("exporter") or {})
-    exporter_tool = str(exporter.get("tool") or "").lower()
-    if exporter_tool != "houdini":
-        failed_requirements.append(
-            make_failed_requirement(
-                "c2_exporter_not_houdini",
-                "The first C2 handoff must be authored and exported by Houdini.",
-                exporter_tool=exporter_tool,
-            )
-        )
-
-    coordinate_system = dict(fixture.get("coordinate_system") or {})
-    linear_unit = str(coordinate_system.get("linear_unit") or "").lower()
-    up_axis = str(coordinate_system.get("up_axis") or "").lower()
-    if linear_unit not in {"cm", "centimeter", "centimeters"}:
-        failed_requirements.append(
-            make_failed_requirement(
-                "c2_linear_unit_invalid",
-                "C2 requires UE-facing centimeter export metadata.",
-                linear_unit=linear_unit,
-            )
-        )
-    if up_axis != "z":
-        failed_requirements.append(
-            make_failed_requirement(
-                "c2_up_axis_invalid",
-                "C2 requires explicit Z-up export metadata for the qualified handoff package.",
-                up_axis=up_axis,
-            )
-        )
-
-    manifest = dict(fixture.get("manifest") or {})
-    if not str(manifest.get("fusion_recipe_id") or ""):
-        failed_requirements.append(
-            make_failed_requirement(
-                "c2_fusion_recipe_missing",
-                "C2 requires a fusion_recipe_id so Linux Houdini automation can replay the same recipe deterministically.",
             )
         )
 
