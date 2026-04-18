@@ -48,6 +48,7 @@ function Get-HostProjectRoot {
         "inspect-slot-runtime" = "kernel"
         "composition-validation" = "kernel"
         "validate-package" = "kernel"
+        "import-level1-curve-bundle" = "demo"
         "load-level" = "demo"
         "stage-capture" = "demo"
         "run-scene-sweep" = "demo"

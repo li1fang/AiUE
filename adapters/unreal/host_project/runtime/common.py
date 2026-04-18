@@ -181,6 +181,12 @@ def object_path_from_asset_path(asset_path: str) -> str:
     asset_name = asset_name_from_path(asset_path)
     return f"{asset_path}.{asset_name}"
 
+
+def asset_path_from_object_path(object_path: str | None) -> str:
+    if not object_path:
+        return ""
+    return str(object_path).split(".", 1)[0]
+
 def serialize_vector(vector) -> dict[str, float]:
     return {
         "x": float(vector.x),
@@ -2246,7 +2252,6 @@ def transform_delta_payload(before: dict, after: dict) -> dict:
         "pitch_delta": float(pitch_delta),
         "roll_delta": float(roll_delta),
     }
-
 
 
 
