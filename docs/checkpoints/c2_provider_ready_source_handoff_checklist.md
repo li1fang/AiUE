@@ -6,7 +6,7 @@
 
 它回答的是更前面的一个问题：
 
-`这个 Houdini handoff 包，是否已经足够合格，能够让 AiUE 派生出 BodyPaint 可消费的 provider-ready source handoff？`
+`这个 source handoff 包，是否已经足够合格，能够让 AiUE 派生出 BodyPaint 可消费的 provider-ready source handoff？`
 
 换句话说，这一阶段的目标是：
 
@@ -26,11 +26,16 @@
 - [latest_canonical_fusion_fixture_c2_report.json](C:/AiUE/Saved/verification/latest_canonical_fusion_fixture_c2_report.json)
 - [converted_model_provider_v0_1.json](C:/AiUE/Saved/body_platform/c2/latest/converted_model_provider_v0_1.json)
 
-并满足：
+并至少满足：
 
-- `latest_canonical_fusion_fixture_c2_report.status = pass`
 - `converted_model_provider_v0_1.status = ready`
 - `converted_model_provider_v0_1.consumer_hints.ready_for_bodypaint = true`
+
+说明：
+
+- package-level source handoff ready
+  不等于
+- strict AiUE `canonical_fusion_fixture_c2` 已通过
 
 ## 包级最小必需项
 
@@ -46,10 +51,20 @@
    - `canonical_fused_body`
 5. `source_module_ids` 至少有 1 个
 6. `primary_mesh_relative_path` 能解析到真实 mesh 文件
-7. `exporter.tool = houdini`
-8. `coordinate_system.linear_unit = cm`
-9. `coordinate_system.up_axis = z`
-10. `fusion_recipe_id` 存在且稳定
+7. `exporter.tool` 存在且稳定
+8. `exporter.version` 存在
+9. `coordinate_system.linear_unit` 存在
+10. `coordinate_system.up_axis` 存在
+11. `coordinate_system.forward_axis` 存在
+12. `fusion_recipe_id` 存在且稳定
+
+这些要求只服务于 source handoff ready。
+
+更严格的内部 `C2` gate 仍然会继续要求：
+
+- `exporter.tool = houdini`
+- `coordinate_system.linear_unit = cm`
+- `coordinate_system.up_axis = z`
 
 ## 推荐目录布局
 
@@ -72,6 +87,12 @@
 
 - [canonical_fusion_fixture_manifest.example.json](C:/AiUE/examples/body_platform/canonical_fusion_fixture_manifest.example.json)
 - [canonical_fusion_fixture_manifest.v0.schema.json](C:/AiUE/schemas/canonical_fusion_fixture_manifest.v0.schema.json)
+
+如果当前手里只有一个原始 `FBX/zip`，也可以先用：
+
+- [run_build_provider_ready_source_handoff_sample.ps1](C:/AiUE/run_build_provider_ready_source_handoff_sample.ps1)
+
+把它包装成一份最小 provider-ready source handoff 样本，再跑后续自检。
 
 ## 自检顺序
 
@@ -103,7 +124,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File C:\AiUE\run_check_c2_provide
 
 - [run_canonical_fusion_fixture_c2.ps1](C:/AiUE/run_canonical_fusion_fixture_c2.ps1)
 
-它会继续检查更完整的 AiUE 上下文，而不只是包本身。
+它会继续检查更完整的 AiUE 上下文，而且它比 package-level self-check 更严格。
 
 ## 当前真实 zip 暴露过的失败类型
 
@@ -116,9 +137,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File C:\AiUE\run_check_c2_provide
 - `c2_fixture_scope_missing`
 - `c2_fixture_scope_invalid`
 - `c2_source_module_ids_missing`
-- `c2_exporter_not_houdini`
-- `c2_linear_unit_invalid`
-- `c2_up_axis_invalid`
+- `source_exporter_tool_missing`
+- `source_exporter_version_missing`
+- `source_linear_unit_missing`
+- `source_up_axis_missing`
+- `source_forward_axis_missing`
 - `c2_fusion_recipe_missing`
 
 ## 边界提醒

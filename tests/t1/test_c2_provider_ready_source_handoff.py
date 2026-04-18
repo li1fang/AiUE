@@ -172,3 +172,78 @@ def test_manifest_example_contains_schema_required_fields():
     assert manifest["exporter"]["tool"] == "houdini"
     assert manifest["coordinate_system"]["linear_unit"] == "cm"
     assert manifest["coordinate_system"]["up_axis"] == "z"
+
+
+def test_source_handoff_check_accepts_explicit_non_houdini_source_metadata(tmp_path: Path):
+    source_zip = tmp_path / "scan-model-hi.zip"
+    build_root = tmp_path / "build_ready_handoff"
+    workspace_path = tmp_path / "workspace.json"
+    latest_report_path = tmp_path / "verification" / "latest_c2_provider_ready_source_handoff_check_report.json"
+    latest_provider_path = tmp_path / "body_platform" / "latest" / "converted_model_provider_provider_ready_check_v0_1.json"
+
+    _write_zip_fixture(source_zip, include_manifest=False)
+    workspace_path.write_text(json.dumps(_workspace_payload(), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+    build = subprocess.run(
+        [
+            sys.executable,
+            str(PMX_PIPELINE_ROOT / "run_build_provider_ready_source_handoff_sample.py"),
+            "--source-zip",
+            str(source_zip),
+            "--output-root",
+            str(build_root),
+            "--fixture-id",
+            "bodypaint_trial::lower_body_core_source_v1",
+            "--body-family-id",
+            "bodypaint_trial",
+            "--exporter-tool",
+            "aiue_source_wrap",
+            "--exporter-version",
+            "0.1",
+            "--linear-unit",
+            "m",
+            "--up-axis",
+            "y",
+            "--forward-axis",
+            "z",
+        ],
+        cwd=str(REPO_ROOT),
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert build.returncode == 0, build.stdout + build.stderr
+
+    package_zip = build_root / "bodypaint_trial_lower_body_core_source_v1.zip"
+    assert package_zip.exists()
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(PMX_PIPELINE_ROOT / "run_check_c2_provider_ready_source_handoff.py"),
+            "--workspace-config",
+            str(workspace_path),
+            "--fixture-zip",
+            str(package_zip),
+            "--latest-report-path",
+            str(latest_report_path),
+            "--latest-provider-path",
+            str(latest_provider_path),
+        ],
+        cwd=str(REPO_ROOT),
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    payload = json.loads(latest_report_path.read_text(encoding="utf-8"))
+    assert payload["status"] == "pass"
+    assert payload["bodypaint_intake_summary"]["provider_ready_source_handoff"] is True
+    assert payload["bodypaint_intake_summary"]["ready_for_bodypaint"] is True
+    assert payload["provider_preview"]["status"] == "ready"
+    assert payload["package_inventory"]["primary_mesh_format"] == "fbx"
+    checklist = {item["item_id"]: item for item in payload["checklist"]}
+    assert checklist["exporter_tool"]["status"] == "pass"
+    assert checklist["linear_unit"]["value"] == "m"
+    assert checklist["up_axis"]["value"] == "y"
+    assert checklist["forward_axis"]["value"] == "z"

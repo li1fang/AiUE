@@ -7,7 +7,7 @@ from _bootstrap import ensure_aiue_paths
 
 REPO_ROOT = ensure_aiue_paths()
 
-from _c2_handoff_common import ALLOWED_FIXTURE_SCOPES, evaluate_provider_ready_source_handoff  # noqa: E402
+from _c2_handoff_common import evaluate_provider_ready_source_handoff, evaluate_strict_c2_requirements  # noqa: E402
 from _gate_common import (  # noqa: E402
     build_discussion_signal,
     default_latest_report_path,
@@ -78,6 +78,12 @@ def evaluate_fixture(fixture: dict, *, c1_report: dict | None, source_report_pat
     _, failed_requirements = evaluate_provider_ready_source_handoff(
         fixture,
         make_failed_requirement=make_failed_requirement,
+    )
+    failed_requirements.extend(
+        evaluate_strict_c2_requirements(
+            fixture,
+            make_failed_requirement=make_failed_requirement,
+        )
     )
     source_status = str((c1_report or {}).get("status") or "")
     source_body_family_id = str((c1_report or {}).get("body_family_id") or "")

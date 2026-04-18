@@ -45,7 +45,7 @@
       "additionalProperties": true,
       "required": ["tool", "version"],
       "properties": {
-        "tool": { "type": "string", "const": "houdini" },
+        "tool": { "type": "string", "minLength": 1 },
         "version": { "type": "string", "minLength": 1 },
         "network": { "type": "string" }
       }
@@ -57,10 +57,10 @@
       "properties": {
         "linear_unit": {
           "type": "string",
-          "enum": ["cm", "centimeter", "centimeters"]
+          "enum": ["mm", "millimeter", "millimeters", "cm", "centimeter", "centimeters", "m", "meter", "meters"]
         },
-        "up_axis": { "type": "string", "enum": ["z"] },
-        "forward_axis": { "type": "string", "minLength": 1 }
+        "up_axis": { "type": "string", "enum": ["x", "y", "z"] },
+        "forward_axis": { "type": "string", "enum": ["x", "y", "z"] }
       }
     },
     "quality": {

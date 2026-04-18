@@ -1,8 +1,9 @@
 # C2 Houdini First Fixture Playbook
 
-This playbook now has a narrower, more practical goal:
+This playbook now serves two adjacent but different goals:
 
-`produce a provider-ready source handoff that can later become BodyPaint's upstream input`
+1. package-level `provider-ready source handoff`
+2. stricter internal `C2` qualification
 
 ## First Real Sample
 
@@ -24,7 +25,7 @@ It is also not yet a `provider-ready source handoff`.
 
 ## What "Provider-Ready" Means
 
-At this stage, the target is not the final downstream `C2` deliverable.
+At the package level, the target is not the final downstream `C2` deliverable.
 
 The current target is smaller:
 
@@ -35,6 +36,13 @@ The current target is smaller:
   - `consumer_hints.ready_for_bodypaint = true`
 
 That is enough for BodyPaint to begin real consumer-side integration.
+
+But it is still possible for:
+
+- package-level source handoff = ready
+- strict internal `canonical_fusion_fixture_c2` = attention
+
+That is expected when the sample is ready for BodyPaint intake but not yet the final UE-facing Houdini-qualified artifact.
 
 ## First Qualified Target
 
@@ -133,6 +141,7 @@ That check answers:
 - if not, which package-level fields are still missing?
 
 It intentionally does not require the full repository-integrated `C2` context.
+It also only requires explicit source metadata, not yet the stricter `houdini + cm + z-up` internal gate shape.
 
 ## Full AiUE Gate
 

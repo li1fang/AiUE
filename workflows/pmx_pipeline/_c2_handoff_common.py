@@ -17,9 +17,14 @@ REMEDIATION_BY_ISSUE_ID = {
     "c2_fixture_scope_missing": "Declare fixture_scope in the manifest.",
     "c2_fixture_scope_invalid": "Change fixture_scope to one of the currently approved scopes.",
     "c2_source_module_ids_missing": "Populate source_module_ids so downstream tools can trace the fused artifact back to source modules.",
-    "c2_exporter_not_houdini": "Set exporter.tool = houdini and keep exporter metadata explicit.",
-    "c2_linear_unit_invalid": "Export with UE-facing centimeter metadata and write linear_unit = cm.",
-    "c2_up_axis_invalid": "Export with explicit Z-up metadata and write up_axis = z.",
+    "source_exporter_tool_missing": "Declare exporter.tool so downstream tools know which system produced the source handoff.",
+    "source_exporter_version_missing": "Declare exporter.version so downstream tools can track the producing tool revision.",
+    "source_linear_unit_missing": "Declare coordinate_system.linear_unit from the source package.",
+    "source_up_axis_missing": "Declare coordinate_system.up_axis from the source package.",
+    "source_forward_axis_missing": "Declare coordinate_system.forward_axis from the source package.",
+    "c2_exporter_not_houdini": "For the strict C2 gate, set exporter.tool = houdini.",
+    "c2_linear_unit_invalid": "For the strict C2 gate, export with UE-facing centimeter metadata and write linear_unit = cm.",
+    "c2_up_axis_invalid": "For the strict C2 gate, export with explicit Z-up metadata and write up_axis = z.",
     "c2_fusion_recipe_missing": "Declare a stable fusion_recipe_id for deterministic replay.",
 }
 
@@ -94,32 +99,49 @@ def evaluate_provider_ready_source_handoff(
 
     exporter = dict(fixture.get("exporter") or {})
     exporter_tool = str(exporter.get("tool") or "").lower()
-    if exporter_tool != "houdini":
+    exporter_version = str(exporter.get("version") or "")
+    if not exporter_tool:
         failed_requirements.append(
             make_failed_requirement(
-                "c2_exporter_not_houdini",
-                "The current provider-ready source handoff requires exporter.tool = houdini.",
+                "source_exporter_tool_missing",
+                "A provider-ready source handoff requires exporter.tool so downstream tools can understand source provenance.",
                 exporter_tool=exporter_tool,
+            )
+        )
+    if not exporter_version:
+        failed_requirements.append(
+            make_failed_requirement(
+                "source_exporter_version_missing",
+                "A provider-ready source handoff requires exporter.version so source provenance is replayable.",
             )
         )
 
     coordinate_system = dict(fixture.get("coordinate_system") or {})
     linear_unit = str(coordinate_system.get("linear_unit") or "").lower()
     up_axis = str(coordinate_system.get("up_axis") or "").lower()
-    if linear_unit not in {"cm", "centimeter", "centimeters"}:
+    forward_axis = str(coordinate_system.get("forward_axis") or "").lower()
+    if not linear_unit:
         failed_requirements.append(
             make_failed_requirement(
-                "c2_linear_unit_invalid",
-                "A provider-ready source handoff requires UE-facing centimeter export metadata.",
+                "source_linear_unit_missing",
+                "A provider-ready source handoff requires coordinate_system.linear_unit from the source package.",
                 linear_unit=linear_unit,
             )
         )
-    if up_axis != "z":
+    if not up_axis:
         failed_requirements.append(
             make_failed_requirement(
-                "c2_up_axis_invalid",
-                "A provider-ready source handoff requires explicit Z-up export metadata.",
+                "source_up_axis_missing",
+                "A provider-ready source handoff requires coordinate_system.up_axis from the source package.",
                 up_axis=up_axis,
+            )
+        )
+    if not forward_axis:
+        failed_requirements.append(
+            make_failed_requirement(
+                "source_forward_axis_missing",
+                "A provider-ready source handoff requires coordinate_system.forward_axis from the source package.",
+                forward_axis=forward_axis,
             )
         )
 
@@ -186,21 +208,33 @@ def build_provider_ready_checklist(fixture: dict[str, Any], *, failed_ids: set[s
         ),
         _row(
             "exporter_tool",
-            "exporter.tool = houdini",
+            "exporter.tool is declared",
             str(exporter.get("tool") or ""),
-            passes="c2_exporter_not_houdini" not in failed_ids,
+            passes="source_exporter_tool_missing" not in failed_ids,
+        ),
+        _row(
+            "exporter_version",
+            "exporter.version is declared",
+            str(exporter.get("version") or ""),
+            passes="source_exporter_version_missing" not in failed_ids,
         ),
         _row(
             "linear_unit",
-            "coordinate_system.linear_unit = cm",
+            "coordinate_system.linear_unit is declared",
             str(coordinate_system.get("linear_unit") or ""),
-            passes="c2_linear_unit_invalid" not in failed_ids,
+            passes="source_linear_unit_missing" not in failed_ids,
         ),
         _row(
             "up_axis",
-            "coordinate_system.up_axis = z",
+            "coordinate_system.up_axis is declared",
             str(coordinate_system.get("up_axis") or ""),
-            passes="c2_up_axis_invalid" not in failed_ids,
+            passes="source_up_axis_missing" not in failed_ids,
+        ),
+        _row(
+            "forward_axis",
+            "coordinate_system.forward_axis is declared",
+            str(coordinate_system.get("forward_axis") or ""),
+            passes="source_forward_axis_missing" not in failed_ids,
         ),
         _row(
             "fusion_recipe_id",
@@ -237,3 +271,42 @@ def build_provider_ready_next_actions(failed_ids: set[str]) -> list[dict[str, st
             }
         )
     return actions
+
+
+def evaluate_strict_c2_requirements(
+    fixture: dict[str, Any],
+    *,
+    make_failed_requirement: FailedRequirementFactory,
+) -> list[dict[str, Any]]:
+    failed_requirements: list[dict[str, Any]] = []
+    exporter = dict(fixture.get("exporter") or {})
+    exporter_tool = str(exporter.get("tool") or "").lower()
+    if exporter_tool != "houdini":
+        failed_requirements.append(
+            make_failed_requirement(
+                "c2_exporter_not_houdini",
+                "The strict C2 gate requires exporter.tool = houdini.",
+                exporter_tool=exporter_tool,
+            )
+        )
+
+    coordinate_system = dict(fixture.get("coordinate_system") or {})
+    linear_unit = str(coordinate_system.get("linear_unit") or "").lower()
+    up_axis = str(coordinate_system.get("up_axis") or "").lower()
+    if linear_unit not in {"cm", "centimeter", "centimeters"}:
+        failed_requirements.append(
+            make_failed_requirement(
+                "c2_linear_unit_invalid",
+                "The strict C2 gate requires UE-facing centimeter export metadata.",
+                linear_unit=linear_unit,
+            )
+        )
+    if up_axis != "z":
+        failed_requirements.append(
+            make_failed_requirement(
+                "c2_up_axis_invalid",
+                "The strict C2 gate requires explicit Z-up export metadata.",
+                up_axis=up_axis,
+            )
+        )
+    return failed_requirements
