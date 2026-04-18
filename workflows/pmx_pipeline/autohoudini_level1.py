@@ -12,6 +12,14 @@ RESULT_SCHEMA_VERSION = "autohoudini_aiue_level1_consumer_result_v0"
 REQUEST_OPERATION = "import_level1_curve_bundle"
 SUPPORTED_IMPORT_MODE = "curve_float_asset_set"
 DEFAULT_REQUEST_RELATIVE_PATH = ("workspace_views", "aiue_level1_consumer_request.json")
+PREVIEW_HINT_KEYS = (
+    "preview_level_path",
+    "target_host_blueprint_asset_path",
+    "target_skeleton_asset_path",
+    "preview_fixture_id",
+    "target_host_fixture_id",
+    "target_skeleton_profile_id",
+)
 
 
 def resolve_request_json_path(workspace: dict, explicit_path: str | None) -> Path:
@@ -58,6 +66,15 @@ def load_level1_request(request_json_path: Path) -> dict[str, Any]:
     for field_name in ("counterparty_system", "source_lane", "transport", "current_aiue_support"):
         if not str(consumer_context.get(field_name) or "").strip():
             raise ValueError(f"autohoudini_level1_request_consumer_context_missing_field:{field_name}")
+    preview_hints = payload.get("preview_hints")
+    if preview_hints is not None:
+        if not isinstance(preview_hints, dict):
+            raise ValueError("autohoudini_level1_request_preview_hints_invalid")
+        for field_name, value in preview_hints.items():
+            if field_name not in PREVIEW_HINT_KEYS:
+                raise ValueError(f"autohoudini_level1_request_preview_hints_unknown_field:{field_name}")
+            if not str(value or "").strip():
+                raise ValueError(f"autohoudini_level1_request_preview_hints_empty_field:{field_name}")
     return payload
 
 
@@ -91,20 +108,41 @@ def build_import_summary(import_action_payload: dict[str, Any]) -> dict[str, Any
     }
 
 
+def preview_hints_from_request(request_payload: dict[str, Any]) -> dict[str, str] | None:
+    preview_hints: dict[str, str] = {}
+    raw_preview_hints = request_payload.get("preview_hints")
+    if isinstance(raw_preview_hints, dict):
+        for key in PREVIEW_HINT_KEYS:
+            value = str(raw_preview_hints.get(key) or "").strip()
+            if value:
+                preview_hints[key] = value
+    for key in (
+        "preview_level_path",
+        "target_host_blueprint_asset_path",
+        "target_skeleton_asset_path",
+    ):
+        if key in preview_hints:
+            continue
+        value = str(request_payload.get(key) or "").strip()
+        if value:
+            preview_hints[key] = value
+    return preview_hints or None
+
+
 def build_not_requested_preview_summary(request_payload: dict[str, Any]) -> dict[str, Any]:
     return {
         "requested": False,
         "status": "not_requested",
-        "generated_at_utc": "",
-        "resolved_import_mode": "",
-        "level_loaded": False,
-        "host_binding_mode": "",
-        "target_bone": str(request_payload.get("target_bone") or ""),
-        "target_bone_exists": False,
-        "curve_pass_count": 0,
-        "curve_fail_count": 0,
-        "max_abs_error": 0.0,
-        "tolerance": 0.0,
+        "generated_at_utc": None,
+        "resolved_import_mode": None,
+        "level_loaded": None,
+        "host_binding_mode": None,
+        "target_bone": None,
+        "target_bone_exists": None,
+        "curve_pass_count": None,
+        "curve_fail_count": None,
+        "max_abs_error": None,
+        "tolerance": None,
         "warnings": [],
         "errors": [],
     }
@@ -125,6 +163,17 @@ def build_external_result(
     warnings = list(import_summary.get("warnings") or [])
     errors = list(import_summary.get("errors") or [])
     status = "pass" if import_summary["status"] == "pass" else "fail"
+    preview_hints = preview_hints_from_request(request_payload)
+    request_snapshot = {
+        "target_package_id": str(request_payload.get("target_package_id") or ""),
+        "target_curve_asset_name": str(request_payload.get("target_curve_asset_name") or ""),
+        "target_bone": str(request_payload.get("target_bone") or ""),
+        "unreal_import_mode": str(
+            import_summary.get("resolved_import_mode") or request_payload.get("unreal_import_mode") or SUPPORTED_IMPORT_MODE
+        ),
+    }
+    if preview_hints:
+        request_snapshot["preview_hints"] = preview_hints
     return {
         "schema_version": RESULT_SCHEMA_VERSION,
         "operation": REQUEST_OPERATION,
@@ -134,21 +183,16 @@ def build_external_result(
         "workspace_config_path": str(workspace_config_path.resolve()),
         "host_key": str(host_key or ""),
         "execution_shell": {
-            "owner_system": "autohoudini",
-            "tool": "run_aiue_level1_handoff.py",
+            "producer_system": "autohoudini",
+            "consumer_system": "aiue",
             "mode": "import_only",
             "dry_run": False,
-            "current_aiue_support": "implemented",
+            "current_aiue_support": str(
+                ((request_payload.get("consumer_context") or {}).get("current_aiue_support")) or "implemented"
+            ),
+            "transport_tool": "toy_yard_publish_profile",
         },
-        "request_snapshot": {
-            "target_package_id": str(request_payload.get("target_package_id") or ""),
-            "target_curve_asset_name": str(request_payload.get("target_curve_asset_name") or ""),
-            "target_bone": str(request_payload.get("target_bone") or ""),
-            "unreal_import_mode": str(import_summary.get("resolved_import_mode") or request_payload.get("unreal_import_mode") or SUPPORTED_IMPORT_MODE),
-            "target_host_blueprint_asset_path": str(request_payload.get("target_host_blueprint_asset_path") or ""),
-            "target_skeleton_asset_path": str(request_payload.get("target_skeleton_asset_path") or ""),
-            "preview_level_path": str(request_payload.get("preview_level_path") or ""),
-        },
+        "request_snapshot": request_snapshot,
         "result_paths": {
             "combined_result_json": str(combined_result_path.resolve()),
             "import_result_json": str(Path(import_action_result_path).expanduser().resolve()) if import_action_result_path else "",
@@ -159,7 +203,7 @@ def build_external_result(
         "warnings": warnings,
         "errors": errors,
         "notes": [
-            "Mirrored by AiUE for AutoHoudini seam compatibility.",
-            "The current external schema still hardcodes launcher ownership and tool identity; see AH0 review.",
+            "Mirrored by AiUE for the tightened AH1 AutoHoudini seam.",
+            "preview_hints remain hint-only and do not gate import-only success.",
         ],
     }

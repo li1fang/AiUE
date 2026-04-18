@@ -41,14 +41,19 @@ def _request_payload(**overrides) -> dict:
             "counterparty_system": "autohoudini",
             "source_lane": "autohoudini_level1",
             "transport": "toy_yard_publish_profile",
-            "current_aiue_support": "planned_not_implemented",
+            "current_aiue_support": "implemented",
             "notes": "fixture",
         },
-        "target_bone": "spine_03",
-        "target_host_blueprint_asset_path": "/Game/AiUE/Hosts/BP_AutoHoudiniPreview.BP_AutoHoudiniPreview",
-        "target_skeleton_asset_path": "/Game/AiUE/ImportedAssets/SK_Target.SK_Target_Skeleton",
-        "preview_level_path": "/Game/Levels/DefaultLevel",
+        "target_bone": "Bone_waist_004",
         "unreal_import_mode": "curve_float_asset_set",
+        "preview_hints": {
+            "preview_level_path": "/Game/Levels/DefaultLevel",
+            "target_host_blueprint_asset_path": "/Game/AiUE/Hosts/BP_AutoHoudiniPreview.BP_AutoHoudiniPreview",
+            "target_skeleton_asset_path": "/Game/AiUE/ImportedAssets/SK_Target.SK_Target_Skeleton",
+            "preview_fixture_id": "demo-preview-fixture",
+            "target_host_fixture_id": "demo-host-fixture",
+            "target_skeleton_profile_id": "demo-skeleton-profile",
+        },
     }
     payload.update(overrides)
     return payload
@@ -96,17 +101,17 @@ def test_build_external_result_marks_preview_not_requested(tmp_path: Path):
         "errors": [],
         "result": {
             "status": "pass",
-            "generated_at_utc": "2026-04-18T12:00:00+00:00",
-            "resolved_import_mode": "curve_float_asset_set",
-            "bundle_summary": {
-                "row_count": 10,
-                "channel_count": 4,
-                "target_bone": "spine_03",
+                "generated_at_utc": "2026-04-18T12:00:00+00:00",
+                "resolved_import_mode": "curve_float_asset_set",
+                "bundle_summary": {
+                    "row_count": 10,
+                    "channel_count": 4,
+                    "target_bone": "Bone_waist_004",
+                },
+                "imported_curve_assets": [{}, {}, {}, {}],
+                "warnings": [],
+                "errors": [],
             },
-            "imported_curve_assets": [{}, {}, {}, {}],
-            "warnings": [],
-            "errors": [],
-        },
     }
 
     external_result = build_external_result(
@@ -120,9 +125,13 @@ def test_build_external_result_marks_preview_not_requested(tmp_path: Path):
     )
 
     assert external_result["status"] == "pass"
+    assert external_result["execution_shell"]["producer_system"] == "autohoudini"
+    assert external_result["execution_shell"]["consumer_system"] == "aiue"
     assert external_result["execution_shell"]["mode"] == "import_only"
     assert external_result["preview_summary"]["requested"] is False
     assert external_result["preview_summary"]["status"] == "not_requested"
+    assert external_result["preview_summary"]["target_bone"] is None
+    assert external_result["request_snapshot"]["preview_hints"]["preview_level_path"] == "/Game/Levels/DefaultLevel"
     assert external_result["import_summary"]["imported_asset_count"] == 4
 
 
@@ -136,7 +145,7 @@ def test_build_import_summary_aggregates_host_and_action_errors():
                 "status": "fail",
                 "generated_at_utc": "2026-04-18T12:00:00+00:00",
                 "resolved_import_mode": "curve_float_asset_set",
-                "bundle_summary": {"row_count": 2, "channel_count": 1, "target_bone": "spine_03"},
+                "bundle_summary": {"row_count": 2, "channel_count": 1, "target_bone": "Bone_waist_004"},
                 "imported_curve_assets": [],
                 "warnings": ["host_warning"],
                 "errors": ["host_error"],
