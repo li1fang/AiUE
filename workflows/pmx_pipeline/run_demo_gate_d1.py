@@ -22,6 +22,7 @@ from run_editor_gate_g1 import (
 from toy_yard_view import (
     build_toy_yard_manifest_index,
     resolve_toy_yard_registry_path,
+    resolve_toy_yard_view_root,
 )
 
 GATE_ID = "demo_stage_d1_onboarding"
@@ -67,7 +68,15 @@ def resolve_registry_path(equipment_report: dict, summary_path: Path, explicit_p
         raise FileNotFoundError(f"Registry path does not exist: {candidate}")
     if workspace is not None:
         toy_yard_registry = resolve_toy_yard_registry_path(workspace)
-        if toy_yard_registry:
+        toy_yard_root = resolve_toy_yard_view_root(workspace)
+        summary_is_from_toy_yard = False
+        if toy_yard_root:
+            try:
+                summary_path.resolve().relative_to(toy_yard_root.resolve())
+                summary_is_from_toy_yard = True
+            except ValueError:
+                summary_is_from_toy_yard = False
+        if toy_yard_registry and summary_is_from_toy_yard:
             return toy_yard_registry
     registry_json_path = equipment_report.get("registry_json_path")
     if registry_json_path:

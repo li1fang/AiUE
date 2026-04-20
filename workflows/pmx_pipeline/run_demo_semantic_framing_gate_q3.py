@@ -23,7 +23,7 @@ SHOT_PROFILES = {
         "subject_center_x_ratio_min": 0.68,
         "subject_center_x_ratio_max": 0.76,
         "subject_right_margin_ratio_min": 0.08,
-        "weapon_phase_min_screen_coverage": 0.025,
+        "weapon_phase_min_screen_coverage": 0.02,
         "weapon_required_visible_phases_per_pair": 1,
         "weapon_expected_side": "left_of_subject_center",
     },

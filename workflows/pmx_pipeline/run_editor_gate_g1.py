@@ -21,6 +21,7 @@ from aiue_unreal.host_bridge import run_host_auto_ue_cli
 from toy_yard_view import (
     resolve_toy_yard_equipment_report_path,
     resolve_toy_yard_summary_path,
+    resolve_toy_yard_view_root,
 )
 
 GATE_ID = "editor_core_closure_g1"
@@ -86,6 +87,19 @@ def resolve_equipment_report_path(workspace: dict, explicit_path: str | None) ->
     raise FileNotFoundError("No ue_equipment_assets_report.json could be resolved for G1 gate.")
 
 
+def _is_relative_to(path: Path, parent: Path) -> bool:
+    try:
+        path.resolve().relative_to(parent.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def _equipment_report_is_from_toy_yard_view(workspace: dict, equipment_report_path: Path) -> bool:
+    toy_yard_root = resolve_toy_yard_view_root(workspace)
+    return bool(toy_yard_root and _is_relative_to(equipment_report_path, toy_yard_root))
+
+
 def resolve_summary_path(workspace: dict, equipment_report_path: Path, equipment_report: dict, explicit_path: str | None) -> Path:
     if explicit_path:
         candidate = Path(explicit_path).expanduser().resolve()
@@ -94,7 +108,7 @@ def resolve_summary_path(workspace: dict, equipment_report_path: Path, equipment
         raise FileNotFoundError(f"Suite summary path does not exist: {candidate}")
 
     toy_yard_summary = resolve_toy_yard_summary_path(workspace)
-    if toy_yard_summary:
+    if toy_yard_summary and _equipment_report_is_from_toy_yard_view(workspace, equipment_report_path):
         return toy_yard_summary
 
     registry_json_path = equipment_report.get("registry_json_path")

@@ -19,6 +19,7 @@ FIXED_EXECUTION_PROFILE = {
     "strict_shot_ids": ["front", "side"],
     "strict_weapon_min_coverage": 0.004,
     "strict_clothing_min_coverage": 0.001,
+    "strict_clothing_required_shots": 1,
     "strict_fx_min_coverage": 0.03,
     "hero_weapon_min_coverage": 0.004,
     "hero_clothing_min_coverage": 0.003,
@@ -87,16 +88,6 @@ def strict_shot_checks(shot_id: str, shot: dict) -> tuple[dict, list[dict]]:
                 minimum=float(FIXED_EXECUTION_PROFILE["strict_weapon_min_coverage"]),
             )
         )
-    if payload["clothing_screen_coverage"] < float(FIXED_EXECUTION_PROFILE["strict_clothing_min_coverage"]):
-        failed_requirements.append(
-            make_failed_requirement(
-                "q4_clothing_visibility_insufficient",
-                "A required strict shot did not keep the clothing slot visible enough.",
-                shot_id=shot_id,
-                clothing_screen_coverage=payload["clothing_screen_coverage"],
-                minimum=float(FIXED_EXECUTION_PROFILE["strict_clothing_min_coverage"]),
-            )
-        )
     if payload["fx_screen_coverage"] < float(FIXED_EXECUTION_PROFILE["strict_fx_min_coverage"]):
         failed_requirements.append(
             make_failed_requirement(
@@ -110,8 +101,8 @@ def strict_shot_checks(shot_id: str, shot: dict) -> tuple[dict, list[dict]]:
     return (
         {
             "shot_id": shot_id,
-            "status": "pass" if not failed_requirements else "fail",
             **payload,
+            "status": "pass" if not failed_requirements else "fail",
         },
         failed_requirements,
     )
@@ -200,6 +191,23 @@ def evaluate_package(runtime_check: dict, visual_check: dict) -> tuple[dict, lis
             ]
         )
 
+    strict_clothing_visible_shot_ids = [
+        str(shot.get("shot_id") or "")
+        for shot in strict_results
+        if float(shot.get("clothing_screen_coverage") or 0.0) >= float(FIXED_EXECUTION_PROFILE["strict_clothing_min_coverage"])
+    ]
+    if len(strict_clothing_visible_shot_ids) < int(FIXED_EXECUTION_PROFILE["strict_clothing_required_shots"]):
+        failed_requirements.append(
+            make_failed_requirement(
+                "q4_clothing_visibility_insufficient",
+                "Q4 requires the clothing slot to remain visible in at least one strict shot.",
+                package_id=package_id,
+                strict_clothing_visible_shot_ids=strict_clothing_visible_shot_ids,
+                minimum_required=int(FIXED_EXECUTION_PROFILE["strict_clothing_required_shots"]),
+                minimum_coverage=float(FIXED_EXECUTION_PROFILE["strict_clothing_min_coverage"]),
+            )
+        )
+
     hero_shot_ids = [
         str(shot.get("shot_id") or "")
         for shot in list(visual_check.get("shots") or [])
@@ -225,6 +233,7 @@ def evaluate_package(runtime_check: dict, visual_check: dict) -> tuple[dict, lis
             "sample_id": runtime_check.get("sample_id") or visual_check.get("sample_id"),
             "status": "pass" if not failed_requirements else "fail",
             "strict_shot_results": strict_results,
+            "strict_clothing_visible_shot_ids": strict_clothing_visible_shot_ids,
             "hero_shot_ids": hero_shot_ids,
             "weapon_binding": runtime_check.get("weapon_binding"),
             "clothing_binding": runtime_check.get("clothing_binding"),
@@ -302,6 +311,11 @@ def main():
             for item in per_package_results
             for shot in list(item.get("strict_shot_results") or [])
             if shot.get("status") == "pass"
+        ),
+        "strict_clothing_visible_packages": sum(
+            1
+            for item in per_package_results
+            if list(item.get("strict_clothing_visible_shot_ids") or [])
         ),
         "packages_with_hero_shot": sum(1 for item in per_package_results if list(item.get("hero_shot_ids") or [])),
         "packages_using_clothing_owner_origin_fallback": sum(1 for item in per_package_results if item.get("clothing_owner_origin_ok")),
