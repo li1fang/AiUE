@@ -6,6 +6,8 @@
   "runtime_budget_class": "nightly_6h_plus",
   "workspace_refs": {
     "main": "C:\\AiUE\\local\\pipeline_workspace.local.json",
+    "toy_yard_solo": "C:\\AiUE\\local\\pipeline_workspace.toyyard.trial-cassia-solo.local.json",
+    "toy_yard_bundle": "C:\\AiUE\\local\\pipeline_workspace.toyyard.trial-yidhari-bundle.local.json",
     "motion_baseline": "C:\\AiUE\\local\\pipeline_workspace.toyyard.motion.trial-turn-hand-ready.local.json",
     "motion_diversity": "C:\\AiUE\\local\\pipeline_workspace.toyyard.motion.trial-m2-diversity.local.json"
   },
@@ -98,10 +100,23 @@
       "mode": "command",
       "group": "source_core",
       "workspace_ref": "main",
-      "requires_workspace_keys": ["paths.toy_yard_pmx_view_root"],
+      "requires_workspace_keys": [],
       "report_gate_id": "toy_yard_default_source_t2",
       "signature_paths": ["status", "counts", "@package_ids"],
-      "command": ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${repo_root}\\run_toy_yard_default_source_t2.ps1", "-WorkspaceConfig", "${workspace}"]
+      "command": [
+        "powershell",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${repo_root}\\run_toy_yard_default_source_t2.ps1",
+        "-WorkspaceConfig",
+        "${workspace}",
+        "-SoloWorkspaceConfig",
+        "${workspace:toy_yard_solo}",
+        "-BundleWorkspaceConfig",
+        "${workspace:toy_yard_bundle}"
+      ]
     },
     "source_contract_preflight_p0": {
       "severity": "hard",

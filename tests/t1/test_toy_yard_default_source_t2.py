@@ -9,6 +9,7 @@ if str(PMX_PIPELINE_ROOT) not in sys.path:
     sys.path.insert(0, str(PMX_PIPELINE_ROOT))
 
 from run_toy_yard_default_source_t2 import (  # noqa: E402
+    _merge_manifest_indexes,
     build_communication_signal,
     select_bundle_candidate,
     select_solo_candidate,
@@ -89,6 +90,39 @@ def test_build_communication_signal_prefers_toy_yard_for_packet_contract_issue()
     assert signal["should_contact_toy_yard"] is True
     assert signal["owner"] == "toy-yard"
     assert signal["reason"] == "export_packet_artifact_contract_issue"
+
+
+def test_merge_manifest_indexes_preserves_first_resolved_manifest_per_package():
+    merged = _merge_manifest_indexes(
+        {
+            "pkg_alpha": Path("C:/tmp/solo/pkg_alpha/manifest.json"),
+            "pkg_beta": Path("C:/tmp/solo/pkg_beta/manifest.json"),
+        },
+        {
+            "pkg_beta": Path("C:/tmp/bundle/pkg_beta/manifest.json"),
+            "pkg_gamma": Path("C:/tmp/bundle/pkg_gamma/manifest.json"),
+        },
+    )
+
+    assert merged["pkg_alpha"] == Path("C:/tmp/solo/pkg_alpha/manifest.json")
+    assert merged["pkg_beta"] == Path("C:/tmp/solo/pkg_beta/manifest.json")
+    assert merged["pkg_gamma"] == Path("C:/tmp/bundle/pkg_gamma/manifest.json")
+
+
+def test_build_communication_signal_prefers_toy_yard_for_split_source_resolution_issue():
+    signal = build_communication_signal(
+        manifest_check_payload={"status": "pass"},
+        failed_requirements=[
+            {
+                "id": "t2_bundle_summary_path_missing",
+                "message": "bundle summary missing",
+            }
+        ],
+    )
+
+    assert signal["should_contact_toy_yard"] is True
+    assert signal["owner"] == "toy-yard"
+    assert signal["reason"] == "default_source_resolution_or_registry_contract_issue"
 
 
 def test_build_communication_signal_prefers_aiue_for_runtime_failure():

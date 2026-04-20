@@ -89,6 +89,16 @@ def test_qa_full_passes_with_expected_soft_watchlist_only(tmp_path: Path):
     verification_root = tmp_path / "Saved" / "verification"
     verification_root.mkdir(parents=True, exist_ok=True)
     write_json(
+        verification_root / "latest_dynamic_balance_governance_progress_report.json",
+        {
+            "gate_id": "dynamic_balance_governance_progress",
+            "status": "attention",
+            "recommendation": {
+                "next_round_kind": "governance",
+            },
+        },
+    )
+    write_json(
         verification_root / "latest_manual_playable_demo_validation_pv1_report.json",
         {
             "gate_id": "manual_playable_demo_validation_pv1",
@@ -134,6 +144,12 @@ def test_qa_full_passes_with_expected_soft_watchlist_only(tmp_path: Path):
                     "pass",
                 ],
             },
+            "dynamic_balance_governance_progress": {
+                "severity": "expected_soft",
+                "mode": "snapshot",
+                "group": "watchlist",
+                "report_gate_id": "dynamic_balance_governance_progress",
+            },
             "manual_playable_demo_validation_pv1": {
                 "severity": "expected_soft",
                 "mode": "snapshot",
@@ -149,6 +165,7 @@ def test_qa_full_passes_with_expected_soft_watchlist_only(tmp_path: Path):
         },
         lane_order=[
             "hard_pass",
+            "dynamic_balance_governance_progress",
             "manual_playable_demo_validation_pv1",
             "test_governance_round1",
         ],
@@ -165,8 +182,12 @@ def test_qa_full_passes_with_expected_soft_watchlist_only(tmp_path: Path):
     assert len(payload["cascade_failures"]) == 0
     assert len(payload["environment_failures"]) == 0
     assert len(payload["soft_findings"]) == 0
-    assert len(payload["expected_watchlist"]) == 2
-    assert payload["expected_watchlist"][0]["reason"] == "manual_signoff_pending"
+    assert len(payload["expected_watchlist"]) == 3
+    assert [item["reason"] for item in payload["expected_watchlist"]] == [
+        "governance_balance_watch",
+        "manual_signoff_pending",
+        "manual_signoff_only_blind_spot",
+    ]
     assert payload["watchlist_only"]["status"] is True
     assert exit_code == 0
     assert report_path.name == "qa_full_nightly_report.json"

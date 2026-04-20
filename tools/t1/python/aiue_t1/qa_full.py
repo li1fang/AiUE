@@ -539,6 +539,13 @@ def _lane_expected_soft_reason(lane_result: dict[str, Any]) -> str:
             return "manual_signoff_only_blind_spot"
         return ""
 
+    if gate_id == "dynamic_balance_governance_progress":
+        recommendation = dict(report_payload.get("recommendation") or {})
+        next_round_kind = str(recommendation.get("next_round_kind") or "")
+        if status == "attention" and next_round_kind:
+            return "governance_balance_watch"
+        return ""
+
     if status == "blocked":
         return "expected_soft_blocked"
     return ""

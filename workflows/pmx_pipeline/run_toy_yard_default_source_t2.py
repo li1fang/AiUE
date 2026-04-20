@@ -46,7 +46,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the AiUE T2 toy-yard default-source confirmation gate.")
     parser.add_argument("--workspace-config", required=True)
     parser.add_argument("--summary-path")
+    parser.add_argument("--solo-summary-path")
+    parser.add_argument("--bundle-summary-path")
     parser.add_argument("--registry-path")
+    parser.add_argument("--bundle-registry-path")
+    parser.add_argument("--solo-workspace-config")
+    parser.add_argument("--bundle-workspace-config")
     parser.add_argument("--output-root")
     parser.add_argument("--latest-report-path")
     return parser.parse_args()
@@ -74,6 +79,56 @@ def resolve_registry_path(workspace: dict, explicit_path: str | None) -> Path:
     if candidate:
         return candidate
     raise FileNotFoundError("No toy-yard equipment registry could be resolved from workspace paths.toy_yard_pmx_view_root.")
+
+
+def load_source_workspace(explicit_workspace_config: str | None, fallback_workspace: dict) -> tuple[dict, Path | None]:
+    if not str(explicit_workspace_config or "").strip():
+        return fallback_workspace, None
+    workspace_path = Path(str(explicit_workspace_config or "")).expanduser().resolve()
+    return load_workspace_config(workspace_path), workspace_path
+
+
+def _merge_manifest_indexes(*indexes: dict[str, Path]) -> dict[str, Path]:
+    merged: dict[str, Path] = {}
+    for index in indexes:
+        for package_id, manifest_path in dict(index or {}).items():
+            merged.setdefault(str(package_id), Path(manifest_path).expanduser().resolve())
+    return merged
+
+
+def _merge_manifest_check_payloads(
+    *,
+    source_workspace_config: Path,
+    packet_checks: list[dict[str, Any]],
+) -> dict[str, Any]:
+    per_manifest_results: list[dict[str, Any]] = []
+    for packet_check in packet_checks:
+        per_manifest_results.extend(list(packet_check.get("per_manifest_results") or []))
+
+    counts = {
+        "manifest_count": len(per_manifest_results),
+        "pass_count": sum(1 for entry in per_manifest_results if str(entry.get("status") or "") == "pass"),
+        "attention_count": sum(1 for entry in per_manifest_results if str(entry.get("status") or "") != "pass"),
+        "output_fbx_missing_count": sum(1 for entry in per_manifest_results if "output_fbx_missing" in list(entry.get("issues") or [])),
+        "source_file_external_reference_count": sum(1 for entry in per_manifest_results if "source_file_external_reference" in list(entry.get("issues") or [])),
+        "missing_texture_manifest_count": sum(
+            1 for entry in per_manifest_results if any(str(issue).startswith("missing_texture_artifacts:") for issue in list(entry.get("issues") or []))
+        ),
+        "external_texture_manifest_count": sum(
+            1 for entry in per_manifest_results if any(str(issue).startswith("external_texture_references:") for issue in list(entry.get("issues") or []))
+        ),
+    }
+    return {
+        "tool_name": "AiUE T1",
+        "report_kind": "toy_yard_manifest_artifact_check",
+        "generated_at_utc": now_utc(),
+        "status": "pass" if counts["attention_count"] == 0 else "attention",
+        "source_workspace_config": str(source_workspace_config.resolve()),
+        "export_root": "",
+        "counts": counts,
+        "source_checks": packet_checks,
+        "per_manifest_results": per_manifest_results,
+    }
 
 
 def _candidate_success_entries(summary_payload: dict[str, Any], manifest_index: dict[str, Path]) -> list[dict[str, Any]]:
@@ -359,8 +414,9 @@ def build_communication_signal(
             "recommended_node": "contract_adjustment_or_export_packet_rebuild",
         }
     if failed_ids & {
-        "t2_summary_path_missing",
-        "t2_registry_path_missing",
+        "t2_solo_summary_path_missing",
+        "t2_bundle_summary_path_missing",
+        "t2_bundle_registry_path_missing",
         "t2_view_root_missing",
         "t2_solo_candidate_missing",
         "t2_bundle_candidate_missing",
@@ -390,6 +446,8 @@ def build_communication_signal(
 def main() -> int:
     args = parse_args()
     workspace = load_workspace_config(args.workspace_config)
+    solo_workspace, solo_workspace_path = load_source_workspace(args.solo_workspace_config, workspace)
+    bundle_workspace, bundle_workspace_path = load_source_workspace(args.bundle_workspace_config, workspace)
     repo_root = repo_root_from_workspace(workspace, REPO_ROOT)
     output_root = Path(args.output_root).expanduser().resolve() if args.output_root else default_output_root(workspace, REPO_ROOT, GATE_ID)
     latest_report_path = Path(args.latest_report_path).expanduser().resolve() if args.latest_report_path else default_latest_report_path(workspace, REPO_ROOT, GATE_ID)
@@ -401,47 +459,91 @@ def main() -> int:
     failed_requirements: list[dict[str, Any]] = []
 
     toy_yard_view_root = resolve_toy_yard_view_root(workspace)
-    if toy_yard_view_root is None:
+    solo_view_root = resolve_toy_yard_view_root(solo_workspace)
+    bundle_view_root = resolve_toy_yard_view_root(bundle_workspace)
+    if toy_yard_view_root is None and solo_view_root is None and bundle_view_root is None:
         failed_requirements.append(
             make_failed_requirement(
                 "t2_view_root_missing",
-                "T2A requires paths.toy_yard_pmx_view_root to resolve to a valid toy-yard export root.",
+                "T2A requires a default or split toy-yard export root to resolve from workspace configuration.",
             )
         )
     try:
-        summary_path = resolve_summary_path(workspace, args.summary_path)
+        solo_summary_path = resolve_summary_path(solo_workspace, args.solo_summary_path or args.summary_path)
     except FileNotFoundError as exc:
-        summary_path = None
+        solo_summary_path = None
         failed_requirements.append(
             make_failed_requirement(
-                "t2_summary_path_missing",
-                "T2A requires a resolvable toy-yard suite summary path.",
+                "t2_solo_summary_path_missing",
+                "T2A requires a resolvable solo suite summary path.",
                 error=str(exc),
             )
         )
     try:
-        registry_path = resolve_registry_path(workspace, args.registry_path)
+        bundle_summary_path = resolve_summary_path(bundle_workspace, args.bundle_summary_path or args.summary_path)
     except FileNotFoundError as exc:
-        registry_path = None
+        bundle_summary_path = None
         failed_requirements.append(
             make_failed_requirement(
-                "t2_registry_path_missing",
-                "T2A requires a resolvable toy-yard equipment registry path.",
+                "t2_bundle_summary_path_missing",
+                "T2A requires a resolvable bundle suite summary path.",
+                error=str(exc),
+            )
+        )
+    try:
+        bundle_registry_path = resolve_registry_path(bundle_workspace, args.bundle_registry_path or args.registry_path)
+    except FileNotFoundError as exc:
+        bundle_registry_path = None
+        failed_requirements.append(
+            make_failed_requirement(
+                "t2_bundle_registry_path_missing",
+                "T2A requires a resolvable bundle equipment registry path.",
                 error=str(exc),
             )
         )
 
-    summary_payload = load_json(summary_path) if summary_path and summary_path.exists() else {}
-    registry_payload = load_json(registry_path) if registry_path and registry_path.exists() else {}
-    if summary_path and summary_path.exists():
-        conversion_root, manifest_index = build_toy_yard_manifest_index(summary_path)
+    solo_summary_payload = load_json(solo_summary_path) if solo_summary_path and solo_summary_path.exists() else {}
+    bundle_summary_payload = load_json(bundle_summary_path) if bundle_summary_path and bundle_summary_path.exists() else {}
+    registry_payload = load_json(bundle_registry_path) if bundle_registry_path and bundle_registry_path.exists() else {}
+    if solo_summary_path and solo_summary_path.exists():
+        solo_conversion_root, solo_manifest_index = build_toy_yard_manifest_index(solo_summary_path)
     else:
-        conversion_root, manifest_index = None, {}
+        solo_conversion_root, solo_manifest_index = None, {}
+    if bundle_summary_path and bundle_summary_path.exists():
+        bundle_conversion_root, bundle_manifest_index = build_toy_yard_manifest_index(bundle_summary_path)
+    else:
+        bundle_conversion_root, bundle_manifest_index = None, {}
 
-    manifest_check_payload = build_manifest_artifact_check_report(
-        manifest_paths=list(manifest_index.values()),
-        export_root=toy_yard_view_root,
+    packet_checks: list[dict[str, Any]] = []
+    if solo_manifest_index:
+        packet_checks.append(
+            {
+                "source_id": "solo",
+                "export_root": str(solo_view_root.resolve()) if solo_view_root else "",
+                "summary_path": str(solo_summary_path.resolve()) if solo_summary_path else "",
+                **build_manifest_artifact_check_report(
+                    manifest_paths=list(solo_manifest_index.values()),
+                    export_root=solo_view_root,
+                    source_workspace_config=solo_workspace_path or Path(args.workspace_config).expanduser().resolve(),
+                ),
+            }
+        )
+    if bundle_manifest_index:
+        packet_checks.append(
+            {
+                "source_id": "bundle",
+                "export_root": str(bundle_view_root.resolve()) if bundle_view_root else "",
+                "summary_path": str(bundle_summary_path.resolve()) if bundle_summary_path else "",
+                **build_manifest_artifact_check_report(
+                    manifest_paths=list(bundle_manifest_index.values()),
+                    export_root=bundle_view_root,
+                    source_workspace_config=bundle_workspace_path or Path(args.workspace_config).expanduser().resolve(),
+                ),
+            }
+        )
+    manifest_check_payload = _merge_manifest_check_payloads(
         source_workspace_config=Path(args.workspace_config).expanduser().resolve(),
+        packet_checks=packet_checks,
     )
     manifest_check_path = output_root / "packet" / "manifest_artifact_check.json"
     manifest_check_path.parent.mkdir(parents=True, exist_ok=True)
@@ -449,22 +551,23 @@ def main() -> int:
 
     write_json(manifest_check_path, manifest_check_payload)
 
-    solo_candidate = select_solo_candidate(summary_payload, manifest_index) if manifest_index else None
+    combined_manifest_index = _merge_manifest_indexes(solo_manifest_index, bundle_manifest_index)
+    solo_candidate = select_solo_candidate(solo_summary_payload, solo_manifest_index) if solo_manifest_index else None
     if not solo_candidate:
         failed_requirements.append(
             make_failed_requirement(
                 "t2_solo_candidate_missing",
                 "T2A requires a consumer-ready character package resolvable from toy-yard suite summary and manifest index.",
-                summary_path=str(summary_path.resolve()) if summary_path else None,
+                summary_path=str(solo_summary_path.resolve()) if solo_summary_path else None,
             )
         )
-    bundle_candidate = select_bundle_candidate(registry_payload, manifest_index) if manifest_index else None
+    bundle_candidate = select_bundle_candidate(registry_payload, bundle_manifest_index) if bundle_manifest_index else None
     if not bundle_candidate:
         failed_requirements.append(
             make_failed_requirement(
                 "t2_bundle_candidate_missing",
                 "T2A requires at least one ready pair resolvable from toy-yard registry and manifest index.",
-                registry_path=str(registry_path.resolve()) if registry_path else None,
+                registry_path=str(bundle_registry_path.resolve()) if bundle_registry_path else None,
             )
         )
     elif not str(bundle_candidate.get("character_skeletal_mesh") or "").strip() or not str(bundle_candidate.get("weapon_skeletal_mesh") or "").strip():
@@ -481,13 +584,13 @@ def main() -> int:
         lane_result, lane_failures = evaluate_solo_lane(workspace, output_root, solo_candidate)
         per_lane_results.append(lane_result)
         failed_requirements.extend(lane_failures)
-    if bundle_candidate and summary_path:
-        lane_result, lane_failures = evaluate_bundle_lane(workspace, output_root, summary_path, bundle_candidate)
+    if bundle_candidate and bundle_summary_path:
+        lane_result, lane_failures = evaluate_bundle_lane(workspace, output_root, bundle_summary_path, bundle_candidate)
         per_lane_results.append(lane_result)
         failed_requirements.extend(lane_failures)
 
     counts = {
-        "manifest_count": len(manifest_index),
+        "manifest_count": len(combined_manifest_index),
         "solo_lanes_passed": sum(1 for item in per_lane_results if item.get("lane_id") == "solo" and item.get("status") == "pass"),
         "bundle_lanes_passed": sum(1 for item in per_lane_results if item.get("lane_id") == "bundle" and item.get("status") == "pass"),
         "lanes_run": len(per_lane_results),
@@ -513,9 +616,14 @@ def main() -> int:
             "status": status,
             "workspace_config": str(Path(args.workspace_config).expanduser().resolve()),
             "toy_yard_view_root": str(toy_yard_view_root.resolve()) if toy_yard_view_root else "",
-            "resolved_summary_path": str(summary_path.resolve()) if summary_path else "",
-            "resolved_registry_path": str(registry_path.resolve()) if registry_path else "",
-            "resolved_conversion_root": str(conversion_root.resolve()) if conversion_root else "",
+            "resolved_summary_path": str(bundle_summary_path.resolve()) if bundle_summary_path else "",
+            "resolved_registry_path": str(bundle_registry_path.resolve()) if bundle_registry_path else "",
+            "resolved_conversion_root": str(bundle_conversion_root.resolve()) if bundle_conversion_root else "",
+            "resolved_solo_summary_path": str(solo_summary_path.resolve()) if solo_summary_path else "",
+            "resolved_bundle_summary_path": str(bundle_summary_path.resolve()) if bundle_summary_path else "",
+            "resolved_bundle_registry_path": str(bundle_registry_path.resolve()) if bundle_registry_path else "",
+            "resolved_solo_conversion_root": str(solo_conversion_root.resolve()) if solo_conversion_root else "",
+            "resolved_bundle_conversion_root": str(bundle_conversion_root.resolve()) if bundle_conversion_root else "",
             "fixed_execution_profile": dict(FIXED_EXECUTION_PROFILE),
             "lanes": ["solo", "bundle"],
             "selected_inputs": {

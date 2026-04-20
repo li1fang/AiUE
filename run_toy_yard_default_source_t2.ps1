@@ -1,7 +1,12 @@
 param(
     [string]$WorkspaceConfig = "C:\AiUE\local\pipeline_workspace.local.json",
     [string]$SummaryPath,
+    [string]$SoloSummaryPath,
+    [string]$BundleSummaryPath,
     [string]$RegistryPath,
+    [string]$BundleRegistryPath,
+    [string]$SoloWorkspaceConfig,
+    [string]$BundleWorkspaceConfig,
     [string]$OutputRoot,
     [string]$LatestReportPath
 )
@@ -16,7 +21,12 @@ $arguments = @(
     $WorkspaceConfig
 )
 if ($SummaryPath) { $arguments += @("--summary-path", $SummaryPath) }
+if ($SoloSummaryPath) { $arguments += @("--solo-summary-path", $SoloSummaryPath) }
+if ($BundleSummaryPath) { $arguments += @("--bundle-summary-path", $BundleSummaryPath) }
 if ($RegistryPath) { $arguments += @("--registry-path", $RegistryPath) }
+if ($BundleRegistryPath) { $arguments += @("--bundle-registry-path", $BundleRegistryPath) }
+if ($SoloWorkspaceConfig) { $arguments += @("--solo-workspace-config", $SoloWorkspaceConfig) }
+if ($BundleWorkspaceConfig) { $arguments += @("--bundle-workspace-config", $BundleWorkspaceConfig) }
 if ($OutputRoot) { $arguments += @("--output-root", $OutputRoot) }
 if ($LatestReportPath) { $arguments += @("--latest-report-path", $LatestReportPath) }
 
