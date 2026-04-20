@@ -109,10 +109,44 @@ def main() -> int:
     output_root.mkdir(parents=True, exist_ok=True)
 
     previous_report = load_json(latest_report_path) if latest_report_path.exists() else None
-    source_report_path = resolve_source_report_path(workspace, args.source_report)
-    source_report = load_json(source_report_path)
-    contract = build_parametric_body_contract(source_report)
-    status, failed_requirements = evaluate_contract(contract, source_report=source_report, source_report_path=source_report_path)
+    source_report_error = ""
+    try:
+        source_report_path = resolve_source_report_path(workspace, args.source_report)
+        source_report = load_json(source_report_path)
+        contract = build_parametric_body_contract(source_report)
+        status, failed_requirements = evaluate_contract(contract, source_report=source_report, source_report_path=source_report_path)
+    except FileNotFoundError as exc:
+        source_report_path = Path(args.source_report).expanduser().resolve() if args.source_report else Path()
+        source_report_error = str(exc)
+        source_report = {
+            "status": "missing",
+            "source_root": "",
+            "counts": {},
+            "module_kind_counts": {},
+            "canonical_fixture_family_id": "",
+            "per_family_results": [],
+        }
+        contract = {
+            "body_family_id": "",
+            "contract_id": "",
+            "core_module_id": "",
+            "supported_head_ids": [],
+            "supported_bust_classes": [],
+            "supported_leg_length_profiles": [],
+            "compatible_hair_ids": [],
+            "fusion_recipe_id": "",
+            "rig_profile_id": "",
+            "material_profile_id": "",
+        }
+        status = "fail"
+        failed_requirements = [
+            make_failed_requirement(
+                "c1_source_report_unconfigured",
+                "C1 requires a latest C0 report or explicit source report, but the current workspace does not provide one.",
+                workspace_config=str(Path(args.workspace_config).expanduser().resolve()),
+                source_report_error=source_report_error,
+            )
+        ]
 
     discussion_signal = build_discussion_signal(
         status,
@@ -150,6 +184,9 @@ def main() -> int:
             "artifacts": {
                 "report_root": str(output_root),
                 "latest_report_path": str(latest_report_path),
+            },
+            "environment": {
+                "source_report_error": source_report_error,
             },
         },
         schema_family="body_platform.parametric_body_contract.c1",

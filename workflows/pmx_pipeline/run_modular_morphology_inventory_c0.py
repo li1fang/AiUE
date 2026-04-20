@@ -87,9 +87,38 @@ def main() -> int:
     output_root.mkdir(parents=True, exist_ok=True)
 
     previous_report = load_json(latest_report_path) if latest_report_path.exists() else None
-    source_root = resolve_source_root(workspace, args.source_root)
-    inventory = build_modular_morphology_inventory(source_root)
-    status, failed_requirements = evaluate_inventory(inventory, source_root_exists=source_root.exists())
+    source_root_error = ""
+    try:
+        source_root = resolve_source_root(workspace, args.source_root)
+        inventory = build_modular_morphology_inventory(source_root)
+        status, failed_requirements = evaluate_inventory(inventory, source_root_exists=source_root.exists())
+    except FileNotFoundError as exc:
+        source_root = Path(args.source_root).expanduser().resolve() if args.source_root else Path()
+        source_root_error = str(exc)
+        inventory = {
+            "source_root": str(source_root),
+            "selection_policy": {},
+            "counts": {
+                "module_count": 0,
+                "family_count": 0,
+                "candidate_fixture_family_count": 0,
+            },
+            "module_kind_counts": {},
+            "source_extension_counts": {},
+            "module_examples_by_kind": {},
+            "canonical_fixture_family_id": "",
+            "candidate_fixture_family_ids": [],
+            "per_family_results": [],
+        }
+        status = "fail"
+        failed_requirements = [
+            make_failed_requirement(
+                "c0_source_root_unconfigured",
+                "C0 requires a body-platform source root, but the current workspace does not provide one.",
+                workspace_config=str(Path(args.workspace_config).expanduser().resolve()),
+                source_root_error=source_root_error,
+            )
+        ]
 
     discussion_signal = build_discussion_signal(
         status,
@@ -119,6 +148,9 @@ def main() -> int:
             "artifacts": {
                 "report_root": str(output_root),
                 "latest_report_path": str(latest_report_path),
+            },
+            "environment": {
+                "source_root_error": source_root_error,
             },
         },
         schema_family="body_platform.modular_morphology_inventory.c0",
