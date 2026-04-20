@@ -14,6 +14,7 @@ from aiue_t1.e2c_showcase import build_e2c_showcase_polish_summary
 from aiue_t1.feature_ledger import build_feature_ledger_summary
 from aiue_t1.material_proof import build_material_proof_quality_summary
 from aiue_t1.q5c_lite import closest_margin_info, margin_to_failure_by_metric, risk_band_for_q5c_lite, risk_reason_for_q5c_lite
+from aiue_t1.qa_full import build_qa_full_summary
 from aiue_t1.report_index import build_report_index
 from aiue_t1.slot_debugger import build_slot_debugger_payload
 
@@ -588,6 +589,46 @@ def _render_test_governance_card(report_index: dict) -> str:
     )
 
 
+def _render_qa_run_card(report_index: dict, *, gate_id: str, title: str, missing_label: str) -> str:
+    summary = build_qa_full_summary(report_index, gate_id=gate_id)
+    if str(summary.get("status") or "missing") == "missing":
+        return f"<p class=\"muted\">No {html.escape(missing_label)} report was available.</p>"
+    return (
+        "<article class=\"card\">"
+        f"<h3>{html.escape(title)}</h3>"
+        f"<p><strong>Status:</strong> {html.escape(str(summary.get('status') or 'unknown'))}</p>"
+        f"<p><strong>Hard:</strong> {int(summary.get('hard_failure_count') or 0)} | "
+        f"<strong>Soft:</strong> {int(summary.get('soft_finding_count') or 0)} | "
+        f"<strong>Watchlist:</strong> {int(summary.get('expected_watchlist_count') or 0)} | "
+        f"<strong>Blocked:</strong> {int(summary.get('blocked_lane_count') or 0)}</p>"
+        f"<p><strong>Root:</strong> {int(summary.get('root_failure_count') or 0)} | "
+        f"<strong>Cascade:</strong> {int(summary.get('cascade_failure_count') or 0)} | "
+        f"<strong>Environment:</strong> {int(summary.get('environment_failure_count') or 0)}</p>"
+        f"<p><strong>Flakes:</strong> {int(summary.get('flake_count') or 0)} | "
+        f"<strong>Output Drift:</strong> {int(summary.get('output_drift_count') or 0)}</p>"
+        f"<p class=\"muted\">Discussion reason: {html.escape(str(summary.get('discussion_reason') or 'none'))}</p>"
+        "</article>"
+    )
+
+
+def _render_qa_full_card(report_index: dict) -> str:
+    return _render_qa_run_card(
+        report_index,
+        gate_id="qa_full_nightly",
+        title="QA-Full Nightly",
+        missing_label="QA-Full nightly",
+    )
+
+
+def _render_qa_lite_card(report_index: dict) -> str:
+    return _render_qa_run_card(
+        report_index,
+        gate_id="qa_lite_daily",
+        title="QA-Lite Daily",
+        missing_label="QA-Lite daily",
+    )
+
+
 def _render_pv1_signoff_card(report_index: dict) -> str:
     pv1_report = dict((dict(report_index.get("reports_by_gate_id") or {}).get("manual_playable_demo_validation_pv1") or {}).get("report") or {})
     if not pv1_report:
@@ -613,6 +654,55 @@ def _render_pv1_signoff_card(report_index: dict) -> str:
         f"<p class=\"muted\">Notes: {html.escape(str(pv1_report.get('notes') or 'none'))}</p>"
         "</article>"
     )
+
+
+def _render_qa_summary(report_index: dict, *, gate_id: str, title: str) -> str:
+    summary = build_qa_full_summary(report_index, gate_id=gate_id)
+    if str(summary.get("status") or "missing") == "missing":
+        return f"<p class=\"muted\">No {html.escape(title)} summary was available.</p>"
+    root_ids = [
+        str(item)
+        for item in list(summary.get("root_failure_lane_ids") or [])
+        if str(item)
+    ]
+    cascade_ids = [
+        str(item)
+        for item in list(summary.get("cascade_failure_lane_ids") or [])
+        if str(item)
+    ]
+    environment_ids = [
+        str(item)
+        for item in list(summary.get("environment_failure_lane_ids") or [])
+        if str(item)
+    ]
+    return (
+        "<article class=\"card\">"
+        f"<h3>{html.escape(title)}</h3>"
+        f"<p><strong>Status:</strong> {html.escape(str(summary.get('status') or 'unknown'))} | "
+        f"<strong>Hard:</strong> {int(summary.get('hard_failure_count') or 0)} | "
+        f"<strong>Soft:</strong> {int(summary.get('soft_finding_count') or 0)} | "
+        f"<strong>Watchlist:</strong> {int(summary.get('expected_watchlist_count') or 0)} | "
+        f"<strong>Blocked:</strong> {int(summary.get('blocked_lane_count') or 0)}</p>"
+        f"<p><strong>Root Failures:</strong> {int(summary.get('root_failure_count') or 0)} | "
+        f"{html.escape(', '.join(root_ids) if root_ids else 'none')}</p>"
+        f"<p><strong>Cascade Failures:</strong> {int(summary.get('cascade_failure_count') or 0)} | "
+        f"{html.escape(', '.join(cascade_ids) if cascade_ids else 'none')}</p>"
+        f"<p><strong>Environment Failures:</strong> {int(summary.get('environment_failure_count') or 0)} | "
+        f"{html.escape(', '.join(environment_ids) if environment_ids else 'none')}</p>"
+        f"<p><strong>Flakes:</strong> {int(summary.get('flake_count') or 0)} | "
+        f"<strong>Output Drift:</strong> {int(summary.get('output_drift_count') or 0)} | "
+        f"<strong>Watchlist Only:</strong> {html.escape(str(bool(summary.get('watchlist_only'))))}</p>"
+        f"<p class=\"muted\">Discussion reason: {html.escape(str(summary.get('discussion_reason') or 'none'))}</p>"
+        "</article>"
+    )
+
+
+def _render_qa_full_summary(report_index: dict) -> str:
+    return _render_qa_summary(report_index, gate_id="qa_full_nightly", title="QA-Full Nightly")
+
+
+def _render_qa_lite_summary(report_index: dict) -> str:
+    return _render_qa_summary(report_index, gate_id="qa_lite_daily", title="QA-Lite Daily")
 
 
 def _render_test_governance_summary(report_index: dict) -> str:
@@ -992,7 +1082,8 @@ def _render_html(manifest: dict, *, report_index: dict | None = None) -> str:
 <h1>AiUE T1 Evidence Pack</h1>
 <p class="muted">Generated at {html.escape(str(manifest.get('generated_at_utc') or ''))}</p>
 <section class="section"><h2>Summary</h2><div class="grid cards"><article class="card"><h3>Reports</h3><p>{int(counts.get('reports') or 0)}</p></article><article class="card"><h3>Active Line</h3><p>{int(counts.get('active_line_reports') or 0)}</p></article><article class="card"><h3>Platform Line</h3><p>{int(counts.get('platform_line_reports') or 0)}</p></article><article class="card"><h3>Body Platform Line</h3><p>{int(counts.get('body_platform_line_reports') or 0)}</p></article><article class="card"><h3>Governance Line</h3><p>{int(counts.get('governance_line_reports') or 0)}</p></article><article class="card"><h3>Passing Reports</h3><p>{int(counts.get('passing_reports') or 0)}</p></article></div></section>
-<section class="section"><h2>Governance</h2><div class="grid cards">{_render_balance_card(report_index)}{_render_test_governance_card(report_index)}{_render_pv1_signoff_card(report_index)}</div></section>
+<section class="section"><h2>Governance</h2><div class="grid cards">{_render_balance_card(report_index)}{_render_test_governance_card(report_index)}{_render_qa_full_card(report_index)}{_render_qa_lite_card(report_index)}{_render_pv1_signoff_card(report_index)}</div></section>
+<section class="section"><h2>QA Profile Summaries</h2><div class="grid cards">{_render_qa_full_summary(report_index)}{_render_qa_lite_summary(report_index)}</div></section>
 <section class="section"><h2>Test Coverage / Blind Spots</h2>{_render_test_governance_summary(report_index)}</section>
 <section class="section"><h2>Feature Ledger</h2>{_render_feature_ledger_summary(feature_ledger)}</section>
 <section class="section"><h2>Active Line Reports</h2><div class="grid cards">{_render_report_cards(list(categories.get('active_line') or []))}</div></section>

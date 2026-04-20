@@ -107,7 +107,7 @@ def test_build_evidence_pack_generates_static_bundle(tmp_path: Path):
     assert (latest_root / "index.html").exists()
     assert not (latest_root / "stale.txt").exists()
     assert manifest["slot_debugger"]["package_count"] == 1
-    assert manifest["report_index"]["counts"]["governance_line_reports"] == 2
+    assert manifest["report_index"]["counts"]["governance_line_reports"] == 3
     assert len(manifest["artifacts"]["preview_images"]) >= 4
     assert any(str(item.get("key") or "").startswith("q5c_") for item in list(manifest["artifacts"]["preview_images"] or []))
     assert any(str(item.get("key") or "").startswith("q5c_contrast_") for item in list(manifest["artifacts"]["preview_images"] or []))
@@ -169,6 +169,45 @@ def test_build_evidence_pack_renders_pv1_signoff_card(tmp_path: Path):
     assert "fixture_user" in index_html
     assert "Checked Packages:</strong> 1 | pkg_alpha" in index_html
     assert "pkg_alpha" in index_html
+
+
+def test_build_evidence_pack_renders_qa_full_governance_card(tmp_path: Path):
+    from tests.t2.helpers import build_fixture_pack
+
+    pack = build_fixture_pack(tmp_path)
+    verification_root = pack["verification_root"]
+    write_json(
+        verification_root / "latest_qa_full_nightly_report.json",
+        {
+            "gate_id": "qa_full_nightly",
+            "status": "attention",
+            "generated_at_utc": "2026-04-19T02:00:00+00:00",
+            "hard_failures": [],
+            "soft_findings": [{"lane_id": "flake_lane", "status": "flake_detected"}],
+            "expected_watchlist": [{"lane_id": "manual_playable_demo_validation_pv1", "reason": "manual_signoff_pending"}],
+            "blocked_lanes": [{"lane_id": "canonical_fusion_fixture_c2", "reason": "fixture_missing"}],
+            "root_failures": [{"lane_id": "flake_lane", "status": "flake_detected"}],
+            "cascade_failures": [{"lane_id": "e2_showcase", "status": "blocked"}],
+            "environment_failures": [{"lane_id": "canonical_fusion_fixture_c2", "status": "blocked"}],
+            "rerun_comparisons": [{"lane_id": "flake_lane", "comparison_status": "flake_detected"}],
+            "discussion_signal": {"reason": "unexpected_soft_findings"},
+        },
+    )
+    manifest = build_evidence_pack(
+        verification_root=verification_root,
+        output_root=pack["output_root"],
+        latest_root=pack["latest_root"],
+        repo_root=tmp_path,
+    )
+    assert manifest["report_index"]["counts"]["governance_line_reports"] == 3
+    index_html = (pack["output_root"] / "index.html").read_text(encoding="utf-8")
+    assert "QA-Full Nightly" in index_html
+    assert "QA-Lite Daily" in index_html
+    assert "Flakes:</strong> 1" in index_html
+    assert "Root:</strong> 1" in index_html
+    assert "Cascade:</strong> 1" in index_html
+    assert "Environment:</strong> 1" in index_html
+    assert "Discussion reason: unexpected_soft_findings" in index_html
 
 
 def test_build_evidence_pack_renders_e2c_showcase_summary(tmp_path: Path):

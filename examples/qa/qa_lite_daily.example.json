@@ -1,0 +1,149 @@
+{
+  "profile_id": "qa_lite_daily",
+  "gate_id": "qa_lite_daily",
+  "selected_lanes_gate_id": "qa_lite_selected_lanes",
+  "schema_family": "aiue_qa_lite_daily_report",
+  "runtime_budget_class": "daily_lite",
+  "workspace_refs": {
+    "main": "C:\\AiUE\\local\\pipeline_workspace.local.json",
+    "motion_diversity": "C:\\AiUE\\local\\pipeline_workspace.toyyard.motion.trial-m2-diversity.local.json"
+  },
+  "lane_order": [
+    "repo_surface",
+    "schema_contracts",
+    "pytest_t1",
+    "toy_yard_default_source_t2",
+    "source_contract_preflight_p0",
+    "visual_proof_v1",
+    "material_texture_proof_m1",
+    "multi_slot_composition_p4",
+    "playable_core_smoke_pc1",
+    "motion_quality_line_m4",
+    "bodypaint_candidate_pool_trial",
+    "dynamic_balance_governance_progress",
+    "test_governance_round1"
+  ],
+  "lane_registry": {
+    "repo_surface": {
+      "severity": "hard",
+      "lane_class": "authoritative_hard",
+      "mode": "command",
+      "group": "preflight",
+      "command": ["${python}", "${repo_root}\\tools\\check_repo_surface.py", "--repo-root", "${repo_root}"]
+    },
+    "schema_contracts": {
+      "severity": "hard",
+      "lane_class": "authoritative_hard",
+      "mode": "command",
+      "group": "preflight",
+      "command": ["${python}", "${repo_root}\\tools\\check_schema_contracts.py", "--repo-root", "${repo_root}"]
+    },
+    "pytest_t1": {
+      "severity": "hard",
+      "lane_class": "authoritative_hard",
+      "mode": "command",
+      "group": "preflight",
+      "command": ["${python}", "-m", "pytest", "tests/t1", "-q"]
+    },
+    "toy_yard_default_source_t2": {
+      "severity": "hard",
+      "lane_class": "environment_or_contract",
+      "mode": "command",
+      "group": "source_core",
+      "workspace_ref": "main",
+      "requires_workspace_keys": ["paths.toy_yard_pmx_view_root"],
+      "report_gate_id": "toy_yard_default_source_t2",
+      "signature_paths": ["status", "counts", "@package_ids"],
+      "command": ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${repo_root}\\run_toy_yard_default_source_t2.ps1", "-WorkspaceConfig", "${workspace}"]
+    },
+    "source_contract_preflight_p0": {
+      "severity": "hard",
+      "lane_class": "authoritative_hard",
+      "mode": "command",
+      "group": "source_core",
+      "workspace_ref": "main",
+      "report_gate_id": "source_contract_preflight_p0",
+      "signature_paths": ["status", "counts", "@package_ids"],
+      "command": ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${repo_root}\\run_source_contract_preflight_p0.ps1", "-WorkspaceConfig", "${workspace}"]
+    },
+    "visual_proof_v1": {
+      "severity": "hard",
+      "lane_class": "authoritative_hard",
+      "mode": "command",
+      "group": "source_core",
+      "workspace_ref": "main",
+      "report_gate_id": "visual_proof_v1",
+      "signature_paths": ["status", "counts", "@package_ids"],
+      "command": ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${repo_root}\\run_visual_proof_v1.ps1", "-WorkspaceConfig", "${workspace}"]
+    },
+    "material_texture_proof_m1": {
+      "severity": "hard",
+      "lane_class": "authoritative_hard",
+      "mode": "command",
+      "group": "source_core",
+      "workspace_ref": "main",
+      "report_gate_id": "material_texture_proof_m1",
+      "signature_paths": ["status", "counts", "@package_ids"],
+      "command": ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${repo_root}\\run_material_texture_proof_m1.ps1", "-WorkspaceConfig", "${workspace}"]
+    },
+    "multi_slot_composition_p4": {
+      "severity": "hard",
+      "lane_class": "authoritative_hard",
+      "mode": "command",
+      "group": "demo_core",
+      "workspace_ref": "main",
+      "report_gate_id": "multi_slot_composition_p4",
+      "signature_paths": ["status", "counts", "@package_ids"],
+      "command": ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${repo_root}\\run_multi_slot_composition_p4.ps1", "-WorkspaceConfig", "${workspace}"]
+    },
+    "playable_core_smoke_pc1": {
+      "severity": "hard",
+      "lane_class": "authoritative_hard",
+      "mode": "command",
+      "group": "demo_core",
+      "workspace_ref": "main",
+      "prerequisite_lane_ids": ["multi_slot_composition_p4"],
+      "report_gate_id": "playable_core_smoke_pc1",
+      "signature_paths": ["status", "counts", "@package_ids"],
+      "command": ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${repo_root}\\run_playable_core_smoke_pc1.ps1", "-WorkspaceConfig", "${workspace}"]
+    },
+    "motion_quality_line_m4": {
+      "severity": "hard",
+      "lane_class": "quality_hard",
+      "mode": "command",
+      "group": "motion",
+      "workspace_ref": "motion_diversity",
+      "report_gate_id": "motion_quality_line_m4",
+      "signature_paths": ["status", "counts", "@owner_distribution"],
+      "command": ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${repo_root}\\run_motion_quality_line_m4.ps1", "-WorkspaceConfig", "${workspace}"]
+    },
+    "bodypaint_candidate_pool_trial": {
+      "severity": "hard",
+      "lane_class": "authoritative_hard",
+      "mode": "command",
+      "group": "body",
+      "workspace_ref": "main",
+      "report_gate_id": "bodypaint_candidate_pool_trial",
+      "signature_paths": ["status", "counts", "counts.ready_for_bodypaint_count"],
+      "command": ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${repo_root}\\run_build_bodypaint_candidate_pool.ps1", "-WorkspaceConfig", "${workspace}"]
+    },
+    "dynamic_balance_governance_progress": {
+      "severity": "soft",
+      "lane_class": "soft_discovery",
+      "mode": "command",
+      "group": "governance",
+      "report_gate_id": "dynamic_balance_governance_progress",
+      "signature_paths": ["status", "recommendation.next_round_kind"],
+      "command": ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${repo_root}\\tools\\run_dynamic_balance.ps1"]
+    },
+    "test_governance_round1": {
+      "severity": "expected_soft",
+      "lane_class": "expected_watchlist",
+      "mode": "command",
+      "group": "governance",
+      "report_gate_id": "test_governance_round1",
+      "signature_paths": ["status", "checkpoint_readiness", "coverage_summary"],
+      "command": ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${repo_root}\\tools\\run_test_governance.ps1"]
+    }
+  }
+}

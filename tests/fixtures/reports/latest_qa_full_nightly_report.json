@@ -1,0 +1,61 @@
+{
+  "gate_id": "qa_full_nightly",
+  "status": "attention",
+  "generated_at_utc": "2026-04-19T02:00:00+00:00",
+  "runtime_budget_class": "fixture",
+  "hard_failures": [],
+  "soft_findings": [
+    {
+      "lane_id": "flake_lane",
+      "status": "flake_detected",
+      "failure_kind": "root_failure"
+    }
+  ],
+  "expected_watchlist": [
+    {
+      "lane_id": "manual_playable_demo_validation_pv1",
+      "reason": "manual_signoff_pending",
+      "failure_kind": "watchlist_only"
+    }
+  ],
+  "blocked_lanes": [
+    {
+      "lane_id": "canonical_fusion_fixture_c2",
+      "reason": "fixture_missing",
+      "failure_kind": "environment_failure"
+    }
+  ],
+  "root_failures": [
+    {
+      "lane_id": "flake_lane",
+      "status": "flake_detected"
+    }
+  ],
+  "cascade_failures": [
+    {
+      "lane_id": "e2_showcase",
+      "status": "blocked"
+    }
+  ],
+  "environment_failures": [
+    {
+      "lane_id": "canonical_fusion_fixture_c2",
+      "status": "blocked"
+    }
+  ],
+  "watchlist_only": {
+    "status": false,
+    "lane_ids": [
+      "manual_playable_demo_validation_pv1"
+    ]
+  },
+  "rerun_comparisons": [
+    {
+      "lane_id": "flake_lane",
+      "comparison_status": "flake_detected"
+    }
+  ],
+  "discussion_signal": {
+    "reason": "unexpected_soft_findings"
+  }
+}

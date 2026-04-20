@@ -1,0 +1,48 @@
+{
+  "profile_id": "qa_body_platform",
+  "gate_id": "qa_body_platform",
+  "selected_lanes_gate_id": "qa_body_platform_selected_lanes",
+  "schema_family": "aiue_qa_body_platform_report",
+  "runtime_budget_class": "conditional_body_platform",
+  "workspace_refs": {
+    "main": "C:\\AiUE\\local\\pipeline_workspace.local.json"
+  },
+  "lane_order": [
+    "modular_morphology_inventory_c0",
+    "parametric_body_contract_c1",
+    "canonical_fusion_fixture_c2"
+  ],
+  "lane_registry": {
+    "modular_morphology_inventory_c0": {
+      "severity": "hard",
+      "lane_class": "environment_or_contract",
+      "mode": "command",
+      "group": "body",
+      "workspace_ref": "main",
+      "requires_workspace_keys": ["paths.body_morphology_source_root"],
+      "report_gate_id": "modular_morphology_inventory_c0",
+      "signature_paths": ["status", "counts"],
+      "command": ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${repo_root}\\run_modular_morphology_inventory_c0.ps1", "-WorkspaceConfig", "${workspace}"]
+    },
+    "parametric_body_contract_c1": {
+      "severity": "hard",
+      "lane_class": "environment_or_contract",
+      "mode": "command",
+      "group": "body",
+      "workspace_ref": "main",
+      "requires_workspace_keys": ["paths.body_morphology_source_root"],
+      "prerequisite_lane_ids": ["modular_morphology_inventory_c0"],
+      "report_gate_id": "parametric_body_contract_c1",
+      "signature_paths": ["status", "counts"],
+      "command": ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${repo_root}\\run_parametric_body_contract_c1.ps1", "-WorkspaceConfig", "${workspace}"]
+    },
+    "canonical_fusion_fixture_c2": {
+      "severity": "expected_soft",
+      "lane_class": "expected_watchlist",
+      "mode": "snapshot",
+      "group": "watchlist",
+      "report_gate_id": "canonical_fusion_fixture_c2",
+      "signature_paths": ["status", "body_family_id", "fixture_id", "fixture_scope"]
+    }
+  }
+}

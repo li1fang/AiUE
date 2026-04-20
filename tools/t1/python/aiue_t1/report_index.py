@@ -17,6 +17,7 @@ ACTIVE_LINE_GATE_IDS = [
 
 PLATFORM_LINE_GATE_IDS = [
     "action_candidate_provider_a1",
+    "source_contract_preflight_p0",
     "material_texture_proof_m1",
     "generic_slot_abstraction_p1",
     "clothing_vertical_slice_p2",
@@ -27,6 +28,7 @@ PLATFORM_LINE_GATE_IDS = [
     "q5c_lite_contrast_lab",
     "fx_vertical_slice_p3",
     "multi_slot_composition_p4",
+    "playable_core_smoke_pc1",
     "real_fx_item_kind_r2",
     "live_fx_visual_quality_r3",
 ]
@@ -46,6 +48,12 @@ BODY_PLATFORM_LINE_GATE_IDS = [
 GOVERNANCE_LINE_GATE_IDS = [
     "dynamic_balance_governance_progress",
     "test_governance_round1",
+    "qa_full_nightly",
+    "qa_full_selected_lanes",
+    "qa_lite_daily",
+    "qa_lite_selected_lanes",
+    "qa_body_platform",
+    "qa_body_platform_selected_lanes",
     "diversity_matrix_dv2",
     "diversity_matrix_dv1",
     "manual_playable_demo_validation_pv1",
