@@ -51,14 +51,18 @@ def test_workbench_cli_seven_open_cycles(tmp_path: Path):
         completed, payload = run_workbench_process(manifest_path=pack["manifest_path"])
         assert completed.returncode == 0, completed.stderr
         assert payload["status"] == "pass"
-        assert payload["summary_counts"]["reports"] == 9
+        assert payload["summary_counts"]["reports"] == 10
         assert payload["summary_counts"]["active_line_reports"] == 4
         assert payload["summary_counts"]["platform_line_reports"] == 3
         assert payload["summary_counts"]["body_platform_line_reports"] == 0
-        assert payload["summary_counts"]["governance_line_reports"] == 2
+        assert payload["summary_counts"]["governance_line_reports"] == 3
         assert payload["slot_debugger"]["package_count"] == 1
         assert payload["governance_balance"]["status"] == "attention"
         assert payload["test_governance"]["status"] == "attention"
+        assert payload["qa_full"]["status"] == "attention"
+        assert payload["qa_full"]["root_failure_count"] == 1
+        assert payload["qa_full"]["cascade_failure_count"] == 1
+        assert payload["qa_full"]["environment_failure_count"] == 1
         assert payload["feature_ledger"]["status"] == "pass"
         assert payload["feature_ledger"]["experimental_item_count"] == 1
         assert payload["feature_ledger"]["unknown_priority_count"] == 1
@@ -192,6 +196,7 @@ def test_workbench_cli_handles_missing_governance_report(tmp_path: Path):
     assert payload["summary_counts"]["governance_line_reports"] == 0
     assert payload["governance_balance"]["status"] == "missing"
     assert payload["test_governance"]["status"] == "missing"
+    assert payload["qa_full"]["status"] == "missing"
     assert payload["feature_ledger"]["status"] == "pass"
 
 

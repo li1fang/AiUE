@@ -8,6 +8,7 @@ from aiue_t2.state_models import (
     CATEGORY_ORDER,
     ErrorRecord,
     GovernanceBalanceRecord,
+    QaFullRecord,
     Pv1SignoffRecord,
     PreviewImageRecord,
     ReportRecord,
@@ -565,6 +566,50 @@ def extract_test_governance(reports_by_gate_id: dict[str, ReportRecord]) -> Test
         high_priority_automation_blind_spot_ids=high_priority_automation_blind_spot_ids,
         high_priority_signoff_blind_spot_ids=high_priority_signoff_blind_spot_ids,
         report_gate_id=record.gate_id,
+        report_source_path=record.report_source_path,
+    )
+
+
+def extract_qa_full(reports_by_gate_id: dict[str, ReportRecord]) -> QaFullRecord:
+    record = reports_by_gate_id.get("qa_full_nightly")
+    if not record or not record.report_payload:
+        return QaFullRecord(status="missing")
+    payload = dict(record.report_payload or {})
+    discussion_signal = dict(payload.get("discussion_signal") or {})
+    root_failures = [dict(item) for item in list(payload.get("root_failures") or [])]
+    cascade_failures = [dict(item) for item in list(payload.get("cascade_failures") or [])]
+    environment_failures = [dict(item) for item in list(payload.get("environment_failures") or [])]
+    rerun_comparisons = [dict(item) for item in list(payload.get("rerun_comparisons") or [])]
+    watchlist_only = dict(payload.get("watchlist_only") or {})
+    return QaFullRecord(
+        status=str(payload.get("status") or record.status or "unknown"),
+        hard_failure_count=len(list(payload.get("hard_failures") or [])),
+        soft_finding_count=len(list(payload.get("soft_findings") or [])),
+        expected_watchlist_count=len(list(payload.get("expected_watchlist") or [])),
+        blocked_lane_count=len(list(payload.get("blocked_lanes") or [])),
+        root_failure_count=len(root_failures),
+        cascade_failure_count=len(cascade_failures),
+        environment_failure_count=len(environment_failures),
+        flake_count=sum(1 for item in rerun_comparisons if str(item.get("comparison_status") or "") == "flake_detected"),
+        output_drift_count=sum(1 for item in rerun_comparisons if str(item.get("comparison_status") or "") == "output_drift"),
+        watchlist_only=bool(watchlist_only.get("status")),
+        root_failure_lane_ids=[
+            str(item.get("lane_id") or "")
+            for item in root_failures
+            if str(item.get("lane_id") or "")
+        ],
+        cascade_failure_lane_ids=[
+            str(item.get("lane_id") or "")
+            for item in cascade_failures
+            if str(item.get("lane_id") or "")
+        ],
+        environment_failure_lane_ids=[
+            str(item.get("lane_id") or "")
+            for item in environment_failures
+            if str(item.get("lane_id") or "")
+        ],
+        discussion_reason=str(discussion_signal.get("reason") or ""),
+        report_gate_id=str(payload.get("gate_id") or record.gate_id or ""),
         report_source_path=record.report_source_path,
     )
 

@@ -297,6 +297,48 @@ class Pv1SignoffRecord:
 
 
 @dataclass
+class QaFullRecord:
+    status: str
+    hard_failure_count: int = 0
+    soft_finding_count: int = 0
+    expected_watchlist_count: int = 0
+    blocked_lane_count: int = 0
+    root_failure_count: int = 0
+    cascade_failure_count: int = 0
+    environment_failure_count: int = 0
+    flake_count: int = 0
+    output_drift_count: int = 0
+    watchlist_only: bool = False
+    root_failure_lane_ids: list[str] = field(default_factory=list)
+    cascade_failure_lane_ids: list[str] = field(default_factory=list)
+    environment_failure_lane_ids: list[str] = field(default_factory=list)
+    discussion_reason: str = ""
+    report_gate_id: str = ""
+    report_source_path: str = ""
+
+    def to_dump_dict(self) -> dict[str, Any]:
+        return {
+            "status": self.status,
+            "hard_failure_count": int(self.hard_failure_count),
+            "soft_finding_count": int(self.soft_finding_count),
+            "expected_watchlist_count": int(self.expected_watchlist_count),
+            "blocked_lane_count": int(self.blocked_lane_count),
+            "root_failure_count": int(self.root_failure_count),
+            "cascade_failure_count": int(self.cascade_failure_count),
+            "environment_failure_count": int(self.environment_failure_count),
+            "flake_count": int(self.flake_count),
+            "output_drift_count": int(self.output_drift_count),
+            "watchlist_only": bool(self.watchlist_only),
+            "root_failure_lane_ids": list(self.root_failure_lane_ids),
+            "cascade_failure_lane_ids": list(self.cascade_failure_lane_ids),
+            "environment_failure_lane_ids": list(self.environment_failure_lane_ids),
+            "discussion_signal": {"reason": self.discussion_reason},
+            "report_gate_id": self.report_gate_id,
+            "report_source_path": self.report_source_path,
+        }
+
+
+@dataclass
 class AppState:
     status: str
     manifest_path: str
@@ -313,6 +355,7 @@ class AppState:
     test_governance: TestGovernanceRecord
     feature_ledger: FeatureLedgerRecord
     pv1_signoff: Pv1SignoffRecord
+    qa_full: QaFullRecord
     demo_session: DemoSessionRecord
     demo_request: DemoRequestRecord
     errors: list[ErrorRecord]
@@ -362,6 +405,7 @@ class AppState:
             "test_governance": self.test_governance.to_dump_dict(),
             "feature_ledger": self.feature_ledger.to_dump_dict(),
             "pv1_signoff": self.pv1_signoff.to_dump_dict(),
+            "qa_full": self.qa_full.to_dump_dict(),
             "q5c_contrast_focus": build_q5c_contrast_focus(
                 self.quality_summaries,
                 selected_package_id=selected_package,

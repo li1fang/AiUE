@@ -25,8 +25,9 @@ def test_workbench_short_soak(qtbot, tmp_path: Path):
         assert window.current_error_codes() == []
         assert window.current_dump_payload()["governance_balance"]["status"] == "attention"
         assert window.current_dump_payload()["test_governance"]["status"] == "attention"
+        assert window.current_dump_payload()["qa_full"]["status"] == "attention"
         assert window.current_dump_payload()["demo_session"]["status"] == "pass"
         assert window.current_dump_payload()["demo_request"]["status"] == "pass"
 
     assert window.isVisible()
-    assert window.current_dump_payload()["summary_counts"]["reports"] == 9
+    assert window.current_dump_payload()["summary_counts"]["reports"] == 10

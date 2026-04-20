@@ -57,6 +57,7 @@ class WorkbenchRenderMixin:
         self._render_test_governance_summary()
         self._render_feature_ledger_summary()
         self._render_pv1_signoff_summary()
+        self._render_qa_full_summary()
         self._render_quality_summaries()
         self._render_report_tree()
         self._render_details()
@@ -140,6 +141,30 @@ class WorkbenchRenderMixin:
             f"package_ids {checked_packages_text} | notes {notes_text}"
         )
         self.pv1_signoff_summary.setVisible(True)
+
+    def _render_qa_full_summary(self) -> None:
+        summary = self.app_state.qa_full
+        if summary.status == "missing":
+            self.qa_full_summary.setVisible(False)
+            self.qa_full_summary.setText("")
+            return
+        root_text = ", ".join(summary.root_failure_lane_ids) if summary.root_failure_lane_ids else "none"
+        cascade_text = ", ".join(summary.cascade_failure_lane_ids) if summary.cascade_failure_lane_ids else "none"
+        environment_text = ", ".join(summary.environment_failure_lane_ids) if summary.environment_failure_lane_ids else "none"
+        self.qa_full_summary.setText(
+            "QA-Full Nightly "
+            f"{summary.status.upper()} | "
+            f"hard {summary.hard_failure_count} | "
+            f"soft {summary.soft_finding_count} | "
+            f"watchlist {summary.expected_watchlist_count} | "
+            f"blocked {summary.blocked_lane_count} | "
+            f"root {summary.root_failure_count}:{root_text} | "
+            f"cascade {summary.cascade_failure_count}:{cascade_text} | "
+            f"environment {summary.environment_failure_count}:{environment_text} | "
+            f"flakes {summary.flake_count} | "
+            f"drift {summary.output_drift_count}"
+        )
+        self.qa_full_summary.setVisible(True)
 
     def _render_quality_summaries(self) -> None:
         diversity_summary = dict((self.app_state.quality_summaries or {}).get("diversity_matrix") or {})

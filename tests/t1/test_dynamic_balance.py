@@ -11,6 +11,7 @@ from aiue_t1.dynamic_balance import (
     scan_first_party_hotspots,
     summarize_pressures,
 )
+from aiue_t1.report_index import ACTIVE_LINE_GATE_IDS, PLATFORM_LINE_GATE_IDS
 
 
 def test_dynamic_balance_classifies_round_kinds():
@@ -60,26 +61,8 @@ def test_dynamic_balance_parses_git_log_with_name_only_records():
 def test_dynamic_balance_detects_pressure_and_recommendation():
     report_index = {
         "reports_by_gate_id": {
-            "visual_proof_v1": {"status": "pass"},
-            "demo_stage_d1_onboarding": {"status": "pass"},
-            "demo_cross_bundle_regression_d12": {"status": "pass"},
-            "showcase_demo_e1": {"status": "pass"},
-            "demo_shot_quality_gate_q1": {"status": "pass"},
-            "demo_composition_quality_gate_q2": {"status": "pass"},
-            "demo_semantic_framing_gate_q3": {"status": "pass"},
-            "multi_slot_quality_gate_q4": {"status": "pass"},
-            "material_texture_proof_m1": {"status": "pass"},
-            "generic_slot_abstraction_p1": {"status": "pass"},
-            "clothing_vertical_slice_p2": {"status": "pass"},
-            "visible_conflict_inspection_q5a": {"status": "pass"},
-                "volumetric_fit_inspection_q5b": {"status": "pass"},
-                "volumetric_fit_spatial_evidence_q5bx": {"status": "pass"},
-                "volumetric_inspection_q5c_lite": {"status": "pass"},
-                "q5c_lite_contrast_lab": {"status": "pass"},
-                "fx_vertical_slice_p3": {"status": "pass"},
-                "multi_slot_composition_p4": {"status": "pass"},
-                "real_fx_item_kind_r2": {"status": "pass"},
-                "live_fx_visual_quality_r3": {"status": "pass"},
+            gate_id: {"status": "pass"}
+            for gate_id in [*ACTIVE_LINE_GATE_IDS, *PLATFORM_LINE_GATE_IDS]
         }
     }
     line_health = build_line_health(report_index)

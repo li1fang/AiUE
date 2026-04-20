@@ -17,6 +17,7 @@ from aiue_t2.state_models import (
     ErrorRecord,
     FeatureLedgerRecord,
     GovernanceBalanceRecord,
+    QaFullRecord,
     Pv1SignoffRecord,
     PreviewImageRecord,
     ReportRecord,
@@ -29,6 +30,7 @@ from aiue_t2.state_models import (
 from aiue_t2.state_quality import (
     build_q5c_contrast_focus,
     extract_governance_balance,
+    extract_qa_full,
     extract_pv1_signoff,
     extract_r3_metrics,
     extract_test_governance,
@@ -100,6 +102,7 @@ def _error_app_state(*, manifest_path: Path, code: str, message: str) -> AppStat
         test_governance=TestGovernanceRecord(status="missing"),
         feature_ledger=FeatureLedgerRecord(status="missing"),
         pv1_signoff=Pv1SignoffRecord(status="missing"),
+        qa_full=QaFullRecord(status="missing"),
         demo_session=DemoSessionRecord(
             status="missing",
             session_manifest_path="",
@@ -196,6 +199,7 @@ def load_workbench_state(
     slot_packages = list(slot_debugger.get("packages") or [])
     governance_balance = extract_governance_balance(reports_by_gate_id)
     test_governance = extract_test_governance(reports_by_gate_id)
+    qa_full = extract_qa_full(reports_by_gate_id)
     feature_ledger_payload = dict(manifest.get("feature_ledger") or {})
     feature_ledger_summary = dict(feature_ledger_payload.get("summary") or {})
     feature_ledger = FeatureLedgerRecord(
@@ -261,6 +265,7 @@ def load_workbench_state(
         test_governance=test_governance,
         feature_ledger=feature_ledger,
         pv1_signoff=pv1_signoff,
+        qa_full=qa_full,
         demo_session=demo_session,
         demo_request=demo_request,
         errors=errors,

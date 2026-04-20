@@ -13,16 +13,20 @@ def test_load_workbench_state_reads_fixture_pack(tmp_path: Path):
     pack = build_fixture_pack(tmp_path)
     state = load_workbench_state(pack["manifest_path"])
     assert state.status == "pass"
-    assert state.summary_counts["reports"] == 9
+    assert state.summary_counts["reports"] == 10
     assert state.summary_counts["active_line_reports"] == 4
     assert state.summary_counts["platform_line_reports"] == 3
     assert state.summary_counts["body_platform_line_reports"] == 0
-    assert state.summary_counts["governance_line_reports"] == 2
+    assert state.summary_counts["governance_line_reports"] == 3
     assert state.slot_debugger["package_count"] == 1
     assert state.default_report_gate_id == "visual_proof_v1"
     assert state.governance_balance.status == "attention"
     assert state.governance_balance.recommended_next_round_kind == "flexible"
     assert state.test_governance.status == "attention"
+    assert state.qa_full.status == "attention"
+    assert state.qa_full.root_failure_count == 1
+    assert state.qa_full.cascade_failure_count == 1
+    assert state.qa_full.environment_failure_count == 1
     assert state.feature_ledger.status == "pass"
     assert state.feature_ledger.experimental_item_count == 1
     assert state.feature_ledger.unknown_priority_count == 1
@@ -46,7 +50,7 @@ def test_dump_payload_exposes_expected_native_state(tmp_path: Path):
     state = load_workbench_state(pack["manifest_path"])
     payload = state.to_dump_payload(build_default_view_state(state))
     assert payload["status"] == "pass"
-    assert payload["summary_counts"]["reports"] == 9
+    assert payload["summary_counts"]["reports"] == 10
     assert payload["report_categories"]["active_line"] == [
         "visual_proof_v1",
         "demo_stage_d1_onboarding",
@@ -57,12 +61,18 @@ def test_dump_payload_exposes_expected_native_state(tmp_path: Path):
     assert payload["report_categories"]["governance_line"] == [
         "dynamic_balance_governance_progress",
         "test_governance_round1",
+        "qa_full_nightly",
     ]
     assert payload["slot_debugger"]["package_count"] == 1
     assert payload["slot_debugger"]["package_ids"] == ["pkg_alpha"]
     assert payload["governance_balance"]["status"] == "attention"
     assert payload["governance_balance"]["recommended_next_round_kind"] == "flexible"
     assert payload["test_governance"]["status"] == "attention"
+    assert payload["qa_full"]["status"] == "attention"
+    assert payload["qa_full"]["root_failure_count"] == 1
+    assert payload["qa_full"]["cascade_failure_count"] == 1
+    assert payload["qa_full"]["environment_failure_count"] == 1
+    assert payload["qa_full"]["root_failure_lane_ids"] == ["flake_lane"]
     assert payload["feature_ledger"]["status"] == "pass"
     assert payload["feature_ledger"]["item_count"] == 2
     assert payload["feature_ledger"]["experimental_item_count"] == 1
@@ -118,6 +128,7 @@ def test_load_workbench_state_handles_missing_governance_report(tmp_path: Path):
     assert state.summary_counts["governance_line_reports"] == 0
     assert state.governance_balance.status == "missing"
     assert state.test_governance.status == "missing"
+    assert state.qa_full.status == "missing"
     assert state.feature_ledger.status == "pass"
 
 

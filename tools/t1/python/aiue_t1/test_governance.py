@@ -200,6 +200,27 @@ def apply_report_coverage_overrides(coverage_ledger: dict[str, Any], verificatio
             if str(pv1_report.get("status") or "") == "pass":
                 axis["status"] = "covered"
                 axis["summary"] = "Playable demo has a recorded manual PV1 signoff for the current demo path."
+        elif axis_id == "source_asset_preflight":
+            evidence_gate_ids = sorted(set(evidence_gate_ids + ["source_contract_preflight_p0"]))
+            p0_report = dict(reports_by_gate_id.get("source_contract_preflight_p0") or {}).get("report") or {}
+            if str(p0_report.get("status") or "") == "pass":
+                axis["status"] = "covered"
+                axis["summary"] = "Source asset preflight is covered by the current P0 source contract proof."
+        elif axis_id == "playable_core_runtime":
+            evidence_gate_ids = sorted(set(evidence_gate_ids + ["playable_core_smoke_pc1"]))
+            pc1_report = dict(reports_by_gate_id.get("playable_core_smoke_pc1") or {}).get("report") or {}
+            if str(pc1_report.get("status") or "") == "pass":
+                axis["status"] = "covered"
+                axis["summary"] = "Playable core runtime proof is covered by the current PC1 smoke report."
+        elif axis_id == "bodypaint_handoff_sample_coverage":
+            evidence_gate_ids = sorted(set(evidence_gate_ids + ["bodypaint_candidate_pool_trial"]))
+            handoff_report = dict(reports_by_gate_id.get("bodypaint_candidate_pool_trial") or {}).get("report") or {}
+            handoff_counts = dict(handoff_report.get("counts") or {})
+            ready_count = int(handoff_counts.get("ready_for_bodypaint_count") or 0)
+            candidate_count = int(handoff_counts.get("candidate_count") or 0)
+            if str(handoff_report.get("status") or "") == "pass" and ready_count > 0 and ready_count == candidate_count:
+                axis["status"] = "covered"
+                axis["summary"] = "BodyPaint handoff sample coverage is covered by the current candidate pool proof."
         elif axis_id in DIVERSITY_COVERAGE_AXIS_IDS:
             evidence_gate_ids = sorted(set(evidence_gate_ids + ["diversity_matrix_dv2", "diversity_matrix_dv1"]))
             diversity_report = (

@@ -90,6 +90,33 @@
       ]
     },
     {
+      "axis_id": "source_asset_preflight",
+      "readiness_domain": "automation",
+      "status": "missing",
+      "summary": "Source contract completeness is not yet promoted into the primary verified path; P0 will clear this once its latest report passes.",
+      "evidence_gate_ids": [
+        "source_contract_preflight_p0"
+      ]
+    },
+    {
+      "axis_id": "playable_core_runtime",
+      "readiness_domain": "automation",
+      "status": "missing",
+      "summary": "Minimal playable runtime proof is not yet promoted into the primary verified path; PC1 will clear this once its latest report passes.",
+      "evidence_gate_ids": [
+        "playable_core_smoke_pc1"
+      ]
+    },
+    {
+      "axis_id": "bodypaint_handoff_sample_coverage",
+      "readiness_domain": "automation",
+      "status": "partial",
+      "summary": "BodyPaint handoff coverage exists as a candidate pool, but is not yet promoted as a fully sampled verified axis.",
+      "evidence_gate_ids": [
+        "bodypaint_candidate_pool_trial"
+      ]
+    },
+    {
       "axis_id": "action_variation",
       "status": "partial",
       "summary": "Action preview is proven on a fixed verified path, but broader action variation is not yet covered; DV1 will update this from automated demo matrix evidence.",
