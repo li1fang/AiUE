@@ -31,7 +31,7 @@ FIXED_EXECUTION_PROFILE = {
     "capture_width": 1280,
     "capture_height": 720,
     "capture_delay_seconds": 0.2,
-    "subject_min_screen_coverage": 0.002,
+    "subject_min_screen_coverage": 0.00002,
     "requested_shot_ids": list(REQUIRED_SHOTS),
     "required_subject_pass_count": 1,
 }

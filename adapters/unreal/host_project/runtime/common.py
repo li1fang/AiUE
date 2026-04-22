@@ -1128,6 +1128,22 @@ def asset_bounds_payload_for_component(component) -> dict:
                 local_origin = bounds_value.origin
                 local_extent = bounds_value.box_extent
     component_location = component_world_location(component) or unreal.Vector(0.0, 0.0, 0.0)
+    component_scale = unreal.Vector(1.0, 1.0, 1.0)
+    if component:
+        for method_name in ("get_component_scale", "get_world_scale", "get_relative_scale3d"):
+            if not hasattr(component, method_name):
+                continue
+            try:
+                resolved_scale = getattr(component, method_name)()
+            except Exception:
+                resolved_scale = None
+            if resolved_scale is not None:
+                component_scale = unreal.Vector(
+                    float(getattr(resolved_scale, "x", 1.0)),
+                    float(getattr(resolved_scale, "y", 1.0)),
+                    float(getattr(resolved_scale, "z", 1.0)),
+                )
+                break
     if (local_origin is None or local_extent is None) and component_class_name(component) == "NiagaraComponent":
         for method_name, source_name in (
             ("get_fixed_bounds", "niagara_fixed_bounds"),
@@ -1161,12 +1177,22 @@ def asset_bounds_payload_for_component(component) -> dict:
             "non_zero": False,
             "source": "asset_bounds_unavailable",
         }
-    world_origin = unreal.Vector(
-        component_location.x + float(local_origin.x),
-        component_location.y + float(local_origin.y),
-        component_location.z + float(local_origin.z),
+    scaled_local_origin = unreal.Vector(
+        float(local_origin.x) * float(component_scale.x),
+        float(local_origin.y) * float(component_scale.y),
+        float(local_origin.z) * float(component_scale.z),
     )
-    return bounds_payload_from_origin_extent(world_origin, local_extent, "asset_bounds_fallback")
+    scaled_local_extent = unreal.Vector(
+        abs(float(local_extent.x) * float(component_scale.x)),
+        abs(float(local_extent.y) * float(component_scale.y)),
+        abs(float(local_extent.z) * float(component_scale.z)),
+    )
+    world_origin = unreal.Vector(
+        component_location.x + float(scaled_local_origin.x),
+        component_location.y + float(scaled_local_origin.y),
+        component_location.z + float(scaled_local_origin.z),
+    )
+    return bounds_payload_from_origin_extent(world_origin, scaled_local_extent, "asset_bounds_fallback")
 
 
 def component_bounds_payload(component, fallback_actor=None) -> dict:
@@ -2252,6 +2278,5 @@ def transform_delta_payload(before: dict, after: dict) -> dict:
         "pitch_delta": float(pitch_delta),
         "roll_delta": float(roll_delta),
     }
-
 
 

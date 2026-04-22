@@ -69,6 +69,63 @@ def _resolve_imported_skeletal_mesh(imported_assets: dict, mesh_destination: str
     return "", None
 
 
+def _align_preview_mesh_to_actor(primary_mesh, actor) -> dict:
+    actor_location = actor.get_actor_location() if actor else unreal.Vector(0.0, 0.0, 0.0)
+    before_bounds = component_bounds_payload(primary_mesh, fallback_actor=actor)
+    if not before_bounds.get("non_zero"):
+        return {
+            "applied": False,
+            "reason": "bounds_unavailable",
+            "before_bounds": before_bounds,
+            "after_bounds": before_bounds,
+            "world_delta": serialize_vector(unreal.Vector(0.0, 0.0, 0.0)),
+        }
+    origin = vector_from_request(before_bounds.get("origin"), actor_location)
+    extent = vector_from_request(before_bounds.get("extent"), unreal.Vector(0.0, 0.0, 0.0))
+    desired_origin = unreal.Vector(float(actor_location.x), float(actor_location.y), float(origin.z))
+    desired_bottom_z = float(actor_location.z)
+    current_bottom_z = float(origin.z) - float(extent.z)
+    world_delta = unreal.Vector(
+        float(desired_origin.x) - float(origin.x),
+        float(desired_origin.y) - float(origin.y),
+        float(desired_bottom_z) - float(current_bottom_z),
+    )
+    applied = False
+    if world_delta.length() > 0.01:
+        if hasattr(primary_mesh, "get_world_location") and hasattr(primary_mesh, "set_world_location"):
+            try:
+                current_location = primary_mesh.get_world_location()
+                target_location = unreal.Vector(
+                    float(current_location.x) + float(world_delta.x),
+                    float(current_location.y) + float(world_delta.y),
+                    float(current_location.z) + float(world_delta.z),
+                )
+                primary_mesh.set_world_location(target_location, False, False)
+                applied = True
+            except Exception:
+                applied = False
+        if not applied and hasattr(primary_mesh, "get_relative_location") and hasattr(primary_mesh, "set_relative_location"):
+            try:
+                current_location = primary_mesh.get_relative_location()
+                target_location = unreal.Vector(
+                    float(current_location.x) + float(world_delta.x),
+                    float(current_location.y) + float(world_delta.y),
+                    float(current_location.z) + float(world_delta.z),
+                )
+                primary_mesh.set_relative_location(target_location, False, False)
+                applied = True
+            except Exception:
+                applied = False
+    after_bounds = component_bounds_payload(primary_mesh, fallback_actor=actor)
+    return {
+        "applied": applied,
+        "reason": "aligned_to_actor_origin_and_floor" if applied else "no_alignment_needed",
+        "before_bounds": before_bounds,
+        "after_bounds": after_bounds,
+        "world_delta": serialize_vector(world_delta),
+    }
+
+
 def inspect_source_handoff_mesh_visual(request: dict) -> dict:
     mesh_source_path = Path(str(request.get("mesh_source_path") or "")).expanduser().resolve()
     if not mesh_source_path.exists():
@@ -148,6 +205,7 @@ def inspect_source_handoff_mesh_visual(request: dict) -> dict:
             target_height = max(float(request.get("target_height_units") or 180.0), 10.0)
             scale_factor = target_height / height
             primary_mesh.set_world_scale3d(unreal.Vector(scale_factor, scale_factor, scale_factor))
+        alignment = _align_preview_mesh_to_actor(primary_mesh, actor)
         time.sleep(max(float(request.get("settle_delay_seconds") or 0.2), 0.05))
 
         bounds = component_bounds_payload(primary_mesh, fallback_actor=actor)
@@ -186,6 +244,7 @@ def inspect_source_handoff_mesh_visual(request: dict) -> dict:
             "main_mesh_component": main_mesh_component,
             "main_mesh_bounds": bounds,
             "main_mesh_world_transform": transform,
+            "preview_alignment": alignment,
             "material_evidence": material_evidence,
             "shots": list(shot_result.get("shots") or []),
             "failed_requirements": failed_requirements,
