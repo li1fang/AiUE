@@ -12,7 +12,7 @@ if str(SCRIPT_DIR) not in sys.path:
 
 from runtime.capture import capture_frame, ensure_stage_anchors, inspect_stage_anchors, load_level, run_scene_sweep, spawn_host
 from runtime.composition import build_equipment_registry, import_package, import_package_dry_run, refresh_assets, validate_package
-from runtime.inspection import debug_physics_api, inspect_host, inspect_host_visual, inspect_live_fx_visual_pair, inspect_slot_runtime, inspect_visible_conflict, list_assets
+from runtime.inspection import debug_physics_api, inspect_host, inspect_host_visual, inspect_live_fx_visual_pair, inspect_slot_runtime, inspect_source_handoff_mesh_visual, inspect_visible_conflict, list_assets
 from runtime.level1_curve_bundle import import_level1_curve_bundle
 from runtime.motion_packet import import_motion_packet
 from runtime.preview import action_preview, animation_preview
@@ -25,6 +25,8 @@ def dispatch(request: dict) -> dict:
         return inspect_host(request)
     if command == "inspect-host-visual":
         return inspect_host_visual(request)
+    if command == "inspect-source-handoff-mesh-visual":
+        return inspect_source_handoff_mesh_visual(request)
     if command == "inspect-visible-conflict":
         return inspect_visible_conflict(request)
     if command == "inspect-live-fx-visual-pair":

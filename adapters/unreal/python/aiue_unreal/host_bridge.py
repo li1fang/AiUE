@@ -12,6 +12,7 @@ DEFAULT_HOST_ROUTES = {
     "build-equipment-registry": "kernel",
     "inspect-host": "kernel",
     "inspect-host-visual": "kernel",
+    "inspect-source-handoff-mesh-visual": "kernel",
     "inspect-visible-conflict": "demo",
     "inspect-slot-runtime": "kernel",
     "composition-validation": "kernel",

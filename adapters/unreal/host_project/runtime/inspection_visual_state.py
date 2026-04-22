@@ -90,7 +90,7 @@ def _component_texture_reference_summary(component) -> dict:
     }
 
 
-def _component_material_evidence(component) -> dict:
+def component_material_evidence(component) -> dict:
     slot_names = _component_material_slot_names(component)
     material_asset_paths = _component_material_asset_paths(component)
     return {
@@ -148,10 +148,10 @@ def collect_visual_host_state(spawned_host) -> dict:
         "weapon_mesh": weapon_mesh_component,
     }
     material_evidence = {
-        "main_mesh": _component_material_evidence(primary_mesh),
-        "weapon_mesh": _component_material_evidence(weapon_mesh),
+        "main_mesh": component_material_evidence(primary_mesh),
+        "weapon_mesh": component_material_evidence(weapon_mesh),
         "managed_slots": {
-            str(slot_name or ""): _component_material_evidence(actor_managed_component_for_slot(spawned_host, slot_name, primary_component=primary_mesh))
+            str(slot_name or ""): component_material_evidence(actor_managed_component_for_slot(spawned_host, slot_name, primary_component=primary_mesh))
             for slot_name in managed_components_by_slot
             if str(slot_name or "")
         },
@@ -203,6 +203,7 @@ def evaluate_visual_host_requirements(state: dict) -> list[str]:
 
 __all__ = [
     "apply_visual_slot_binding_overrides",
+    "component_material_evidence",
     "collect_visual_host_state",
     "evaluate_visual_host_requirements",
 ]

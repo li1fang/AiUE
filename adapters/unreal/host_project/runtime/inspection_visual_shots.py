@@ -128,6 +128,7 @@ def capture_visual_shot_set(
     height = int(request.get("height") or request.get("capture_height") or 720)
     subject_min_screen_coverage = float(request.get("subject_min_screen_coverage") or 0.015)
     weapon_min_screen_coverage = float(request.get("weapon_min_screen_coverage") or 0.001)
+    require_weapon_visible = bool(request.get("require_weapon_visible", True))
     tracked_slot_names = [slot_name_text(value) for value in list(request.get("tracked_slots") or []) if str(value)]
     shot_plans = build_visual_proof_shots(spawned_host, request)
     requested_shot_ids = [str(value) for value in list(request.get("requested_shot_ids") or []) if str(value)]
@@ -160,8 +161,11 @@ def capture_visual_shot_set(
         weapon_pass_count += int(shot_result["weapon_passed"])
         shots.append(shot_result["shot"])
 
-    required_subject_pass_count = min(2, len(shot_plans)) if shot_plans else 1
-    required_weapon_pass_count = 1 if shot_plans else 0
+    required_subject_pass_count = int(request.get("required_subject_pass_count") or 0)
+    if required_subject_pass_count <= 0:
+        required_subject_pass_count = min(2, len(shot_plans)) if shot_plans else 1
+    required_subject_pass_count = min(required_subject_pass_count, len(shot_plans)) if shot_plans else 1
+    required_weapon_pass_count = 1 if shot_plans and require_weapon_visible else 0
     if subject_pass_count < required_subject_pass_count:
         failed_requirements.append("out_of_frame")
     if weapon_pass_count < required_weapon_pass_count:
